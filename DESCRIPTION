@@ -11,3 +11,5 @@ Encoding: UTF-8
 Imports: 
     projthis,
     rmarkdown
+URL: https://github.com/LukasMaMi/StARS_Simulations
+BugReports: https://github.com/LukasMaMi/StARS_Simulations/issues
