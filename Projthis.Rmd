@@ -1,0 +1,26 @@
+---
+title: "Projthis"
+output: github_document
+---
+
+# Create Projthis Project
+```{r}
+projthis::proj_create("/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations")
+```
+
+Load Projthis
+```{r}
+library("projthis")
+```
+
+Create Workflow
+```{r}
+proj_use_workflow("workflow", git_ignore_data = FALSE)
+```
+
+Create a workflow project
+```{r}
+# creates a new rmd file from a template
+proj_workflow_use_rmd("00-import")
+```
+

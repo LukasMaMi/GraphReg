@@ -1,0 +1,9 @@
+---
+title: "01-Simulation_Rand"
+date: "Compiled at `r format(Sys.time(), '%Y-%m-%d %H:%M:%S', tz = 'UTC')` UTC"
+output: github_document
+params:
+  name: "01-Simulation_Rand" # change if you rename file
+---
+
+
