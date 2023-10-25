@@ -421,7 +421,28 @@ cat("Jaccard Index:", jaccard_index_s4, "\n")
 ```
 
 
+## Plot Synthetic Data against F1-Score
+```{r}
 
+#install.packages("ggplot2")
+library(ggplot2)
+
+# Set up data
+stars <- data.frame(
+  np_setting = c("n=800 p=40", "n=400 p=100", "n=200 p=200", "n=100 p=400"),
+  F1_score = c(F1_1, F1_2, F1_3, F1_4)
+)
+
+# Create the plot
+ggplot(data, aes(x=np_setting, y=F1_score, group=1)) + 
+  geom_line() + 
+  geom_point() +
+  ggtitle("F1-scores for different settings of n and p") + 
+  xlab("Settings of n and p") + 
+  ylab("F1-score") + 
+  theme_minimal()
+
+```
 
 
 
