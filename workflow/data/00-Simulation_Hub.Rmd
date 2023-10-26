@@ -204,6 +204,18 @@ cat("F1-score:", F1_gs1, "\n")
 cat("Jaccard Index:", jaccard_index_gs1, "\n")
 
 ```
+## oracle 
+```{r}
+# Obtain true covariance matrix from the generated data
+true_cov <- hub1$cov
+
+# Apply graphical lasso using the true covariance matrix
+oracle_result <- huge(true_cov, method = "glasso", n = n)
+
+# Plot the oracle estimated graph
+huge.plot(oracle_result$icov)
+
+```
 
 
 ### 2) Hub Graph for n = 400 and p = 100
@@ -496,6 +508,34 @@ jaccard_index_s4 <- TP_s4 / (TP_s4 + FP_s4 + FN_s4)
 
 cat("F1-score:", F1_s4, "\n")
 cat("Jaccard Index:", jaccard_index_s4, "\n")
+
+```
+
+## 200 Repetitions Loop (pp.8)
+```{r}
+# Initialize a vector to store F1-scores across repetitions
+F1_scores <- numeric(200)
+
+# Repeat the entire experiment 200 times
+for (i in 1:200) {
+  
+  # Generate data
+  set.seed(123 + i) # Different seed for each repetition
+  hub1 <- huge.generator(n = n, d = p, graph = "hub", v = v, u = u, g = J, vis = TRUE)
+  
+  # ... [Your process for graph estimation and evaluation here] ...
+  
+  # Store F1-score for this repetition
+  F1_scores[i] <- F1 # Assuming F1 is the F1-score for this repetition
+  
+}
+
+# Calculate mean and standard deviation of F1-scores
+mean_F1 <- mean(F1_scores)
+std_F1 <- sd(F1_scores)
+
+cat("Mean F1-score:", mean_F1, "\n")
+cat("Standard Deviation of F1-score:", std_F1, "\n")
 
 ```
 
