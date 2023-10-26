@@ -45,19 +45,19 @@ J <- floor(p/s)
 #Off-diagonal elements
 rho <- (1/(s+1))
 #Diagonal elements
-u <- 0.0001
+u <- 0.01
 
 
 set.seed(123)
-hub_s1 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+hub1 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
 
-diag(hub_s1$omega)
-diag(hub_s1$sigma)
+diag(hub1$omega)
+diag(hub1$sigma)
 
-hub_s1_data <- hub_s1$data
+hub1_data <- hub1$data
 
 #Plot Adjacency Matrix
-huge.plot(hub_s1$theta)
+huge.plot(hub1$theta)
 ```
 
 ### 1.1) StARS: Hub1
@@ -69,12 +69,12 @@ b = (floor(10*sqrt(n)))/n
 N = 20
 
 #Lambda path
-lams_s1  <- getLamPath(max = getMaxCov(hub_s1_data), min = 0.01, len = 40)
+lams_s1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
 hugeargs_s1 <- list(lambda=lams_s1, verbose=FALSE)
 
 set.seed(123)
 out.p_s1 <- pulsar(
-      hub_s1_data,
+      hub1_data,
       fun = huge::huge,
       fargs = hugeargs_s1,
       criterion = c("stars"),
@@ -90,7 +90,6 @@ out.p_s1 <- pulsar(
 
 out.p_s1
 plot(out.p_s1)
-lambda_opt_s1 <- opt.index(out.p_s1, criterion = "stars")
 ```
 
 ### 1.2) Stars: F1-Scores and Jaccard-Index for Hub1
@@ -101,7 +100,7 @@ est_graph_s1 <- fit_s1[["refit"]][["stars"]]
 huge.plot(est_graph_s1)
 
 # 2. Get the true graph structure (true adjacency matrix)
-true_graph_s1 <- hub_s1$theta
+true_graph_s1 <- hub1$theta
 huge.plot(true_graph_s1)
 
 # 3. Compute the metrics
@@ -125,6 +124,8 @@ cat("F1-score:", F1_s1, "\n")
 cat("Jaccard Index:", jaccard_index_s1, "\n")
 
 ```
+
+
 ### 1.3) G-StARS: Hub1
 ```{r}
 library(orca)
@@ -136,15 +137,15 @@ b = (floor(10*sqrt(n)))/n
 N = 20
 
 #Lambda path
-lams_gs1  <- getLamPath(max = getMaxCov(hub_s1_data), min = 0.01, len = 40)
+lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
 hugeargs_gs1 <- list(lambda=lams_gs1, verbose=FALSE)
 
 set.seed(123)
 out.p_gs1 <- pulsar(
-      hub_s1_data,
+      hub1_data,
       fun = huge::huge,
       fargs = hugeargs_gs1,
-      criterion = c("stars" ,"gcd"),
+      criterion = c('stars', 'gcd'),
       thresh = 0.1,
       subsample.ratio = b,
       rep.num = N,
@@ -157,17 +158,29 @@ out.p_gs1 <- pulsar(
 
 out.p_gs1
 plot(out.p_gs1)
+
+#Get optimal index for gcd
+lam_gam <- get.opt.index(out.p_gs1, criterion = "gcd")
+#Set optimal index for gcd
+opt.index(out.p_gs1, criterion = "gcd") <- lam_gam
+
 ```
+
 
 ### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
 ```{r}
 # 1. Extract the estimated graph structure (estimated adjacency matrix)
-fit_gs1  <- refit(out.p_gs1, criterion = "stars")
+
+fit_gs1  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
+print(fit_gs1)
+
 est_graph_gs1 <- fit_gs1[["refit"]][["stars"]]
+est_graph_gs2 <- fit_gs1[["refit"]][["gcd"]]
 huge.plot(est_graph_gs1)
+huge.plot(est_graph_gs2)
 
 # 2. Get the true graph structure (true adjacency matrix)
-true_graph_gs1 <- hub_s1$theta
+true_graph_gs1 <- hub1$theta
 huge.plot(true_graph_gs1)
 
 # 3. Compute the metrics
@@ -212,15 +225,15 @@ u <- 0.0001
 
 
 set.seed(123)
-hub_s2 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+hub2 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
 
-diag(hub_s2$omega)
-diag(hub_s2$sigma)
+diag(hub2$omega)
+diag(hub2$sigma)
 
-hub_s2_data <- hub_s2$data
+hub2_data <- hub2$data
 
 #Plot Adjacency Matrix
-huge.plot(hub_s2$theta)
+huge.plot(hub2$theta)
 ```
 
 ### 2.1) StARS for Hub Graph 2
@@ -232,12 +245,12 @@ b = (floor(10*sqrt(n)))/n
 N = 20
 
 #Lambda path
-lams_s2  <- getLamPath(max = getMaxCov(hub_s2_data), min = 0.01, len = 40)
+lams_s2  <- getLamPath(max = getMaxCov(hub2_data), min = 0.01, len = 40)
 hugeargs_s2 <- list(lambda=lams_s2, verbose=FALSE)
 
 set.seed(123)
 out.p_s2 <- pulsar(
-      hub_s2_data,
+      hub2_data,
       fun = huge::huge,
       fargs = hugeargs_s2,
       criterion = c("stars"),
@@ -265,7 +278,7 @@ est_graph_s2 <- fit_s2[["refit"]][["stars"]]
 huge.plot(est_graph_s2)
 
 # 2. Get the true graph structure (true adjacency matrix)
-true_graph_s2 <- hub_s2$theta
+true_graph_s2 <- hub2$theta
 huge.plot(true_graph_s2)
 
 # 3. Compute the metrics
@@ -310,15 +323,15 @@ u <- 0.0001
 
 
 set.seed(123)
-hub_s3 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+hub3 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
 
-diag(hub_s3$omega)
-diag(hub_s3$sigma)
+diag(hub3$omega)
+diag(hub3$sigma)
 
-hub_s3_data <- hub_s3$data
+hub3_data <- hub3$data
 
 #Plot Adjacency Matrix
-huge.plot(hub_s3$theta)
+huge.plot(hub3$theta)
 ```
 
 ### 3.1) StARS for Hub Graph 3
@@ -330,12 +343,12 @@ b = (floor(10*sqrt(n)))/n
 N = 20
 
 #Lambda path
-lams_s3  <- getLamPath(max = getMaxCov(hub_s3_data), min = 0.01, len = 40)
+lams_s3  <- getLamPath(max = getMaxCov(hub3_data), min = 0.01, len = 40)
 hugeargs_s3 <- list(lambda=lams_s3, verbose=FALSE)
 
 set.seed(123)
 out.p_s3 <- pulsar(
-      hub_s3_data,
+      hub3_data,
       fun = huge::huge,
       fargs = hugeargs_s3,
       criterion = c("stars"),
@@ -363,7 +376,7 @@ est_graph_s3 <- fit_s3[["refit"]][["stars"]]
 huge.plot(est_graph_s3)
 
 # 2. Get the true graph structure (true adjacency matrix)
-true_graph_s3 <- hub_s3$theta
+true_graph_s3 <- hub3$theta
 huge.plot(true_graph_s3)
 
 # 3. Compute the metrics
@@ -408,15 +421,15 @@ u <- 0.0001
 
 
 set.seed(123)
-hub_s4 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+hub4 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
 
-diag(hub_s4$omega)
-diag(hub_s4$sigma)
+diag(hub4$omega)
+diag(hub4$sigma)
 
-hub_s4_data <- hub_s4$data
+hub4_data <- hub4$data
 
 #Plot Adjacency Matrix
-huge.plot(hub_s4$theta)
+huge.plot(hub4$theta)
 ```
 
 ### 4.1) StARS for Hub Graph 4
@@ -428,12 +441,12 @@ b = (floor(10*sqrt(n)))/n
 N = 20
 
 #Lambda path
-lams_s4  <- getLamPath(max = getMaxCov(hub_s4_data), min = 0.01, len = 40)
+lams_s4  <- getLamPath(max = getMaxCov(hub4_data), min = 0.01, len = 40)
 hugeargs_s4 <- list(lambda=lams_s4, verbose=FALSE)
 
 set.seed(123)
 out.p_s4 <- pulsar(
-      hub_s4_data,
+      hub4_data,
       fun = huge::huge,
       fargs = hugeargs_s4,
       criterion = c("stars"),
@@ -461,7 +474,7 @@ est_graph_s4 <- fit_s4[["refit"]][["stars"]]
 huge.plot(est_graph_s4)
 
 # 2. Get the true graph structure (true adjacency matrix)
-true_graph_s4 <- hub_s4$theta
+true_graph_s4 <- hub4$theta
 huge.plot(true_graph_s4)
 
 # 3. Compute the metrics
