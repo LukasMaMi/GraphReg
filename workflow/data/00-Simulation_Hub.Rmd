@@ -45,7 +45,7 @@ J <- floor(p/s)
 #Off-diagonal elements
 rho <- (1/(s+1))
 #Diagonal elements
-u <- 0.01
+u <- 0.001
 
 
 set.seed(123)
@@ -59,6 +59,100 @@ hub1_data <- hub1$data
 #Plot Adjacency Matrix
 huge.plot(hub1$theta)
 ```
+
+
+```{r}
+
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+
+#Number of Subsamples N
+N = 20
+
+#Lambda path
+lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
+lambda <- list(lambda=lams_gs1)
+
+#Define QUIC as method of choice
+library(QUIC)
+quicr <- function(hub1_data, lambda, ...) {
+S <- cov(hub1_data)
+est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+est$path <- lapply(seq(length(lambda)), function(i) {
+## convert precision array to adj list
+tmp <- est$X[,,i]; diag(tmp) <- 0
+as(tmp!=0, "lMatrix")
+})
+est
+}
+
+#Run pulsar package
+library(orca)
+set.seed(123)
+out.p_gs1 <- pulsar(
+      hub1_data,
+      fun = quicr,
+      fargs = lambda,
+      criterion = c('stars', 'gcd'),
+      thresh = 0.1,
+      subsample.ratio = b,
+      rep.num = N,
+      seed = NULL,
+      lb.stars = TRUE,
+      ub.stars = TRUE,
+      ncores = 1,
+      refit = FALSE
+)
+
+out.p_gs1
+plot(out.p_gs1, scale = T, invlam = FALSE, loglam = FALSE, legends = FALSE)
+
+#Get optimal index for gcd
+lam_gam <- get.opt.index(out.p_gs1, criterion = "gcd")
+#Set optimal index for gcd
+opt.index(out.p_gs1, criterion = "gcd") <- lam_gam
+
+```
+
+
+### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
+```{r}
+# 1. Extract the estimated graph structure (estimated adjacency matrix)
+
+fit_gs1  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
+print(fit_gs1)
+
+est_graph_gs1 <- fit_gs1[["refit"]][["stars"]]
+est_graph_gs2 <- fit_gs1[["refit"]][["gcd"]]
+huge.plot(est_graph_gs1)
+huge.plot(est_graph_gs2)
+
+# 2. Get the true graph structure (true adjacency matrix)
+true_graph_gs1 <- hub1$theta
+huge.plot(true_graph_gs1)
+
+# 3. Compute the metrics
+# Convert the matrices to binary (1 for edge, 0 for no edge)
+est_bin_gs1 <- as.numeric(est_graph_gs1 != 0)
+true_bin_gs1 <- as.numeric(true_graph_gs1 != 0)
+
+# Compute true positives, false positives, true negatives, and false negatives
+TP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 1)
+FP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 0)
+TN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 0)
+FN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 1)
+
+# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
+precision_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1)
+recall_gs1 <- TP_gs1 / (TP_gs1 + FN_gs1)
+F1_gs1 <- 2 * (precision_gs1 * recall_gs1 / (precision_gs1 + recall_gs1))
+jaccard_index_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1 + FN_gs1)
+
+cat("F1-score:", F1_gs1, "\n")
+cat("Jaccard Index:", jaccard_index_gs1, "\n")
+
+```
+
 
 ### 1.1) StARS: Hub1
 ```{r}
@@ -128,7 +222,7 @@ cat("Jaccard Index:", jaccard_index_s1, "\n")
 
 ### 1.3) G-StARS: Hub1
 ```{r}
-library(orca)
+
 
 #Subsampled dataset size 
 b = (floor(10*sqrt(n)))/n
@@ -140,6 +234,60 @@ N = 20
 lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
 hugeargs_gs1 <- list(lambda=lams_gs1, verbose=FALSE)
 
+#Define QUIC as method of choice
+
+lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
+lambda <- list(lambda=lams_gs1)
+
+library(QUIC)
+quicr <- function(hub1_data, lambda, ...) {
+S <- cov(hub1_data)
+est <- QUIC(S, rho = rho, path = lambda , msg=0, tol=1e-2)
+est$path <- lapply(seq(length(lambda)), function(i) {
+## convert precision array to adj list
+tmp <- est$X[,,i]; diag(tmp) <- 0
+as(tmp!=0, "lMatrix")
+})
+est
+}
+
+#Run pulsar package
+library(orca)
+set.seed(123)
+out.p_gs1 <- pulsar(
+      hub1_data,
+      fun = quicr,
+      fargs = lambda,
+      criterion = c('stars', 'gcd'),
+      thresh = 0.1,
+      subsample.ratio = b,
+      rep.num = N,
+      seed = NULL,
+      lb.stars = TRUE,
+      ub.stars = TRUE,
+      ncores = 1,
+      refit = FALSE
+)
+
+out.p_gs1
+plot(out.p_gs1)
+
+#Define GLASSO as method of choice
+'huge_gs1 <- huge(
+hub1_data,
+lambda = NULL,
+nlambda = NULL,
+lambda.min.ratio = NULL,
+method = "glasso",
+scr = NULL,
+scr.num = NULL,
+cov.output = FALSE,
+sym = "or",
+verbose = TRUE
+)'
+
+#Run pulsar package
+library(orca)
 set.seed(123)
 out.p_gs1 <- pulsar(
       hub1_data,
@@ -207,7 +355,7 @@ cat("Jaccard Index:", jaccard_index_gs1, "\n")
 ## oracle 
 ```{r}
 # Obtain true covariance matrix from the generated data
-true_cov <- hub1$cov
+true_cov <- hub1$sigma
 
 # Apply graphical lasso using the true covariance matrix
 oracle_result <- huge(true_cov, method = "glasso", n = n)
