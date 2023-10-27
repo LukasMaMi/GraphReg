@@ -113,6 +113,18 @@ lam_gam <- get.opt.index(out.p_gs1, criterion = "gcd")
 opt.index(out.p_gs1, criterion = "gcd") <- lam_gam
 
 ```
+### Oracle
+```{r}
+# Obtain true covariance matrix from the generated data
+true_cov <- hub1$sigma
+
+# Apply graphical lasso using the true covariance matrix
+oracle_result2 <- huge(true_cov, method = "glasso", n = n)
+
+# Plot the oracle estimated graph
+huge.plot(oracle_result$icov)
+
+```
 
 
 ### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
@@ -185,6 +197,7 @@ out.p_s1 <- pulsar(
 out.p_s1
 plot(out.p_s1)
 ```
+
 
 ### 1.2) Stars: F1-Scores and Jaccard-Index for Hub1
 ```{r}
