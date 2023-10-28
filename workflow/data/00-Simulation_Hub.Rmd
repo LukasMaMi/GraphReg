@@ -46,15 +46,23 @@ J <- floor(p/s)
 rho <- (1/(s+1))
 #Diagonal elements
 u <- 0.001
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+#Number of Subsamples N
+N = 20
+
 
 
 set.seed(123)
 hub1 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+hub1_data <- hub1$data
 
 diag(hub1$omega)
 diag(hub1$sigma)
 
-hub1_data <- hub1$data
+#Lambda path
+lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
+lambda <- list(lambda=lams_gs1)
 
 #Plot Adjacency Matrix
 huge.plot(hub1$theta)
@@ -62,16 +70,6 @@ huge.plot(hub1$theta)
 
 
 ```{r}
-
-#Subsampled dataset size 
-b = (floor(10*sqrt(n)))/n
-
-#Number of Subsamples N
-N = 20
-
-#Lambda path
-lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
-lambda <- list(lambda=lams_gs1)
 
 #Define QUIC as method of choice
 library(QUIC)
@@ -89,7 +87,7 @@ est
 #Run pulsar package
 library(orca)
 set.seed(123)
-out.p_gs1 <- pulsar(
+out.p <- pulsar(
       hub1_data,
       fun = quicr,
       fargs = lambda,
@@ -103,14 +101,20 @@ out.p_gs1 <- pulsar(
       ncores = 1,
       refit = FALSE
 )
-
-out.p_gs1
-plot(out.p_gs1, scale = T, invlam = FALSE, loglam = FALSE, legends = FALSE)
-
 #Get optimal index for gcd
-lam_gam <- get.opt.index(out.p_gs1, criterion = "gcd")
+lam_gam <- get.opt.index(out.p, criterion = "gcd")
 #Set optimal index for gcd
-opt.index(out.p_gs1, criterion = "gcd") <- lam_gam
+opt.index(out.p, criterion = "gcd") <- lam_gam
+
+
+out.p
+plot(out.p, scale = T, invlam = FALSE, loglam = FALSE, legends = FALSE)
+
+fit  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
+print(fit)
+
+stars_graph <- fit[["refit"]][["stars"]]
+gstars_graph <- fit[["refit"]][["gcd"]]
 
 ```
 ### Oracle
@@ -149,7 +153,7 @@ best_lambda <- lambda_path[best_lambda_index]
 oracle_best_precision_matrix <- oracle_results$X[,,best_lambda_index]
 
 #Plot the oracle graph:
-oracle_best_graph <- oracle_best_precision_matrix != 0
+oracle_graph <- oracle_best_precision_matrix != 0
 huge.plot(oracle_best_graph)
 
 
@@ -189,6 +193,8 @@ jaccard_index_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1 + FN_gs1)
 cat("F1-score:", F1_gs1, "\n")
 cat("Jaccard Index:", jaccard_index_gs1, "\n")
 
+
+
 ```
 
 
@@ -210,545 +216,6 @@ cat("Oracle F1-score:", F1_oracle, "\n")
 cat("Oracle Jaccard Index:", jaccard_index_oracle, "\n")
 
 ```
-
-
-
-
-
-### 1.1) StARS: Hub1
-```{r}
-#Subsampled dataset size 
-b = (floor(10*sqrt(n)))/n
-
-#Number of Subsamples N
-N = 20
-
-#Lambda path
-lams_s1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
-hugeargs_s1 <- list(lambda=lams_s1, verbose=FALSE)
-
-set.seed(123)
-out.p_s1 <- pulsar(
-      hub1_data,
-      fun = huge::huge,
-      fargs = hugeargs_s1,
-      criterion = c("stars"),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = NULL,
-      lb.stars = FALSE,
-      ub.stars = FALSE,
-      ncores = 1,
-      refit = FALSE
-)
-
-out.p_s1
-plot(out.p_s1)
-```
-
-
-### 1.2) Stars: F1-Scores and Jaccard-Index for Hub1
-```{r}
-# 1. Extract the estimated graph structure (estimated adjacency matrix)
-fit_s1  <- refit(out.p_s1, criterion = "stars")
-est_graph_s1 <- fit_s1[["refit"]][["stars"]]
-huge.plot(est_graph_s1)
-
-# 2. Get the true graph structure (true adjacency matrix)
-true_graph_s1 <- hub1$theta
-huge.plot(true_graph_s1)
-
-# 3. Compute the metrics
-# Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_s1 <- as.numeric(est_graph_s1 != 0)
-true_bin_s1 <- as.numeric(true_graph_s1 != 0)
-
-# Compute true positives, false positives, true negatives, and false negatives
-TP_s1 <- sum(est_bin_s1 == 1 & true_bin_s1 == 1)
-FP_s1 <- sum(est_bin_s1 == 1 & true_bin_s1 == 0)
-TN_s1 <- sum(est_bin_s1 == 0 & true_bin_s1 == 0)
-FN_s1 <- sum(est_bin_s1 == 0 & true_bin_s1 == 1)
-
-# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
-precision_s1 <- TP_s1 / (TP_s1 + FP_s1)
-recall_s1 <- TP_s1 / (TP_s1 + FN_s1)
-F1_s1 <- 2 * (precision_s1 * recall_s1 / (precision_s1 + recall_s1))
-jaccard_index_s1 <- TP_s1 / (TP_s1 + FP_s1 + FN_s1)
-
-cat("F1-score:", F1_s1, "\n")
-cat("Jaccard Index:", jaccard_index_s1, "\n")
-
-```
-
-
-### 1.3) G-StARS: Hub1
-```{r}
-
-
-#Subsampled dataset size 
-b = (floor(10*sqrt(n)))/n
-
-#Number of Subsamples N
-N = 20
-
-#Lambda path
-lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
-hugeargs_gs1 <- list(lambda=lams_gs1, verbose=FALSE)
-
-#Define QUIC as method of choice
-
-lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
-lambda <- list(lambda=lams_gs1)
-
-library(QUIC)
-quicr <- function(hub1_data, lambda, ...) {
-S <- cov(hub1_data)
-est <- QUIC(S, rho = rho, path = lambda , msg=0, tol=1e-2)
-est$path <- lapply(seq(length(lambda)), function(i) {
-## convert precision array to adj list
-tmp <- est$X[,,i]; diag(tmp) <- 0
-as(tmp!=0, "lMatrix")
-})
-est
-}
-
-#Run pulsar package
-library(orca)
-set.seed(123)
-out.p_gs1 <- pulsar(
-      hub1_data,
-      fun = quicr,
-      fargs = lambda,
-      criterion = c('stars', 'gcd'),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = NULL,
-      lb.stars = TRUE,
-      ub.stars = TRUE,
-      ncores = 1,
-      refit = FALSE
-)
-
-out.p_gs1
-plot(out.p_gs1)
-
-#Define GLASSO as method of choice
-'huge_gs1 <- huge(
-hub1_data,
-lambda = NULL,
-nlambda = NULL,
-lambda.min.ratio = NULL,
-method = "glasso",
-scr = NULL,
-scr.num = NULL,
-cov.output = FALSE,
-sym = "or",
-verbose = TRUE
-)'
-
-#Run pulsar package
-library(orca)
-set.seed(123)
-out.p_gs1 <- pulsar(
-      hub1_data,
-      fun = huge::huge,
-      fargs = hugeargs_gs1,
-      criterion = c('stars', 'gcd'),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = NULL,
-      lb.stars = TRUE,
-      ub.stars = TRUE,
-      ncores = 1,
-      refit = FALSE
-)
-
-out.p_gs1
-plot(out.p_gs1)
-
-#Get optimal index for gcd
-lam_gam <- get.opt.index(out.p_gs1, criterion = "gcd")
-#Set optimal index for gcd
-opt.index(out.p_gs1, criterion = "gcd") <- lam_gam
-
-```
-
-
-### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
-```{r}
-# 1. Extract the estimated graph structure (estimated adjacency matrix)
-
-fit_gs1  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
-print(fit_gs1)
-
-est_graph_gs1 <- fit_gs1[["refit"]][["stars"]]
-est_graph_gs2 <- fit_gs1[["refit"]][["gcd"]]
-huge.plot(est_graph_gs1)
-huge.plot(est_graph_gs2)
-
-# 2. Get the true graph structure (true adjacency matrix)
-true_graph_gs1 <- hub1$theta
-huge.plot(true_graph_gs1)
-
-# 3. Compute the metrics
-# Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_gs1 <- as.numeric(est_graph_gs1 != 0)
-true_bin_gs1 <- as.numeric(true_graph_gs1 != 0)
-
-# Compute true positives, false positives, true negatives, and false negatives
-TP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 1)
-FP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 0)
-TN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 0)
-FN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 1)
-
-# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
-precision_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1)
-recall_gs1 <- TP_gs1 / (TP_gs1 + FN_gs1)
-F1_gs1 <- 2 * (precision_gs1 * recall_gs1 / (precision_gs1 + recall_gs1))
-jaccard_index_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1 + FN_gs1)
-
-cat("F1-score:", F1_gs1, "\n")
-cat("Jaccard Index:", jaccard_index_gs1, "\n")
-
-```
-## oracle 
-```{r}
-# Obtain true covariance matrix from the generated data
-true_cov <- hub1$sigma
-
-# Apply graphical lasso using the true covariance matrix
-oracle_result <- huge(true_cov, method = "glasso", n = n)
-
-# Plot the oracle estimated graph
-huge.plot(oracle_result$icov)
-
-```
-
-
-### 2) Hub Graph for n = 400 and p = 100
-```{r}
-library(huge)
-library(pulsar)
-
-#Set Parameters
-n <- 400 
-p <- 100 
-#Size of each hub group
-s <- 20
-#Number of hub groups
-J <- floor(p/s) 
-#Off-diagonal elements
-rho <- (1/(s+1))
-#Diagonal elements
-u <- 0.0001
-
-
-set.seed(123)
-hub2 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
-
-diag(hub2$omega)
-diag(hub2$sigma)
-
-hub2_data <- hub2$data
-
-#Plot Adjacency Matrix
-huge.plot(hub2$theta)
-```
-
-### 2.1) StARS for Hub Graph 2
-```{r}
-#Subsampled dataset size 
-b = (floor(10*sqrt(n)))/n
-
-#Number of Subsamples N
-N = 20
-
-#Lambda path
-lams_s2  <- getLamPath(max = getMaxCov(hub2_data), min = 0.01, len = 40)
-hugeargs_s2 <- list(lambda=lams_s2, verbose=FALSE)
-
-set.seed(123)
-out.p_s2 <- pulsar(
-      hub2_data,
-      fun = huge::huge,
-      fargs = hugeargs_s2,
-      criterion = c("stars"),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = NULL,
-      lb.stars = FALSE,
-      ub.stars = FALSE,
-      ncores = 1,
-      refit = FALSE
-)
-
-out.p_s2
-plot(out.p_s2)
-lambda_opt_s2 <- opt.index(out.p_s2, criterion = "stars")
-
-```
-
-### 2.2) F1-Scores and Jaccard-Index for Hub2
-```{r}
-# 1. Extract the estimated graph structure (estimated adjacency matrix)
-fit_s2  <- refit(out.p_s2, criterion = "stars")
-est_graph_s2 <- fit_s2[["refit"]][["stars"]]
-huge.plot(est_graph_s2)
-
-# 2. Get the true graph structure (true adjacency matrix)
-true_graph_s2 <- hub2$theta
-huge.plot(true_graph_s2)
-
-# 3. Compute the metrics
-# Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_s2 <- as.numeric(est_graph_s2 != 0)
-true_bin_s2 <- as.numeric(true_graph_s2 != 0)
-
-# Compute true positives, false positives, true negatives, and false negatives
-TP_s2 <- sum(est_bin_s2 == 1 & true_bin_s2 == 1)
-FP_s2 <- sum(est_bin_s2 == 1 & true_bin_s2 == 0)
-TN_s2 <- sum(est_bin_s2 == 0 & true_bin_s2 == 0)
-FN_s2 <- sum(est_bin_s2 == 0 & true_bin_s2 == 1)
-
-# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
-precision_s2 <- TP_s2 / (TP_s2 + FP_s2)
-recall_s2 <- TP_s2 / (TP_s2 + FN_s2)
-F1_s2 <- 2 * (precision_s2 * recall_s2 / (precision_s2 + recall_s2))
-jaccard_index_s2 <- TP_s2 / (TP_s2 + FP_s2 + FN_s2)
-
-cat("F1-score:", F1_s2, "\n")
-cat("Jaccard Index:", jaccard_index_s2, "\n")
-
-```
-
-
-### 3) Hub Graph for n = 200 and p = 100
-```{r}
-library(huge)
-library(pulsar)
-
-#Set Parameters
-n <- 200 
-p <- 200 
-#Size of each hub group
-s <- 20
-#Number of hub groups
-J <- floor(p/s) 
-#Off-diagonal elements
-rho <- (1/(s+1))
-#Diagonal elements
-u <- 0.0001
-
-
-set.seed(123)
-hub3 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
-
-diag(hub3$omega)
-diag(hub3$sigma)
-
-hub3_data <- hub3$data
-
-#Plot Adjacency Matrix
-huge.plot(hub3$theta)
-```
-
-### 3.1) StARS for Hub Graph 3
-```{r}
-#Subsampled dataset size 
-b = (floor(10*sqrt(n)))/n
-
-#Number of Subsamples N
-N = 20
-
-#Lambda path
-lams_s3  <- getLamPath(max = getMaxCov(hub3_data), min = 0.01, len = 40)
-hugeargs_s3 <- list(lambda=lams_s3, verbose=FALSE)
-
-set.seed(123)
-out.p_s3 <- pulsar(
-      hub3_data,
-      fun = huge::huge,
-      fargs = hugeargs_s3,
-      criterion = c("stars"),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = NULL,
-      lb.stars = FALSE,
-      ub.stars = FALSE,
-      ncores = 1,
-      refit = FALSE
-)
-
-out.p_s3
-plot(out.p_s3)
-lambda_opt_s3 <- opt.index(out.p_s3, criterion = "stars")
-
-```
-
-### 3.2) F1-Scores and Jaccard-Index for Hub3
-```{r}
-# 1. Extract the estimated graph structure (estimated adjacency matrix)
-fit_s3  <- refit(out.p_s3, criterion = "stars")
-est_graph_s3 <- fit_s3[["refit"]][["stars"]]
-huge.plot(est_graph_s3)
-
-# 2. Get the true graph structure (true adjacency matrix)
-true_graph_s3 <- hub3$theta
-huge.plot(true_graph_s3)
-
-# 3. Compute the metrics
-# Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_s3 <- as.numeric(est_graph_s3 != 0)
-true_bin_s3 <- as.numeric(true_graph_s3 != 0)
-
-# Compute true positives, false positives, true negatives, and false negatives
-TP_s3 <- sum(est_bin_s3 == 1 & true_bin_s3 == 1)
-FP_s3 <- sum(est_bin_s3 == 1 & true_bin_s3 == 0)
-TN_s3 <- sum(est_bin_s3 == 0 & true_bin_s3 == 0)
-FN_s3 <- sum(est_bin_s3 == 0 & true_bin_s3 == 1)
-
-# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
-precision_s3 <- TP_s3 / (TP_s3 + FP_s3)
-recall_s3 <- TP_s3 / (TP_s3 + FN_s3)
-F1_s3 <- 2 * (precision_s3 * recall_s3 / (precision_s3 + recall_s3))
-jaccard_index_s3 <- TP_s3 / (TP_s3 + FP_s3 + FN_s3)
-
-cat("F1-score:", F1_s3, "\n")
-cat("Jaccard Index:", jaccard_index_s3, "\n")
-
-```
-
-
-### 4) Hub Graph for n = 100 and p = 400
-```{r}
-library(huge)
-library(pulsar)
-
-#Set Parameters
-n <- 100 
-p <- 400 
-#Size of each hub group
-s <- 20
-#Number of hub groups
-J <- floor(p/s) 
-#Off-diagonal elements
-rho <- (1/(s+1))
-#Diagonal elements
-u <- 0.0001
-
-
-set.seed(123)
-hub4 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
-
-diag(hub4$omega)
-diag(hub4$sigma)
-
-hub4_data <- hub4$data
-
-#Plot Adjacency Matrix
-huge.plot(hub4$theta)
-```
-
-### 4.1) StARS for Hub Graph 4
-```{r}
-#Subsampled dataset size 
-b = (floor(10*sqrt(n)))/n
-
-#Number of Subsamples N
-N = 20
-
-#Lambda path
-lams_s4  <- getLamPath(max = getMaxCov(hub4_data), min = 0.01, len = 40)
-hugeargs_s4 <- list(lambda=lams_s4, verbose=FALSE)
-
-set.seed(123)
-out.p_s4 <- pulsar(
-      hub4_data,
-      fun = huge::huge,
-      fargs = hugeargs_s4,
-      criterion = c("stars"),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = NULL,
-      lb.stars = FALSE,
-      ub.stars = FALSE,
-      ncores = 1,
-      refit = FALSE
-)
-
-out.p_s4
-plot(out.p_s4)
-lambda_opt_s4 <- opt.index(out.p_s4, criterion = "stars")
-
-```
-
-### 4.2) F1-Scores and Jaccard-Index for Hub4
-```{r}
-# 1. Extract the estimated graph structure (estimated adjacency matrix)
-fit_s4  <- refit(out.p_s4, criterion = "stars")
-est_graph_s4 <- fit_s4[["refit"]][["stars"]]
-huge.plot(est_graph_s4)
-
-# 2. Get the true graph structure (true adjacency matrix)
-true_graph_s4 <- hub4$theta
-huge.plot(true_graph_s4)
-
-# 3. Compute the metrics
-# Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_s4 <- as.numeric(est_graph_s4 != 0)
-true_bin_s4 <- as.numeric(true_graph_s4 != 0)
-
-# Compute true positives, false positives, true negatives, and false negatives
-TP_s4 <- sum(est_bin_s4 == 1 & true_bin_s4 == 1)
-FP_s4 <- sum(est_bin_s4 == 1 & true_bin_s4 == 0)
-TN_s4 <- sum(est_bin_s4 == 0 & true_bin_s4 == 0)
-FN_s4 <- sum(est_bin_s4 == 0 & true_bin_s4 == 1)
-
-# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
-precision_s4 <- TP_s4 / (TP_s4 + FP_s4)
-recall_s4 <- TP_s4 / (TP_s4 + FN_s4)
-F1_s4 <- 2 * (precision_s4 * recall_s4 / (precision_s4 + recall_s4))
-jaccard_index_s4 <- TP_s4 / (TP_s4 + FP_s4 + FN_s4)
-
-cat("F1-score:", F1_s4, "\n")
-cat("Jaccard Index:", jaccard_index_s4, "\n")
-
-```
-
-## 200 Repetitions Loop (pp.8)
-```{r}
-# Initialize a vector to store F1-scores across repetitions
-F1_scores <- numeric(200)
-
-# Repeat the entire experiment 200 times
-for (i in 1:200) {
-  
-  # Generate data
-  set.seed(123 + i) # Different seed for each repetition
-  hub1 <- huge.generator(n = n, d = p, graph = "hub", v = v, u = u, g = J, vis = TRUE)
-  
-  # ... [Your process for graph estimation and evaluation here] ...
-  
-  # Store F1-score for this repetition
-  F1_scores[i] <- F1 # Assuming F1 is the F1-score for this repetition
-  
-}
-
-# Calculate mean and standard deviation of F1-scores
-mean_F1 <- mean(F1_scores)
-std_F1 <- sd(F1_scores)
-
-cat("Mean F1-score:", mean_F1, "\n")
-cat("Standard Deviation of F1-score:", std_F1, "\n")
-
-```
-
 
 ## Plot Synthetic Data against F1-Score
 ```{r}
@@ -774,7 +241,214 @@ ggplot(stars, aes(x=np_setting, y=F1_score, group=1)) +
 
 ```
 
+#Workspace
+```{r}
+stars_graph 
+gstars_graph
+oracle_graph
+true_graph 
 
+# Convert the matrices to binary (1 for edge, 0 for no edge)
+est_bin_gs1 <- as.numeric(est_graph_gs1 != 0)
+true_bin_gs1 <- as.numeric(true_graph_gs1 != 0)
+
+# Compute true positives, false positives, true negatives, and false negatives
+TP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 1)
+FP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 0)
+TN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 0)
+FN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 1)
+
+# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
+precision_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1)
+recall_gs1 <- TP_gs1 / (TP_gs1 + FN_gs1)
+F1_gs1 <- 2 * (precision_gs1 * recall_gs1 / (precision_gs1 + recall_gs1))
+jaccard_index_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1 + FN_gs1)
+
+cat("F1-score:", F1_gs1, "\n")
+cat("Jaccard Index:", jaccard_index_gs1, "\n")
+
+```
+
+
+
+```{r}
+# Load necessary libraries
+library(pulsar)
+library(huge)
+library(QUIC)
+library(orca)
+library(ggplot2)
+
+
+# Specify configurations
+configs <- list(
+  list(n=800, p=40),
+  list(n=400, p=100),
+  list(n=200, p=200)
+)
+
+
+# Function to run experiment
+run_hub <- function(n, p, s = s, J = J, rho = rho, u = u, b = b, N = N) {
+  
+  # 1. Set Parameters
+  # Size of each hub group
+  s <- 20
+  # Number of hub groups
+  J <- floor(p/s) 
+  # Off-diagonal elements
+  rho <- (1/(s+1))
+  # Diagonal elements
+  u <- 0.001
+  # Subsampled dataset size 
+  b = (floor(10*sqrt(n)))/n
+  # Number of Subsamples N
+  N = 20
+  
+  # 2. Data Generation
+  set.seed(123)
+  hub <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+  hub_data <- hub$data
+  
+  true_graph <- hub$theta != 0
+  true_cov <- hub$sigma
+  lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
+  lambda <- list(lambda=lambda_path)
+  
+  # 3. Run QUIC method
+  quicr <- function(hub_data, lambda, ...) {
+  S <- cov(hub_data)
+  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+  est$path <- lapply(seq(length(lambda)), function(i) {
+  ## convert precision array to adj list
+  tmp <- est$X[,,i]; diag(tmp) <- 0
+  as(tmp!=0, "lMatrix")
+  })
+  est
+  }
+
+  # Run pulsar package
+  out.p <- pulsar(
+      hub_data,
+      fun = quicr,
+      fargs = lambda,
+      criterion = c('stars', 'gcd'),
+      thresh = 0.1,
+      subsample.ratio = b,
+      rep.num = N,
+      seed = NULL,
+      lb.stars = TRUE,
+      ub.stars = TRUE,
+      ncores = 1,
+      refit = FALSE
+  )
+  # Get optimal index for gcd
+  lam_gam <- get.opt.index(out.p, criterion = "gcd")
+  # Set optimal index for gcd
+  opt.index(out.p, criterion = "gcd") <- lam_gam
+
+  fit  <- refit(out.p, criterion = c("stars", "gcd"))
+  stars_graph <- fit[["refit"]][["stars"]]
+  gstars_graph <- fit[["refit"]][["gcd"]]
+
+  # 4. Run Oracle QUIC
+  oracle_quic <- function(true_cov, lambda, ...) {
+    S <- true_cov
+    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+    est$path <- lapply(seq(length(lambda)), function(i) {
+        tmp <- est$X[,,i]
+        diag(tmp) <- 0
+        as(tmp != 0, "lMatrix")
+    })
+    est
+  }
+  
+  oracle_results <- oracle_quic(true_cov, lambda_path)
+
+  # Minimize total number of different edges between the estimated and true graph
+  best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+    estimated_graph <- oracle_results$path[[i]]
+    sum(estimated_graph != true_graph)
+  }))
+
+  best_lambda <- lambda_path[best_lambda_index]
+
+  # Extract the oracle precision matrix for the best lambda:
+  oracle_graph <- oracle_results$X[,,best_lambda_index]
+
+  
+  # 5. Calculate metrics
+ 
+  # List of estimated graphs
+  estimated_graphs <- list(stars = stars_graph, gstars = gstars_graph, oracle = oracle_graph)
+
+  # Create empty lists to store results
+  F1_scores <- list()
+  jaccard_indices <- list()
+
+  # Loop through each estimated graph and calculate metrics
+  for (name in names(estimated_graphs)) {
+  
+  # Convert the matrices to binary (1 for edge, 0 for no edge)
+  est_bin <- as.numeric(estimated_graphs[[name]] != 0)
+  true_bin <- as.numeric(true_graph != 0)
+
+  # Compute true positives, false positives, true negatives, and false negatives
+  TP <- sum(est_bin == 1 & true_bin == 1)
+  FP <- sum(est_bin == 1 & true_bin == 0)
+  TN <- sum(est_bin == 0 & true_bin == 0)
+  FN <- sum(est_bin == 0 & true_bin == 1)
+
+  # Calculate precision, recall, F1-score, and Jaccard index
+  precision <- TP / (TP + FP)
+  recall <- TP / (TP + FN)
+  F1 <- 2 * (precision * recall) / (precision + recall)
+  jaccard_index <- TP / (TP + FP + FN)
+
+  # Save results to lists
+  F1_scores[[name]] <- F1
+  jaccard_indices[[name]] <- jaccard_index
+  }
+  
+  return(list(F1_stars = F1_scores[["stars"]], F1_gcd = F1_scores[["gstars"]], F1_oracle = F1_scores[["oracle"]]))
+
+}
+
+
+# Run the loop for each configuration
+results <- list()
+for (config in configs) {
+  cat("Running experiment for configuration:", paste0("n=", config$n, " p=", config$p), "\n")
+  res <- run_hub(config$n, config$p, s, J, rho, u, b, N)
+  results[[paste0("n=", config$n, " p=", config$p)]] <- res
+}
+
+# Create a data frame to store results for plotting
+df <- data.frame(np_setting = names(results), 
+                 F1_stars = sapply(results, function(x) x$F1_stars),
+                 F1_gcd = sapply(results, function(x) x$F1_gcd),
+                 F1_oracle = sapply(results, function(x) x$F1_oracle))
+
+
+# Plotting the results
+desired_order <- sapply(configs, function(x) paste0("n=", x$n, " p=", x$p))
+df$np_setting <- factor(df$np_setting, levels = desired_order, ordered = TRUE)
+
+ggplot(df, aes(x=np_setting)) + 
+  geom_line(aes(y=F1_stars, color="Stars", group="Stars"), linetype="dotted", color="lightblue", linewidth=1.5) + 
+  geom_line(aes(y=F1_gcd, color="GCD", group="GCD"), linetype="dotted", color="brown", linewidth=1.5) + 
+  geom_line(aes(y=F1_oracle, color="Oracle", group="Oracle"), linetype="solid", color="black", linewidth=1.5) + 
+  geom_point(aes(y=F1_stars, color="Stars"), size=1.5) +
+  geom_point(aes(y=F1_gcd, color="GCD"), size=1.5) +
+  geom_point(aes(y=F1_oracle, color="Oracle"), size=1.5) +
+  labs(title = "F1-scores Across Different Configurations", y = "F1-score") + 
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
+  scale_color_manual(values=c("Stars"="lightblue", "GCD"="brown", "Oracle"="black"), 
+                     name="Method",
+                     breaks=c("Stars", "GCD", "Oracle"))
+
+```
 
 
 
