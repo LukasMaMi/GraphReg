@@ -118,14 +118,43 @@ opt.index(out.p_gs1, criterion = "gcd") <- lam_gam
 # Obtain true covariance matrix from the generated data
 true_cov <- hub1$sigma
 
-# Apply graphical lasso using the true covariance matrix
-oracle_result2 <- huge(true_cov, method = "glasso", n = n)
+# Oracle with QUIC
+oracle_quic <- function(true_cov, lambda, ...) {
+    S <- true_cov
+    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+    est$path <- lapply(seq(length(lambda)), function(i) {
+        tmp <- est$X[,,i]
+        diag(tmp) <- 0
+        as(tmp != 0, "lMatrix")
+    })
+    est
+}
 
-# Plot the oracle estimated graph
-huge.plot(oracle_result$icov)
+true_graph <- hub1$theta != 0
+
+lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
+lambda <- list(lambda=lams_gs1)
+lambda_path <- lams_gs1  # This is your previously defined lambda path
+oracle_results <- oracle_quic(true_cov, lambda_path)
+
+# Minimize total number of different edges between the estimated and true graph
+best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+    estimated_graph <- oracle_results$path[[i]]
+    sum(estimated_graph != true_graph)
+}))
+
+best_lambda <- lambda_path[best_lambda_index]
+
+#Extract the oracle precision matrix for the best lambda:
+oracle_best_precision_matrix <- oracle_results$X[,,best_lambda_index]
+
+#Plot the oracle graph:
+oracle_best_graph <- oracle_best_precision_matrix != 0
+huge.plot(oracle_best_graph)
+
+
 
 ```
-
 
 ### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
 ```{r}
@@ -134,14 +163,11 @@ huge.plot(oracle_result$icov)
 fit_gs1  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
 print(fit_gs1)
 
-est_graph_gs1 <- fit_gs1[["refit"]][["stars"]]
-est_graph_gs2 <- fit_gs1[["refit"]][["gcd"]]
-huge.plot(est_graph_gs1)
-huge.plot(est_graph_gs2)
+est_graph_stars <- fit_gs1[["refit"]][["stars"]]
+est_graph_gstars <- fit_gs1[["refit"]][["gcd"]]
 
 # 2. Get the true graph structure (true adjacency matrix)
 true_graph_gs1 <- hub1$theta
-huge.plot(true_graph_gs1)
 
 # 3. Compute the metrics
 # Convert the matrices to binary (1 for edge, 0 for no edge)
@@ -164,6 +190,29 @@ cat("F1-score:", F1_gs1, "\n")
 cat("Jaccard Index:", jaccard_index_gs1, "\n")
 
 ```
+
+
+
+```{r}
+oracle_bin <- as.numeric(oracle_best_graph)
+
+TP_oracle <- sum(oracle_bin == 1 & true_bin_gs1 == 1)
+FP_oracle <- sum(oracle_bin == 1 & true_bin_gs1 == 0)
+TN_oracle <- sum(oracle_bin == 0 & true_bin_gs1 == 0)
+FN_oracle <- sum(oracle_bin == 0 & true_bin_gs1 == 1)
+
+precision_oracle <- TP_oracle / (TP_oracle + FP_oracle)
+recall_oracle <- TP_oracle / (TP_oracle + FN_oracle)
+F1_oracle <- 2 * (precision_oracle * recall_oracle / (precision_oracle + recall_oracle))
+jaccard_index_oracle <- TP_oracle / (TP_oracle + FP_oracle + FN_oracle)
+
+cat("Oracle F1-score:", F1_oracle, "\n")
+cat("Oracle Jaccard Index:", jaccard_index_oracle, "\n")
+
+```
+
+
+
 
 
 ### 1.1) StARS: Hub1

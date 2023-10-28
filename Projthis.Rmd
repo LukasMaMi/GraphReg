@@ -26,6 +26,6 @@ proj_workflow_use_rmd("00-import")
 
 ```{r}
 install.packages("C:/R Projekte/QUIC_1.1.1.tar.gz", repos = NULL, type="source")
-
+install.packages("/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/QUIC_1.1.1.tar", repos = NULL, type="source")
 ```
 
