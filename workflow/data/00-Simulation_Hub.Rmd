@@ -52,17 +52,16 @@ b = (floor(10*sqrt(n)))/n
 N = 20
 
 
-
 set.seed(123)
 hub1 <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
 hub1_data <- hub1$data
 
-diag(hub1$omega)
-diag(hub1$sigma)
-
 #Lambda path
 lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
 lambda <- list(lambda=lams_gs1)
+
+true_graph <- hub1$theta
+true_cov <- hub1$sigma
 
 #Plot Adjacency Matrix
 huge.plot(hub1$theta)
@@ -79,7 +78,7 @@ est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
 est$path <- lapply(seq(length(lambda)), function(i) {
 ## convert precision array to adj list
 tmp <- est$X[,,i]; diag(tmp) <- 0
-as(tmp!=0, "lMatrix")
+as(tmp!=0, "lMatrix") #Here change format into "lsCMatrix"!!!!
 })
 est
 }
@@ -87,7 +86,7 @@ est
 #Run pulsar package
 library(orca)
 set.seed(123)
-out.p <- pulsar(
+out.p_gs1 <- pulsar(
       hub1_data,
       fun = quicr,
       fargs = lambda,
@@ -102,13 +101,13 @@ out.p <- pulsar(
       refit = FALSE
 )
 #Get optimal index for gcd
-lam_gam <- get.opt.index(out.p, criterion = "gcd")
+lam_gam <- get.opt.index(out.p_gs1, criterion = "gcd")
 #Set optimal index for gcd
-opt.index(out.p, criterion = "gcd") <- lam_gam
+opt.index(out.p_gs1, criterion = "gcd") <- lam_gam
 
 
-out.p
-plot(out.p, scale = T, invlam = FALSE, loglam = FALSE, legends = FALSE)
+out.p_gs1
+plot(out.p_gs1, scale = T, invlam = FALSE, loglam = FALSE, legends = FALSE)
 
 fit  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
 print(fit)
@@ -117,15 +116,14 @@ stars_graph <- fit[["refit"]][["stars"]]
 gstars_graph <- fit[["refit"]][["gcd"]]
 
 ```
+
+
 ### Oracle
 ```{r}
-# Obtain true covariance matrix from the generated data
-true_cov <- hub1$sigma
 
 # Oracle with QUIC
 oracle_quic <- function(true_cov, lambda, ...) {
-    S <- true_cov
-    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+    est <- QUIC(true_cov, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
     est$path <- lapply(seq(length(lambda)), function(i) {
         tmp <- est$X[,,i]
         diag(tmp) <- 0
@@ -134,34 +132,53 @@ oracle_quic <- function(true_cov, lambda, ...) {
     est
 }
 
-true_graph <- hub1$theta != 0
+oracle_results <- oracle_quic(true_cov, lams_gs1) #Bis hier OK!
 
-lams_gs1  <- getLamPath(max = getMaxCov(hub1_data), min = 0.01, len = 40)
-lambda <- list(lambda=lams_gs1)
-lambda_path <- lams_gs1  # This is your previously defined lambda path
-oracle_results <- oracle_quic(true_cov, lambda_path)
+oracle_results$X
+oracle_results$X
+oracle_results$opt
 
 # Minimize total number of different edges between the estimated and true graph
-best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+best_lambda_index <- which.min(sapply(1:length(lams_gs1), function(i) {
     estimated_graph <- oracle_results$path[[i]]
     sum(estimated_graph != true_graph)
 }))
 
-best_lambda <- lambda_path[best_lambda_index]
+best_lambda <- lams_gs1[best_lambda_index]
 
 #Extract the oracle precision matrix for the best lambda:
 oracle_best_precision_matrix <- oracle_results$X[,,best_lambda_index]
 
 #Plot the oracle graph:
-oracle_graph <- oracle_best_precision_matrix != 0
-huge.plot(oracle_best_graph)
+oracle_graph <- oracle_best_precision_matrix !=0
 
-
+huge.plot(oracle_graph)
 
 ```
 
 ### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
 ```{r}
+
+true_graph 
+oracle_graph
+true_cov
+
+stars_graph
+gstars_graph
+
+oracle_graph[oracle_graph == TRUE] <- 1
+oracle_graph[oracle_graph == FALSE] <- 0
+
+library(Matrix)
+dense_to_sparse <- function(mat) {
+  s_mat <- as(mat, "CsparseMatrix")
+  as(s_mat, "lMatrix")
+}
+
+oracle_graph <- dense_to_sparse(oracle_graph)
+true_graph  <- dense_to_sparse(true_graph) 
+true_cov  <- dense_to_sparse(true_cov) 
+
 # 1. Extract the estimated graph structure (estimated adjacency matrix)
 
 fit_gs1  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
@@ -170,13 +187,10 @@ print(fit_gs1)
 est_graph_stars <- fit_gs1[["refit"]][["stars"]]
 est_graph_gstars <- fit_gs1[["refit"]][["gcd"]]
 
-# 2. Get the true graph structure (true adjacency matrix)
-true_graph_gs1 <- hub1$theta
-
 # 3. Compute the metrics
 # Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_gs1 <- as.numeric(est_graph_gs1 != 0)
-true_bin_gs1 <- as.numeric(true_graph_gs1 != 0)
+est_bin_gs1 <- as.numeric(oracle_graph != 0)
+true_bin_gs1 <- as.numeric(true_graph != 0)
 
 # Compute true positives, false positives, true negatives, and false negatives
 TP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 1)
@@ -217,68 +231,13 @@ cat("Oracle Jaccard Index:", jaccard_index_oracle, "\n")
 
 ```
 
-## Plot Synthetic Data against F1-Score
+
+
+## Loop over all repetitions
 ```{r}
-library(ggplot2)
 
-# Set up data
-stars <- data.frame(
-  np_setting = factor(c("n=800 p=40", "n=400 p=100", "n=200 p=200", "n=100 p=400"),
-                      levels = c("n=800 p=40", "n=400 p=100", 
-                                 "n=200 p=200", "n=100 p=400")),
-  F1_score = c(F1_s1, F1_s2, F1_s3, F1_s4)
-)
-
-# Create the plot
-ggplot(stars, aes(x=np_setting, y=F1_score, group=1)) + 
-  geom_line() + 
-  geom_point() +
-  labs(title = "Hub") + 
-  xlab("") + 
-  ylab("F1-score") + 
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14))
-
-```
-
-#Workspace
-```{r}
-stars_graph 
-gstars_graph
-oracle_graph
-true_graph 
-
-# Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_gs1 <- as.numeric(est_graph_gs1 != 0)
-true_bin_gs1 <- as.numeric(true_graph_gs1 != 0)
-
-# Compute true positives, false positives, true negatives, and false negatives
-TP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 1)
-FP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 0)
-TN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 0)
-FN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 1)
-
-# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
-precision_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1)
-recall_gs1 <- TP_gs1 / (TP_gs1 + FN_gs1)
-F1_gs1 <- 2 * (precision_gs1 * recall_gs1 / (precision_gs1 + recall_gs1))
-jaccard_index_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1 + FN_gs1)
-
-cat("F1-score:", F1_gs1, "\n")
-cat("Jaccard Index:", jaccard_index_gs1, "\n")
-
-```
-
-
-
-```{r}
-# Load necessary libraries
-library(pulsar)
-library(huge)
-library(QUIC)
-library(orca)
-library(ggplot2)
-
+# Manually set the number of repetitions
+num_repetitions <- 2 
 
 # Specify configurations
 configs <- list(
@@ -287,9 +246,15 @@ configs <- list(
   list(n=200, p=200)
 )
 
+# Initialize matrices to store F1 scores
+F1_stars_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+F1_gcd_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+F1_oracle_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
 
+for(rep in 1:num_repetitions){
+  
 # Function to run experiment
-run_hub <- function(n, p, s = s, J = J, rho = rho, u = u, b = b, N = N) {
+run_hub <- function(n, p) {
   
   # 1. Set Parameters
   # Size of each hub group
@@ -306,12 +271,13 @@ run_hub <- function(n, p, s = s, J = J, rho = rho, u = u, b = b, N = N) {
   N = 20
   
   # 2. Data Generation
-  set.seed(123)
   hub <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
   hub_data <- hub$data
   
-  true_graph <- hub$theta != 0
+  true_graph <- hub$theta !=0
   true_cov <- hub$sigma
+  
+  #Define lambda path
   lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
   lambda <- list(lambda=lambda_path)
   
@@ -353,16 +319,15 @@ run_hub <- function(n, p, s = s, J = J, rho = rho, u = u, b = b, N = N) {
 
   # 4. Run Oracle QUIC
   oracle_quic <- function(true_cov, lambda, ...) {
-    S <- true_cov
-    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
-    est$path <- lapply(seq(length(lambda)), function(i) {
-        tmp <- est$X[,,i]
-        diag(tmp) <- 0
-        as(tmp != 0, "lMatrix")
-    })
-    est
+  est <- QUIC(true_cov, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+  est$path <- lapply(seq(length(lambda)), function(i) {
+    tmp <- est$X[,,i]
+    diag(tmp) <- 0
+    as(tmp != 0, "lMatrix")
+  })
+  est
   }
-  
+
   oracle_results <- oracle_quic(true_cov, lambda_path)
 
   # Minimize total number of different edges between the estimated and true graph
@@ -375,6 +340,8 @@ run_hub <- function(n, p, s = s, J = J, rho = rho, u = u, b = b, N = N) {
 
   # Extract the oracle precision matrix for the best lambda:
   oracle_graph <- oracle_results$X[,,best_lambda_index]
+  oracle_graph[oracle_graph == TRUE] <- "1"
+  oracle_graph[oracle_graph == FALSE] <- "0"
 
   
   # 5. Calculate metrics
@@ -412,46 +379,55 @@ run_hub <- function(n, p, s = s, J = J, rho = rho, u = u, b = b, N = N) {
   
   return(list(F1_stars = F1_scores[["stars"]], F1_gcd = F1_scores[["gstars"]], F1_oracle = F1_scores[["oracle"]]))
 
+  }
+
+  results <- lapply(configs, function(cfg) run_hub(n = cfg$n, p = cfg$p))  
+
+  # Update the matrices with the results of this repetition
+  F1_stars_matrix[rep, ] <- sapply(results, function(x) x$F1_stars)
+  F1_gcd_matrix[rep, ] <- sapply(results, function(x) x$F1_gcd)
+  F1_oracle_matrix[rep, ] <- sapply(results, function(x) x$F1_oracle)
+    
 }
 
+# Compute average scores
+avg_F1_stars <- colMeans(F1_stars_matrix)
+avg_F1_gcd <- colMeans(F1_gcd_matrix)
+avg_F1_oracle <- colMeans(F1_oracle_matrix)
 
-# Run the loop for each configuration
-results <- list()
-for (config in configs) {
-  cat("Running experiment for configuration:", paste0("n=", config$n, " p=", config$p), "\n")
-  res <- run_hub(config$n, config$p, s, J, rho, u, b, N)
-  results[[paste0("n=", config$n, " p=", config$p)]] <- res
-}
-
-# Create a data frame to store results for plotting
-df <- data.frame(np_setting = names(results), 
-                 F1_stars = sapply(results, function(x) x$F1_stars),
-                 F1_gcd = sapply(results, function(x) x$F1_gcd),
-                 F1_oracle = sapply(results, function(x) x$F1_oracle))
-
-
-# Plotting the results
 desired_order <- sapply(configs, function(x) paste0("n=", x$n, " p=", x$p))
+
+# Update the df to contain the average scores
+df <- data.frame(np_setting = desired_order, 
+                 F1_stars = avg_F1_stars,
+                 F1_gcd = avg_F1_gcd,
+                 F1_oracle = avg_F1_oracle)
+
 df$np_setting <- factor(df$np_setting, levels = desired_order, ordered = TRUE)
 
-ggplot(df, aes(x=np_setting)) + 
-  geom_line(aes(y=F1_stars, color="Stars", group="Stars"), linetype="dotted", color="lightblue", linewidth=1.5) + 
-  geom_line(aes(y=F1_gcd, color="GCD", group="GCD"), linetype="dotted", color="brown", linewidth=1.5) + 
-  geom_line(aes(y=F1_oracle, color="Oracle", group="Oracle"), linetype="solid", color="black", linewidth=1.5) + 
-  geom_point(aes(y=F1_stars, color="Stars"), size=1.5) +
-  geom_point(aes(y=F1_gcd, color="GCD"), size=1.5) +
-  geom_point(aes(y=F1_oracle, color="Oracle"), size=1.5) +
-  labs(title = "F1-scores Across Different Configurations", y = "F1-score") + 
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
-  scale_color_manual(values=c("Stars"="lightblue", "GCD"="brown", "Oracle"="black"), 
-                     name="Method",
-                     breaks=c("Stars", "GCD", "Oracle"))
 
 ```
 
 
 
+## Plotting F1-Scores over all repetitions for all configurations
+```{r}
+# Plotting the results
+ggplot(df, aes(x=np_setting)) + 
+  geom_line(aes(y=F1_stars, color="Stars", group="Stars"), linetype="dotted", color="lightblue", linewidth=1.5) + 
+  geom_line(aes(y=F1_gcd, color="GCD", group="GCD"), linetype="dotted", color="darkorange", linewidth=1.5) + 
+  geom_line(aes(y=F1_oracle, color="Oracle", group="Oracle"), linetype="solid", color="black", linewidth=1.5) + 
+  geom_point(aes(y=F1_stars, color="Stars"), size=1.5) +
+  geom_point(aes(y=F1_gcd, color="GCD"), size=1.5) +
+  geom_point(aes(y=F1_oracle, color="Oracle"), size=1.5) +
+  labs(title = "Hub", y = "F1-score") + 
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
+  scale_color_manual(values=c("Stars"="lightblue", "GCD"="darkorange", "Oracle"="black"), 
+                     name="Method",
+                     breaks=c("Stars", "GCD", "Oracle"))
+
+```
 
 
 
