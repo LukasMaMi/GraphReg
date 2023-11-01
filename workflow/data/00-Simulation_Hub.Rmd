@@ -28,28 +28,12 @@ set of all indices: V_1 U V_2 U ... U V_J = {1, ..., p}.
 * **Threshold beta:** The beta threshold is a user-defined value that decides the minimum proportion necessary for an edge to be considered "stable" and thus be included in the final graph. For instance, if the threshold is set to 0.1, it means an edge should be present in at least 10% of the subsamples to be considered stable.
 * **Adjacency Matrix:** An adjacency matrix is a square matrix used to represent a finite graph. The elements of the matrix indicate whether pairs of vertices are adjacent or not in the graph. For a simple graph (no self-loops or multiple edges) with vertex set V, the adjacency matrix A is a set of |V| x |V| where its element A_ij is 1 or non-negative, if there is an edge between vertix i and vertex j, and 0 otherwise.
 
-
-## Simulate Synthetic Data
 ```{r}
 library(MASS)
 library(pulsar)
 library(Matrix)
 library(igraph)
 library(huge)
-
-#Set Parameters
-n <- 800 
-p <- 40 
-#Size of each hub group
-s <- 20
-#Number of hub groups
-J <- floor(p/s) 
-#Off-diagonal elements
-rho <- (1/(s+1))
-#Subsampled dataset size 
-b = (floor(10*sqrt(n)))/n
-#Number of Subsamples N
-N = 20
 
 generator <- function (n, p, graph, rho, g, vis, verbose) 
 {
@@ -113,6 +97,86 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
     class(sim) = "sim"
     return(sim)
 }
+```
+
+
+
+```{r}
+
+# Define directory path
+dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Data_storage"
+
+# Manually set the number of repetitions
+num_repetitions <- 2 
+
+# Specify configurations
+configs <- list(
+  list(n=800, p=40),
+  list(n=400, p=100),
+  list(n=200, p=200)
+)
+
+#Size of each hub group
+s <- 20
+#Off-diagonal elements
+rho <- (1/(s+1))
+
+# Set up outer loop for repetitions
+for(rep in 1:num_repetitions) {
+  
+  # Set up inner loop for configurations
+  for(cfg in configs) {
+    
+    n <- cfg$n
+    p <- cfg$p
+    
+    #Number of hub groups
+    J <- floor(p/s)
+    
+    #Subsampled dataset size 
+    b = (floor(10*sqrt(n)))/n
+    #Number of Subsamples N
+    N = 20
+
+    hub <- generator(n = n, p = p, graph = "hub", rho = rho, g = J, vis = FALSE, verbose = TRUE)
+    
+    hub_data <- hub$data
+    true_graph <- as.matrix(hub$theta)
+    true_cov <- hub$sigma
+    
+    # Define the name of the file to save, including the directory path
+    file_name <- paste0(dir_path, "/hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
+    
+    # Save the hub data to the file
+    save(hub, hub_data, true_graph, true_cov, file = file_name)
+  }
+}
+
+print("Hubs generated and saved!")
+
+
+```
+
+
+
+
+
+## Simulate Synthetic Data
+```{r}
+
+#Set Parameters
+n <- 800 
+p <- 40 
+#Size of each hub group
+s <- 20
+#Number of hub groups
+J <- floor(p/s) 
+#Off-diagonal elements
+rho <- (1/(s+1))
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+#Number of Subsamples N
+N = 20
 
 hub <- generator(n = n, p = p, graph = "hub", rho = rho, g = J, vis = TRUE, verbose = TRUE)
 
@@ -275,28 +339,6 @@ cat("Jaccard Index:", jaccard_index_gs1, "\n")
 
 
 ```
-
-
-
-```{r}
-oracle_bin <- as.numeric(oracle_best_graph)
-
-TP_oracle <- sum(oracle_bin == 1 & true_bin_gs1 == 1)
-FP_oracle <- sum(oracle_bin == 1 & true_bin_gs1 == 0)
-TN_oracle <- sum(oracle_bin == 0 & true_bin_gs1 == 0)
-FN_oracle <- sum(oracle_bin == 0 & true_bin_gs1 == 1)
-
-precision_oracle <- TP_oracle / (TP_oracle + FP_oracle)
-recall_oracle <- TP_oracle / (TP_oracle + FN_oracle)
-F1_oracle <- 2 * (precision_oracle * recall_oracle / (precision_oracle + recall_oracle))
-jaccard_index_oracle <- TP_oracle / (TP_oracle + FP_oracle + FN_oracle)
-
-cat("Oracle F1-score:", F1_oracle, "\n")
-cat("Oracle Jaccard Index:", jaccard_index_oracle, "\n")
-
-```
-
-
 
 ## Loop over all repetitions
 ```{r}
