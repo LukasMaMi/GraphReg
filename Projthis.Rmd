@@ -191,3 +191,61 @@ df <- data.frame(np_setting = names(results),
 
 
 ```
+
+
+### 1) Hub1: for n = 800 and p = 40
+```{r}
+library(huge)
+library(pulsar)
+
+#Set Parameters
+n <- 800 
+p <- 40 
+#Size of each hub group
+s <- 20
+#Number of hub groups
+J <- floor(p/s) 
+#Off-diagonal elements
+rho <- (1/(s+1))
+#Diagonal elements
+u <- 0.003
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+#Number of Subsamples N
+N = 20
+
+
+set.seed(123)
+hub <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+hub_data <- hub$data
+
+#Lambda path
+lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
+lambda <- list(lambda=lambda_path)
+
+true_graph <- as(hub$theta, "lMatrix")
+true_cov <- hub$sigma
+
+#Plot Adjacency Matrix
+huge.plot(hub$theta)
+
+true_graph <- as.matrix(hub$theta)
+test <- as(hub$theta, "TsparseMatrix")
+```
+
+```{r}
+#Define QUIC as method of choice for stars and gstars
+library(QUIC)
+
+quicr <- function(hub_data, lambda, ...) {
+S <- cov(hub_data)
+est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+est$path <- lapply(seq(length(lambda)), function(i) {
+## convert precision array to adj list
+tmp <- est$X[,,i]; diag(tmp) <- 0
+as(tmp!=0, "lMatrix") 
+})
+est
+}
+```
+
