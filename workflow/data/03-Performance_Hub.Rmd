@@ -6,7 +6,7 @@ output: github_document
 ```{r}
 
 # Define the directory for estimated results
-dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Hub"
+dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 # 1. Generate list of file names based on configs
 get_filename <- function(config, rep, prefix = "hub") {
@@ -31,12 +31,18 @@ compute_metrics <- function(est_graph, true_graph) {
 results <- list()
 
 for(cfg in configs) {
+  
   # Initialize lists to store metrics for each repetition
   stars_results <- list()
   gstars_results <- list()
   oracle_results <- list()
 
   for(rep in 1:num_repetitions) {
+    
+    # Load the simulated data
+    sim_filename <- paste0(dir_path, "/hub_rep_", rep, "_n_", cfg$n, "_p_", cfg$p, ".RData")
+    load(sim_filename)
+    
     # Load the results
     result_filename <- get_filename(cfg, rep, prefix="estimation")
     load(paste0(dir_path2, "/", result_filename))
@@ -72,9 +78,15 @@ for(cfg in configs) {
 }
 
 # Save metrics to the directory
-save(results, file=paste0(dir_path2, "/performance_metrics.RData"))
+save(results, file=paste0(dir_path3, "/performance_metrics.RData"))
 
 print("Performance metrics calculated and saved!")
+
+```
+
+## Check
+```{r}
+print(results)
 
 ```
 

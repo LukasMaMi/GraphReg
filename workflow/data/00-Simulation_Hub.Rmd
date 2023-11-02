@@ -160,101 +160,9 @@ print("Hubs generated and saved!")
 
 
 ```
-## StARS, G-StARS and Oracle
-```{r}
-
-#Define QUIC as method of choice for stars and gstars
-library(QUIC)
-
-quicr <- function(hub_data, lambda, ...) {
-  S <- cov(hub_data)
-  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
-  est$path <- lapply(seq(length(lambda)), function(i) {
-  ## convert precision array to adj list
-  tmp <- est$X[,,i]; diag(tmp) <- 0
-  tmp <- ifelse(tmp != 0, 1, 0)
-  return(tmp)
-  })
-  est
-}
-
-#Run pulsar package
-library(orca)
-out.p <- pulsar(
-      hub_data,
-      fun = quicr,
-      fargs = (lambda = lambda),
-      criterion = c('stars', 'gcd'),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = NULL,
-      lb.stars = TRUE,
-      ub.stars = TRUE,
-      ncores = 1,
-      refit = FALSE
-)
-#Get optimal index for gcd
-lam_gam <- get.opt.index(out.p, criterion = "gcd")
-#Set optimal index for gcd
-opt.index(out.p, criterion = "gcd") <- lam_gam
 
 
-out.p
-plot(out.p, scale = T, invlam = FALSE, loglam = FALSE, legends = FALSE)
-
-fit  <- refit(out.p, criterion = c("stars", "gcd"))
-print(fit)
-
-stars_graph <- fit[["refit"]][["stars"]]
-gstars_graph <- fit[["refit"]][["gcd"]]
-
-
-#Define Hamming Distance as criterium for Oracle
-hamming_distance <- function(matrix1, matrix2) {
-    return(sum(matrix1 != matrix2))
-}
-
-# Oracle with QUIC
-oracle_quic <- function(data, lambda, ...) {
-    S <- true_cov
-    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
-    est$path <- lapply(seq(length(lambda)), function(i) {
-    ## convert precision array to adj list
-    tmp <- est$X[,,i]; diag(tmp) <- 0
-    tmp <- ifelse(tmp != 0, 1, 0)
-    return(tmp)
-    })
-    est
-}
-
-oracle_results <- oracle_quic(hub_data, lambda_path)
-
-# Minimize Hamming distance between the estimated and true graph HAMMING!
-# best_lambda_index is position of optimal lambda on path
-best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
-    estimated_graph <- oracle_results$path[[i]]
-    hamming_distance(estimated_graph, true_graph)
-}))
-
-#Determine best lambda oracle
-best_lambda <- lambda_path[best_lambda_index]
-
-#Extract the oracle precision matrix for the best lambda:
-oracle_graph <- oracle_results$X[,,best_lambda_index]
-# Convert precision matrix to adjacency matrix
-oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
-diag(oracle_graph) <- 0
-
-
-#Plot
-huge.plot(stars_graph)
-huge.plot(gstars_graph)
-huge.plot(oracle_graph)
-```
-
-
-
+#####################################
 
 ## Simulate Synthetic Data
 ```{r}
@@ -277,6 +185,7 @@ hub <- generator(n = n, p = p, graph = "hub", rho = rho, g = J, vis = TRUE, verb
 
 hub_data <- hub$data
 true_graph <- as.matrix(hub$theta)
+true_graph <- true_graph * lower.tri(true_graph, diag = TRUE)
 true_cov <- hub$sigma
 
 #Lambda path
@@ -287,6 +196,7 @@ lambda <- list(lambda=lambda_path)
 huge.plot(true_graph)
 
 ```
+
 ## StARS and G-StARS
 ```{r}
 
@@ -344,14 +254,37 @@ huge.plot(gstars_graph)
 ## Oracle
 ```{r}
 
+#Subsample original data set (b x p)
+
+# Function to generate N subsamples from the original dataset
+subsample_data <- function(data, N, b) {
+  n <- nrow(data)
+  subsample_size <- floor(b * n)
+  
+  subsamples <- vector("list", N)
+  
+  for (i in 1:N) {
+    subsample_indices <- sample(1:n, subsample_size)
+    subsamples[[i]] <- data[subsample_indices, ]
+  }
+  
+  return(subsamples)
+}
+
+# Use the function to generate the subsamples
+oracle_data <- subsample_data(hub_data, N, b)
+
+
 #Define Hamming Distance as criterium for Oracle
 hamming_distance <- function(matrix1, matrix2) {
     return(sum(matrix1 != matrix2))
 }
 
-# Oracle with QUIC
+# Assuming lambda_path is defined somewhere above in your original code
+
+# Oracle with QUIC function adjusted to take a single data sample
 oracle_quic <- function(data, lambda, ...) {
-    S <- true_cov
+    S <- cov(data)
     est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
     est$path <- lapply(seq(length(lambda)), function(i) {
     ## convert precision array to adj list
@@ -362,20 +295,36 @@ oracle_quic <- function(data, lambda, ...) {
     est
 }
 
-oracle_results <- oracle_quic(hub_data, lambda_path)
+# List to store best lambda for each subsample
+best_lambdas <- numeric(N)
 
-# Minimize Hamming distance between the estimated and true graph HAMMING!
-# best_lambda_index is position of optimal lambda on path
-best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
-    estimated_graph <- oracle_results$path[[i]]
-    hamming_distance(estimated_graph, true_graph)
-}))
+# Iterate over each subsample
+for(i in 1:N) {
+    # Apply the QUIC method to the current subsample
+    oracle_results <- oracle_quic(oracle_data[[i]], lambda_path)
+    
+    # Determine the best lambda for the current subsample
+    best_lambda_index <- which.min(sapply(1:length(lambda_path), function(j) {
+        estimated_graph <- oracle_results$path[[j]]
+        hamming_distance(estimated_graph, true_graph)
+    }))
+    
+    # Store the best lambda for this subsample
+    best_lambdas[i] <- lambda_path[best_lambda_index]
+}
 
-#Determine best lambda oracle
-best_lambda <- lambda_path[best_lambda_index]
+# Determine the most frequently optimal lambda across all subsamples
+best_lambda_overall <- as.numeric(names(sort(table(best_lambdas), decreasing = TRUE)[1]))
 
-#Extract the oracle precision matrix for the best lambda:
-oracle_graph <- oracle_results$X[,,best_lambda_index]
+# Using the overall best lambda to run QUIC on the full dataset
+oracle_results_full <- oracle_quic(hub_data, lambda_path)
+
+# Find the index of the lambda in lambda_path that is closest to best_lambda_overall
+closest_lambda_index <- which.min(abs(lambda_path - best_lambda_overall))
+
+# Extract the precision matrix for the closest lambda to best_lambda_overall
+oracle_graph <- oracle_results_full$X[,,closest_lambda_index]
+
 # Convert precision matrix to adjacency matrix
 oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
 diag(oracle_graph) <- 0
@@ -388,50 +337,40 @@ huge.plot(oracle_graph)
 ### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
 ```{r}
 
-true_graph 
-oracle_graph
-stars_graph
-gstars_graph
+# 1. Extract the estimated graph structure (estimated adjacency matrix)
+#true_graph 
+#oracle_graph
+#stars_graph
+#gstars_graph
 
-library(Matrix)
-dense_to_sparse <- function(mat) {
-  s_mat <- as(mat, "CsparseMatrix")
-  as(s_mat, "lMatrix")
+# Function to calculate F1-score and Jaccard index
+compute_metrics <- function(est_graph, true_graph) {
+  TP <- sum(est_graph == 1 & true_graph == 1)
+  FP <- sum(est_graph == 1 & true_graph == 0)
+  FN <- sum(est_graph == 0 & true_graph == 1)
+
+  precision <- TP / (TP + FP)
+  recall <- TP / (TP + FN)
+  F1 <- 2 * (precision * recall) / (precision + recall)
+  jaccard_index <- TP / (TP + FP + FN)
+
+  return(list(F1 = F1, Jaccard = jaccard_index))
 }
 
-oracle_graph <- dense_to_sparse(oracle_graph)
-true_graph  <- dense_to_sparse(true_graph) 
-true_cov  <- dense_to_sparse(true_cov) 
+# Compute metrics for Oracle graph
+oracle_metrics <- compute_metrics(oracle_graph, true_graph)
+cat("Oracle - F1-score:", oracle_metrics$F1, "\n")
+cat("Oracle - Jaccard Index:", oracle_metrics$Jaccard, "\n\n")
 
-# 1. Extract the estimated graph structure (estimated adjacency matrix)
+# Compute metrics for Stars graph
+stars_metrics <- compute_metrics(stars_graph, true_graph)
+cat("Stars - F1-score:", stars_metrics$F1, "\n")
+cat("Stars - Jaccard Index:", stars_metrics$Jaccard, "\n\n")
 
-fit_gs1  <- refit(out.p_gs1, criterion = c("stars", "gcd"))
-print(fit_gs1)
-
-est_graph_stars <- fit_gs1[["refit"]][["stars"]]
-est_graph_gstars <- fit_gs1[["refit"]][["gcd"]]
-
-# 3. Compute the metrics
-# Convert the matrices to binary (1 for edge, 0 for no edge)
-est_bin_gs1 <- as.numeric(oracle_graph != 0)
-true_bin_gs1 <- as.numeric(true_graph != 0)
-
-# Compute true positives, false positives, true negatives, and false negatives
-TP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 1)
-FP_gs1 <- sum(est_bin_gs1 == 1 & true_bin_gs1 == 0)
-TN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 0)
-FN_gs1 <- sum(est_bin_gs1 == 0 & true_bin_gs1 == 1)
-
-# Calculate precision, recall, F1-score (Sl. 8), and Jaccard index
-precision_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1)
-recall_gs1 <- TP_gs1 / (TP_gs1 + FN_gs1)
-F1_gs1 <- 2 * (precision_gs1 * recall_gs1 / (precision_gs1 + recall_gs1))
-jaccard_index_gs1 <- TP_gs1 / (TP_gs1 + FP_gs1 + FN_gs1)
-
-cat("F1-score:", F1_gs1, "\n")
-cat("Jaccard Index:", jaccard_index_gs1, "\n")
-
-
+# Compute metrics for GStars graph
+gstars_metrics <- compute_metrics(gstars_graph, true_graph)
+cat("GStars - F1-score:", gstars_metrics$F1, "\n")
+cat("GStars - Jaccard Index:", gstars_metrics$Jaccard, "\n\n")
 
 ```
 
@@ -439,7 +378,7 @@ cat("Jaccard Index:", jaccard_index_gs1, "\n")
 ```{r}
 
 # Manually set the number of repetitions
-num_repetitions <- 2 
+num_repetitions <- 1 
 
 # Specify configurations
 configs <- list(
@@ -455,51 +394,52 @@ F1_oracle_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
 
 for(rep in 1:num_repetitions){
   
-# Function to run experiment
-run_hub <- function(n, p) {
+  # Function to run experiment
+  run_hub <- function(n, p) {
   
-  # 1. Set Parameters
-  # Size of each hub group
+  #Size of each hub group
   s <- 20
-  # Number of hub groups
+  #Number of hub groups
   J <- floor(p/s) 
-  # Off-diagonal elements
+  #Off-diagonal elements
   rho <- (1/(s+1))
-  # Diagonal elements
-  u <- 0.001
-  # Subsampled dataset size 
+  #Subsampled dataset size 
   b = (floor(10*sqrt(n)))/n
-  # Number of Subsamples N
+  #Number of Subsamples N
   N = 20
-  
-  # 2. Data Generation
-  hub <- huge.generator(n = n, d = p, graph = "hub", v = rho, u = u, g = J, vis = TRUE)
+
+  hub <- generator(n = n, p = p, graph = "hub", rho = rho, g = J, vis = TRUE, 
+                   verbose = TRUE)
+
   hub_data <- hub$data
-  
-  true_graph <- hub$theta !=0
+  true_graph <- as.matrix(hub$theta)
   true_cov <- hub$sigma
-  
-  #Define lambda path
-  lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
+
+  #Lambda path
+  lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.001, len = 30)
   lambda <- list(lambda=lambda_path)
   
   # 3. Run QUIC method
+  library(QUIC)
+
   quicr <- function(hub_data, lambda, ...) {
-  S <- cov(hub_data)
-  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
-  est$path <- lapply(seq(length(lambda)), function(i) {
-  ## convert precision array to adj list
-  tmp <- est$X[,,i]; diag(tmp) <- 0
-  as(tmp!=0, "lMatrix")
-  })
-  est
+    S <- cov(hub_data)
+    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+    est$path <- lapply(seq(length(lambda)), function(i) {
+    ## convert precision array to adj list
+    tmp <- est$X[,,i]; diag(tmp) <- 0
+    tmp <- ifelse(tmp != 0, 1, 0)
+    return(tmp)
+    })
+    est
   }
 
-  # Run pulsar package
+  #Run pulsar package
+  library(orca)
   out.p <- pulsar(
       hub_data,
       fun = quicr,
-      fargs = lambda,
+      fargs = (lambda = lambda),
       criterion = c('stars', 'gcd'),
       thresh = 0.1,
       subsample.ratio = b,
@@ -510,46 +450,96 @@ run_hub <- function(n, p) {
       ncores = 1,
       refit = FALSE
   )
-  # Get optimal index for gcd
+  #Get optimal index for gcd
   lam_gam <- get.opt.index(out.p, criterion = "gcd")
-  # Set optimal index for gcd
+  #Set optimal index for gcd
   opt.index(out.p, criterion = "gcd") <- lam_gam
 
   fit  <- refit(out.p, criterion = c("stars", "gcd"))
+  
   stars_graph <- fit[["refit"]][["stars"]]
   gstars_graph <- fit[["refit"]][["gcd"]]
 
+  
   # 4. Run Oracle QUIC
-  oracle_quic <- function(true_cov, lambda, ...) {
-  est <- QUIC(true_cov, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
-  est$path <- lapply(seq(length(lambda)), function(i) {
-    tmp <- est$X[,,i]
-    diag(tmp) <- 0
-    as(tmp != 0, "lMatrix")
-  })
-  est
+  
+  # Function to generate N subsamples from the original dataset
+  subsample_data <- function(data, N, b) {
+  n <- nrow(data)
+  subsample_size <- floor(b * n)
+  
+  subsamples <- vector("list", N)
+  
+  for (i in 1:N) {
+    subsample_indices <- sample(1:n, subsample_size)
+    subsamples[[i]] <- data[subsample_indices, ]
+  }
+  
+  return(subsamples)
   }
 
-  oracle_results <- oracle_quic(true_cov, lambda_path)
+  # Use the function to generate the subsamples
+  oracle_data <- subsample_data(hub_data, N, b)
 
-  # Minimize total number of different edges between the estimated and true graph
-  best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
-    estimated_graph <- oracle_results$path[[i]]
-    sum(estimated_graph != true_graph)
-  }))
 
-  best_lambda <- lambda_path[best_lambda_index]
+  #Define Hamming Distance as criterium for Oracle
+  hamming_distance <- function(matrix1, matrix2) {
+    return(sum(matrix1 != matrix2))
+  }
 
-  # Extract the oracle precision matrix for the best lambda:
-  oracle_graph <- oracle_results$X[,,best_lambda_index]
-  oracle_graph[oracle_graph == TRUE] <- "1"
-  oracle_graph[oracle_graph == FALSE] <- "0"
+  # Oracle with QUIC function adjusted to take a single data sample
+  oracle_quic <- function(data, lambda, ...) {
+    S <- cov(data)
+    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+    est$path <- lapply(seq(length(lambda)), function(i) {
+    ## convert precision array to adj list
+    tmp <- est$X[,,i]; diag(tmp) <- 0
+    tmp <- ifelse(tmp != 0, 1, 0)
+    return(tmp)
+    })
+    est
+  }
+
+  # List to store best lambda for each subsample
+  best_lambdas <- numeric(N)
+
+  # Iterate over each subsample
+  for(i in 1:N) {
+    # Apply the QUIC method to the current subsample
+    oracle_results <- oracle_quic(oracle_data[[i]], lambda_path)
+    
+    # Determine the best lambda for the current subsample
+    best_lambda_index <- which.min(sapply(1:length(lambda_path), function(j) {
+        estimated_graph <- oracle_results$path[[j]]
+        hamming_distance(estimated_graph, true_graph)
+    }))
+    
+    # Store the best lambda for this subsample
+    best_lambdas[i] <- lambda_path[best_lambda_index]
+  }
+
+# Determine the most frequently optimal lambda across all subsamples
+best_lambda_overall <- as.numeric(names(sort(table(best_lambdas), decreasing = TRUE)[1]))
+
+# Using the overall best lambda to run QUIC on the full dataset
+oracle_results_full <- oracle_quic(hub_data, lambda_path)
+
+# Find the index of the lambda in lambda_path that is closest to best_lambda_overall
+closest_lambda_index <- which.min(abs(lambda_path - best_lambda_overall))
+
+# Extract the precision matrix for the closest lambda to best_lambda_overall
+oracle_graph <- oracle_results_full$X[,,closest_lambda_index]
+
+# Convert precision matrix to adjacency matrix
+oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
+diag(oracle_graph) <- 0
 
   
   # 5. Calculate metrics
  
   # List of estimated graphs
-  estimated_graphs <- list(stars = stars_graph, gstars = gstars_graph, oracle = oracle_graph)
+  estimated_graphs <- list(stars = stars_graph, gstars = gstars_graph, 
+                           oracle = oracle_graph)
 
   # Create empty lists to store results
   F1_scores <- list()
@@ -579,7 +569,8 @@ run_hub <- function(n, p) {
   jaccard_indices[[name]] <- jaccard_index
   }
   
-  return(list(F1_stars = F1_scores[["stars"]], F1_gcd = F1_scores[["gstars"]], F1_oracle = F1_scores[["oracle"]]))
+  return(list(F1_stars = F1_scores[["stars"]], F1_gcd = F1_scores[["gstars"]], 
+              F1_oracle = F1_scores[["oracle"]]))
 
   }
 
@@ -614,6 +605,9 @@ df$np_setting <- factor(df$np_setting, levels = desired_order, ordered = TRUE)
 
 ## Plotting F1-Scores over all repetitions for all configurations
 ```{r}
+
+library(ggplot2)
+
 # Plotting the results
 ggplot(df, aes(x=np_setting)) + 
   geom_line(aes(y=F1_stars, color="Stars", group="Stars"), linetype="dotted", color="lightblue", linewidth=1.5) + 
@@ -630,6 +624,7 @@ ggplot(df, aes(x=np_setting)) +
                      breaks=c("Stars", "GCD", "Oracle"))
 
 ```
+
 
 
 
