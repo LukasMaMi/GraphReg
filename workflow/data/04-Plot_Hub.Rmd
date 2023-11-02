@@ -1,0 +1,80 @@
+---
+title: "04-Plot_Hub"
+output: github_document
+---
+
+
+```{r}
+
+configs <- names(results)
+methods <- names(results[[1]])
+
+# Create the dataframe dynamically
+df <- data.frame()
+
+for(config in configs) {
+    for(method in methods) {
+        temp <- data.frame(
+            np_setting = config,
+            method = method,
+            F1_mean = results[[config]][[method]]$Mean_F1,
+            F1_lower = results[[config]][[method]]$CI_F1[1],
+            F1_upper = results[[config]][[method]]$CI_F1[2],
+            Jaccard_mean = results[[config]][[method]]$Mean_Jaccard,
+            Jaccard_lower = results[[config]][[method]]$CI_Jaccard[1],
+            Jaccard_upper = results[[config]][[method]]$CI_Jaccard[2]
+        )
+        df <- rbind(df, temp)
+    }
+}
+
+```
+
+
+```{r}
+library(ggplot2)
+
+f1_plot <- ggplot(df, aes(x=np_setting)) + 
+  geom_line(aes(y=F1_mean, color=method, group=method), linetype="dotted", linewidth=1.5) + 
+  geom_point(aes(y=F1_mean, color=method), size=1.5) +
+  geom_errorbar(aes(ymin=F1_lower, ymax=F1_upper, color=method), width=0.2) +
+  labs(title = "Hub", y = "F1-score") + 
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
+  scale_color_manual(values=c("Stars"="lightblue", "GStars"="darkorange", "Oracle"="black"), 
+                     name="Method",
+                     breaks=c("Stars", "GStars", "Oracle"))
+
+print(f1_plot)
+```
+
+
+
+```{r}
+
+jaccard_plot <- ggplot(df, aes(x=np_setting)) + 
+  geom_line(aes(y=Jaccard_mean, color=method, group=method), linetype="dotted", linewidth=1.5) + 
+  geom_point(aes(y=Jaccard_mean, color=method), size=1.5) +
+  geom_errorbar(aes(ymin=Jaccard_lower, ymax=Jaccard_upper, color=method), width=0.2) +
+  labs(title = "Hub", y = "Jaccard Index") + 
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
+  scale_color_manual(values=c("Stars"="lightblue", "GStars"="darkorange", "Oracle"="black"), 
+                     name="Method",
+                     breaks=c("Stars", "GStars", "Oracle"))
+
+print(jaccard_plot)
+
+```
+
+
+```{r}
+
+# Replace with your specific path
+path_to_folder <- "/path_to_your_folder/"
+
+ggsave(filename=paste0(path_to_folder, "f1_plot.png"), plot=f1_plot, width=10, height=6)
+ggsave(filename=paste0(path_to_folder, "jaccard_plot.png"), plot=jaccard_plot, width=10, height=6)
+
+```
+
