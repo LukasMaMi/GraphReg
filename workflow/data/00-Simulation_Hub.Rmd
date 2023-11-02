@@ -104,7 +104,7 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
 ```{r}
 
 # Define directory path
-dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Data_storage"
+dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Simulation_Hub"
 
 # Manually set the number of repetitions
 num_repetitions <- 2 
@@ -144,6 +144,10 @@ for(rep in 1:num_repetitions) {
     true_graph <- as.matrix(hub$theta)
     true_cov <- hub$sigma
     
+    #Lambda path
+    lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
+    lambda <- list(lambda=lambda_path)
+    
     # Define the name of the file to save, including the directory path
     file_name <- paste0(dir_path, "/hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
     
@@ -156,7 +160,98 @@ print("Hubs generated and saved!")
 
 
 ```
+## StARS, G-StARS and Oracle
+```{r}
 
+#Define QUIC as method of choice for stars and gstars
+library(QUIC)
+
+quicr <- function(hub_data, lambda, ...) {
+  S <- cov(hub_data)
+  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+  est$path <- lapply(seq(length(lambda)), function(i) {
+  ## convert precision array to adj list
+  tmp <- est$X[,,i]; diag(tmp) <- 0
+  tmp <- ifelse(tmp != 0, 1, 0)
+  return(tmp)
+  })
+  est
+}
+
+#Run pulsar package
+library(orca)
+out.p <- pulsar(
+      hub_data,
+      fun = quicr,
+      fargs = (lambda = lambda),
+      criterion = c('stars', 'gcd'),
+      thresh = 0.1,
+      subsample.ratio = b,
+      rep.num = N,
+      seed = NULL,
+      lb.stars = TRUE,
+      ub.stars = TRUE,
+      ncores = 1,
+      refit = FALSE
+)
+#Get optimal index for gcd
+lam_gam <- get.opt.index(out.p, criterion = "gcd")
+#Set optimal index for gcd
+opt.index(out.p, criterion = "gcd") <- lam_gam
+
+
+out.p
+plot(out.p, scale = T, invlam = FALSE, loglam = FALSE, legends = FALSE)
+
+fit  <- refit(out.p, criterion = c("stars", "gcd"))
+print(fit)
+
+stars_graph <- fit[["refit"]][["stars"]]
+gstars_graph <- fit[["refit"]][["gcd"]]
+
+
+#Define Hamming Distance as criterium for Oracle
+hamming_distance <- function(matrix1, matrix2) {
+    return(sum(matrix1 != matrix2))
+}
+
+# Oracle with QUIC
+oracle_quic <- function(data, lambda, ...) {
+    S <- true_cov
+    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+    est$path <- lapply(seq(length(lambda)), function(i) {
+    ## convert precision array to adj list
+    tmp <- est$X[,,i]; diag(tmp) <- 0
+    tmp <- ifelse(tmp != 0, 1, 0)
+    return(tmp)
+    })
+    est
+}
+
+oracle_results <- oracle_quic(hub_data, lambda_path)
+
+# Minimize Hamming distance between the estimated and true graph HAMMING!
+# best_lambda_index is position of optimal lambda on path
+best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+    estimated_graph <- oracle_results$path[[i]]
+    hamming_distance(estimated_graph, true_graph)
+}))
+
+#Determine best lambda oracle
+best_lambda <- lambda_path[best_lambda_index]
+
+#Extract the oracle precision matrix for the best lambda:
+oracle_graph <- oracle_results$X[,,best_lambda_index]
+# Convert precision matrix to adjacency matrix
+oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
+diag(oracle_graph) <- 0
+
+
+#Plot
+huge.plot(stars_graph)
+huge.plot(gstars_graph)
+huge.plot(oracle_graph)
+```
 
 
 
