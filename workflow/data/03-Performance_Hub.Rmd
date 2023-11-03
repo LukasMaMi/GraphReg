@@ -6,7 +6,8 @@ output: github_document
 ```{r}
 
 # Define the directory for estimated results
-dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
+#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
+dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 # 1. Generate list of file names based on configs
 get_filename <- function(config, rep, prefix = "hub") {

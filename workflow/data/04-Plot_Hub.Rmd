@@ -71,7 +71,7 @@ print(jaccard_plot)
 ```{r}
 
 # Replace with your specific path
-path_to_folder <- "/path_to_your_folder/"
+path_to_folder <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
 
 ggsave(filename=paste0(path_to_folder, "f1_plot.png"), plot=f1_plot, width=10, height=6)
 ggsave(filename=paste0(path_to_folder, "jaccard_plot.png"), plot=jaccard_plot, width=10, height=6)

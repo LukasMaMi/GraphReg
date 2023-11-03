@@ -8,7 +8,8 @@ output: github_document
 ```{r}
 
 # Define directory path
-dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Hub"
+#dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Hub"
+dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub"
 
 # 1. Generate list of file names based on configs
 get_filename <- function(config, rep, prefix = "hub") {

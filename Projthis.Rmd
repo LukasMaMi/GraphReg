@@ -344,4 +344,86 @@ huge.plot(oracle_graph)
 ```
 
 
+## Oracle
+```{r}
+
+#Subsample original data set (b x p)
+
+# Function to generate N subsamples from the original dataset
+subsample_data <- function(data, N, b) {
+  n <- nrow(data)
+  subsample_size <- floor(b * n)
+  
+  subsamples <- vector("list", N)
+  
+  for (i in 1:N) {
+    subsample_indices <- sample(1:n, subsample_size)
+    subsamples[[i]] <- data[subsample_indices, ]
+  }
+  
+  return(subsamples)
+}
+
+# Use the function to generate the subsamples
+oracle_data <- subsample_data(hub_data, N, b)
+
+
+#Define Hamming Distance as criterium for Oracle
+hamming_distance <- function(matrix1, matrix2) {
+    return(sum(matrix1 != matrix2))
+}
+
+# Assuming lambda_path is defined somewhere above in your original code
+
+# Oracle with QUIC function adjusted to take a single data sample
+oracle_quic <- function(data, lambda, ...) {
+    S <- cov(data)
+    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+    est$path <- lapply(seq(length(lambda)), function(i) {
+    ## convert precision array to adj list
+    tmp <- est$X[,,i]; diag(tmp) <- 0
+    tmp <- ifelse(tmp != 0, 1, 0)
+    return(tmp)
+    })
+    est
+}
+
+# List to store best lambda for each subsample
+best_lambdas <- numeric(N)
+
+# Iterate over each subsample
+for(i in 1:N) {
+    # Apply the QUIC method to the current subsample
+    oracle_results <- oracle_quic(oracle_data[[i]], lambda_path)
+    
+    # Determine the best lambda for the current subsample
+    best_lambda_index <- which.min(sapply(1:length(lambda_path), function(j) {
+        estimated_graph <- oracle_results$path[[j]]
+        hamming_distance(estimated_graph, true_graph)
+    }))
+    
+    # Store the best lambda for this subsample
+    best_lambdas[i] <- lambda_path[best_lambda_index]
+}
+
+# Determine the most frequently optimal lambda across all subsamples
+best_lambda_overall <- as.numeric(names(sort(table(best_lambdas), decreasing = TRUE)[1]))
+
+# Using the overall best lambda to run QUIC on the full dataset
+oracle_results_full <- oracle_quic(hub_data, lambda_path)
+
+# Find the index of the lambda in lambda_path that is closest to best_lambda_overall
+closest_lambda_index <- which.min(abs(lambda_path - best_lambda_overall))
+
+# Extract the precision matrix for the closest lambda to best_lambda_overall
+oracle_graph <- oracle_results_full$X[,,closest_lambda_index]
+
+# Convert precision matrix to adjacency matrix
+oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
+diag(oracle_graph) <- 0
+
+#Plot
+huge.plot(oracle_graph)
+
+```
 
