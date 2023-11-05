@@ -427,3 +427,9 @@ huge.plot(oracle_graph)
 
 ```
 
+```{r}
+#out.p$stars$merge
+
+#res10 = quicr(hub_data, c(out.p$stars$summary[19]))
+```
+

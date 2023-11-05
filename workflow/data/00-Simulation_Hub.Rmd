@@ -68,7 +68,7 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
     diag(omega) = abs(min(eigen(omega)$values)) + 0.1 
     # diagonal of omega set to a specific value based on its smallest eigenvalue for more stability
     sigma = cov2cor(solve(omega)) #Give Cov and transform it into Corr
-    #omega = solve(sigma) #fishy!!!
+    #omega = solve(sigma) 
     diag(omega) = 1 #Set diagonal of precision matrix to 1 (Liu et al.)
     x = mvrnorm(n, rep(0, p), sigma)
     sigmahat = cor(x)
@@ -117,6 +117,9 @@ configs <- list(
   list(n=200, p=200)
 )
 
+save(num_repetitions, configs, dir_path, file="session_settings.RData")
+
+
 #Size of each hub group
 s <- 20
 #Off-diagonal elements
@@ -143,7 +146,7 @@ for(rep in 1:num_repetitions) {
     
     hub_data <- hub$data
     true_graph <- as.matrix(hub$theta)
-    true_cov <- hub$sigma
+
     
     #Lambda path
     lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
@@ -153,11 +156,12 @@ for(rep in 1:num_repetitions) {
     file_name <- paste0(dir_path, "/hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
     
     # Save the hub data to the file
-    save(hub, hub_data, true_graph, true_cov, file = file_name)
+    save(hub, hub_data, true_graph, lambda, lambda_path, b, N, file = file_name)
+
+
   }
 }
-hub$omega
-hub$theta
+
 print("Hubs generated and saved!")
 
 
@@ -170,8 +174,8 @@ print("Hubs generated and saved!")
 ```{r}
 
 #Set Parameters
-n <- 800 
-p <- 40 
+n <- 400 
+p <- 100 
 #Size of each hub group
 s <- 20
 #Number of hub groups
@@ -183,12 +187,12 @@ b = (floor(10*sqrt(n)))/n
 #Number of Subsamples N
 N = 20
 
+set.seed(123)
 hub <- generator(n = n, p = p, graph = "hub", rho = rho, g = J, vis = TRUE, verbose = TRUE)
 
 hub_data <- hub$data
 true_graph <- as.matrix(hub$theta)
-#true_graph <- true_graph * lower.tri(true_graph, diag = TRUE)
-true_cov <- hub$sigma
+#true_cov <- hub$sigma
 
 #Lambda path
 lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
@@ -201,7 +205,7 @@ huge.plot(true_graph)
 
 ```
 
-## StARS and G-StARS
+## StARS, G-StARS and Oracle
 ```{r}
 
 #Define QUIC as method of choice for stars and gstars
@@ -219,11 +223,6 @@ quicr <- function(data, lambda, ...) {
   est
 }
 
-#out.p$stars$merge
-
-#res10 = quicr(hub_data, c(out.p$stars$summary[19]))
-
-
 #Run pulsar package
 library(orca)
 out.p <- pulsar(
@@ -234,14 +233,12 @@ out.p <- pulsar(
       thresh = 0.1,
       subsample.ratio = b,
       rep.num = N,
-      seed = NULL,
+      seed = 123,
       lb.stars = TRUE,
       ub.stars = TRUE,
       ncores = 1,
       refit = FALSE
 )
-
- out.p$stars$summary
 
 #Get optimal index for gcd
 lam_gam <- get.opt.index(out.p, criterion = "gcd")
@@ -292,40 +289,49 @@ huge.plot(oracle_graph)
 ### 1.4) G-Stars: F1-Scores and Jaccard-Index for Hub1
 ```{r}
 
-# 1. Extract the estimated graph structure (estimated adjacency matrix)
-#true_graph 
+# 1. Extract lower triangle
+true_graph <- true_graph[lower.tri(true_graph)]
+oracle_graph <- oracle_graph[lower.tri(oracle_graph)]
+stars_graph <- stars_graph[lower.tri(stars_graph)]
+gstars_graph <- gstars_graph[lower.tri(gstars_graph)]
+
+#true_graph
 #oracle_graph
-#stars_graph
+#stars_graph 
 #gstars_graph
 
-# Function to calculate F1-score and Jaccard index
 compute_metrics <- function(est_graph, true_graph) {
   TP <- sum(est_graph == 1 & true_graph == 1)
   FP <- sum(est_graph == 1 & true_graph == 0)
   FN <- sum(est_graph == 0 & true_graph == 1)
+  TN <- sum(est_graph == 0 & true_graph == 0)
 
   precision <- TP / (TP + FP)
   recall <- TP / (TP + FN)
   F1 <- 2 * (precision * recall) / (precision + recall)
   jaccard_index <- TP / (TP + FP + FN)
+  
+  # Calculate Hamming distance
+  hamming_distance <- sum(est_graph != true_graph)
 
-  return(list(F1 = F1, Jaccard = jaccard_index))
+  return(list(F1 = F1, Jaccard = jaccard_index, Hamming = hamming_distance))
 }
 
-# Compute metrics for Oracle graph
+# Now you can compute the metrics including Hamming distance for each graph:
 oracle_metrics <- compute_metrics(oracle_graph, true_graph)
 cat("Oracle - F1-score:", oracle_metrics$F1, "\n")
-cat("Oracle - Jaccard Index:", oracle_metrics$Jaccard, "\n\n")
+cat("Oracle - Jaccard Index:", oracle_metrics$Jaccard, "\n")
+cat("Oracle - Hamming Distance:", oracle_metrics$Hamming, "\n\n")
 
-# Compute metrics for Stars graph
 stars_metrics <- compute_metrics(stars_graph, true_graph)
 cat("Stars - F1-score:", stars_metrics$F1, "\n")
-cat("Stars - Jaccard Index:", stars_metrics$Jaccard, "\n\n")
+cat("Stars - Jaccard Index:", stars_metrics$Jaccard, "\n")
+cat("Stars - Hamming Distance:", stars_metrics$Hamming, "\n\n")
 
-# Compute metrics for GStars graph
 gstars_metrics <- compute_metrics(gstars_graph, true_graph)
 cat("GStars - F1-score:", gstars_metrics$F1, "\n")
-cat("GStars - Jaccard Index:", gstars_metrics$Jaccard, "\n\n")
+cat("GStars - Jaccard Index:", gstars_metrics$Jaccard, "\n")
+cat("GStars - Hamming Distance:", gstars_metrics$Hamming, "\n\n")
 
 ```
 
@@ -347,11 +353,23 @@ F1_stars_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
 F1_gcd_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
 F1_oracle_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
 
+Jaccard_stars_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+Jaccard_gcd_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+Jaccard_oracle_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+
+Hamming_stars_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+Hamming_gcd_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+Hamming_oracle_matrix <- matrix(0, nrow=num_repetitions, ncol=length(configs))
+
+
 for(rep in 1:num_repetitions){
   
   # Function to run experiment
   run_hub <- function(n, p) {
   
+    
+  # 1.Generate Data  
+    
   #Size of each hub group
   s <- 20
   #Number of hub groups
@@ -368,13 +386,14 @@ for(rep in 1:num_repetitions){
 
   hub_data <- hub$data
   true_graph <- as.matrix(hub$theta)
-  true_cov <- hub$sigma
+  true_graph <- true_graph[lower.tri(true_graph)]
 
   #Lambda path
   lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.001, len = 40)
   lambda <- list(lambda=lambda_path)
   
-  # 3. Run QUIC method
+  
+  # 2. Estimate StARS and G-StARS
   library(QUIC)
 
   quicr <- function(data, lambda, ...) {
@@ -415,22 +434,22 @@ for(rep in 1:num_repetitions){
   stars_graph <- fit[["refit"]][["stars"]]
   gstars_graph <- fit[["refit"]][["gcd"]]
 
+  stars_graph <- stars_graph[lower.tri(stars_graph)]
+  gstars_graph <- gstars_graph[lower.tri(gstars_graph)]
+
   
-  # 4. Run Oracle QUIC
+  # 3. Estimate Oracle
   
   # Oracle procedure
   oracle_results <- quicr(hub_data, lambda_path)
 
-  #Define Hamming Distance as criterium for Oracle
-  hamming_distance <- function(matrix1, matrix2) {
-     return(sum(matrix1 != matrix2))
-  }
-
   # Minimize total number of different edges between the estimated and true graph
   best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
     estimated_graph <- oracle_results$path[[i]]
-    hamming_distance(estimated_graph, true_graph)
+    # Calculate Hamming distance 
+    sum(estimated_graph != true_graph)
   }))
+
 
   best_lambda_oracle <- lambda_path[best_lambda_index]
 
@@ -440,8 +459,11 @@ for(rep in 1:num_repetitions){
   # Convert precision matrix to adjacency matrix
   oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
   diag(oracle_graph) <- 0
+
+  oracle_graph <- oracle_graph[lower.tri(oracle_graph)]
+
   
-  # 5. Calculate metrics
+  # 4. Calculate metrics
  
   # List of estimated graphs
   estimated_graphs <- list(stars = stars_graph, gstars = gstars_graph, 
@@ -450,6 +472,7 @@ for(rep in 1:num_repetitions){
   # Create empty lists to store results
   F1_scores <- list()
   jaccard_indices <- list()
+  hamming <- list()
 
   # Loop through each estimated graph and calculate metrics
   for (name in names(estimated_graphs)) {
@@ -468,15 +491,27 @@ for(rep in 1:num_repetitions){
   precision <- TP / (TP + FP)
   recall <- TP / (TP + FN)
   F1 <- 2 * (precision * recall) / (precision + recall)
-  jaccard_index <- TP / (TP + FP + FN)
+  jaccard <- TP / (TP + FP + FN)
+  # Calculate Hamming distance
+  hamming_distance <- sum(estimated_graphs[[name]] != true_graph)
 
   # Save results to lists
   F1_scores[[name]] <- F1
-  jaccard_indices[[name]] <- jaccard_index
+  jaccard_indices[[name]] <- jaccard
+  hamming[[name]] <- hamming_distance
   }
   
-  return(list(F1_stars = F1_scores[["stars"]], F1_gcd = F1_scores[["gstars"]], 
-              F1_oracle = F1_scores[["oracle"]]))
+ return(list(
+  F1_stars = F1_scores[["stars"]],
+  F1_gcd = F1_scores[["gstars"]],
+  F1_oracle = F1_scores[["oracle"]],
+  jaccard_stars = jaccard_indices[["stars"]],
+  jaccard_gcd = jaccard_indices[["gstars"]],
+  jaccard_oracle = jaccard_indices[["oracle"]],
+  hamming_stars = hamming[["stars"]],
+  hamming_gcd = hamming[["gstars"]],
+  hamming_oracle = hamming[["oracle"]]
+  ))
 
   }
 
@@ -486,6 +521,14 @@ for(rep in 1:num_repetitions){
   F1_stars_matrix[rep, ] <- sapply(results, function(x) x$F1_stars)
   F1_gcd_matrix[rep, ] <- sapply(results, function(x) x$F1_gcd)
   F1_oracle_matrix[rep, ] <- sapply(results, function(x) x$F1_oracle)
+  
+  Jaccard_stars_matrix[rep, ] <- sapply(results, function(x) x$jaccard_stars)
+  Jaccard_gcd_matrix[rep, ] <- sapply(results, function(x) x$jaccard_gcd)
+  Jaccard_oracle_matrix[rep, ] <- sapply(results, function(x) x$jaccard_oracle)
+
+  Hamming_stars_matrix[rep, ] <- sapply(results, function(x) x$hamming_stars)
+  Hamming_gcd_matrix[rep, ] <- sapply(results, function(x) x$hamming_gcd)
+  Hamming_oracle_matrix[rep, ] <- sapply(results, function(x) x$hamming_oracle)
     
 }
 
@@ -493,6 +536,14 @@ for(rep in 1:num_repetitions){
 avg_F1_stars <- colMeans(F1_stars_matrix)
 avg_F1_gcd <- colMeans(F1_gcd_matrix)
 avg_F1_oracle <- colMeans(F1_oracle_matrix)
+
+avg_Jaccard_stars <- colMeans(Jaccard_stars_matrix)
+avg_Jaccard_gcd <- colMeans(Jaccard_gcd_matrix)
+avg_Jaccard_oracle <- colMeans(Jaccard_oracle_matrix)
+
+avg_Hamming_stars <- colMeans(Hamming_stars_matrix)
+avg_Hamming_gcd <- colMeans(Hamming_gcd_matrix)
+avg_Hamming_oracle <- colMeans(Hamming_oracle_matrix)
 
 desired_order <- sapply(configs, function(x) paste0("n=", x$n, " p=", x$p))
 
@@ -502,7 +553,19 @@ df <- data.frame(np_setting = desired_order,
                  F1_gcd = avg_F1_gcd,
                  F1_oracle = avg_F1_oracle)
 
+df_Jaccard <- data.frame(np_setting = desired_order, 
+                 Jaccard_stars = avg_Jaccard_stars,
+                 Jaccard_gcd = avg_Jaccard_gcd,
+                 Jaccard_oracle = avg_Jaccard_oracle)
+
+df_Hamming <- data.frame(np_setting = desired_order, 
+                 Hamming_stars = avg_Hamming_stars,
+                 Hamming_gcd = avg_Hamming_gcd,
+                 Hamming_oracle = avg_Hamming_oracle)
+
 df$np_setting <- factor(df$np_setting, levels = desired_order, ordered = TRUE)
+df_Jaccard$np_setting <- factor(df_Jaccard$np_setting, levels = desired_order, ordered = TRUE)
+df_Hamming$np_setting <- factor(df_Hamming$np_setting, levels = desired_order, ordered = TRUE)
 
 
 ```
@@ -523,6 +586,36 @@ ggplot(df, aes(x=np_setting)) +
   geom_point(aes(y=F1_gcd, color="GCD"), size=1.5) +
   geom_point(aes(y=F1_oracle, color="Oracle"), size=1.5) +
   labs(title = "Hub", y = "F1-score") + 
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
+  scale_color_manual(values=c("Stars"="lightblue", "GCD"="darkorange", "Oracle"="black"), 
+                     name="Method",
+                     breaks=c("Stars", "GCD", "Oracle"))
+
+# Plotting the results
+ggplot(df_Jaccard, aes(x=np_setting)) + 
+  geom_line(aes(y=Jaccard_stars, color="Stars", group="Stars"), linetype="dotted", color="lightblue", linewidth=1.5) + 
+  geom_line(aes(y=Jaccard_gcd, color="GCD", group="GCD"), linetype="dotted", color="darkorange", linewidth=1.5) + 
+  geom_line(aes(y=Jaccard_oracle, color="Oracle", group="Oracle"), linetype="solid", color="black", linewidth=1.5) + 
+  geom_point(aes(y=Jaccard_stars, color="Stars"), size=1.5) +
+  geom_point(aes(y=Jaccard_gcd, color="GCD"), size=1.5) +
+  geom_point(aes(y=Jaccard_oracle, color="Oracle"), size=1.5) +
+  labs(title = "Hub", y = "Jaccard-score") + 
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
+  scale_color_manual(values=c("Stars"="lightblue", "GCD"="darkorange", "Oracle"="black"), 
+                     name="Method",
+                     breaks=c("Stars", "GCD", "Oracle"))
+
+# Plotting the results
+ggplot(df_Hamming, aes(x=np_setting)) + 
+  geom_line(aes(y=Hamming_stars, color="Stars", group="Stars"), linetype="dotted", color="lightblue", linewidth=1.5) + 
+  geom_line(aes(y=Hamming_gcd, color="GCD", group="GCD"), linetype="dotted", color="darkorange", linewidth=1.5) + 
+  geom_line(aes(y=Hamming_oracle, color="Oracle", group="Oracle"), linetype="solid", color="black", linewidth=1.5) + 
+  geom_point(aes(y=Hamming_stars, color="Stars"), size=1.5) +
+  geom_point(aes(y=Hamming_gcd, color="GCD"), size=1.5) +
+  geom_point(aes(y=Hamming_oracle, color="Oracle"), size=1.5) +
+  labs(title = "Hub", y = "Hamming-score") + 
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
   scale_color_manual(values=c("Stars"="lightblue", "GCD"="darkorange", "Oracle"="black"), 

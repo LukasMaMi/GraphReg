@@ -6,4 +6,74 @@ params:
   name: "01-Simulation_Rand" # change if you rename file
 ---
 
+```{r}
+library(MASS)
+library(pulsar)
+library(Matrix)
+library(igraph)
+library(huge)
+
+generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal distribution with the", 
+            graph, "graph structure....")
+
+    g.large = p%%g
+    g.small = g - g.large
+    n.small = floor(p/g)
+    n.large = n.small + 1
+    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
+    g.ind = rep(c(1:g), g.list)
+    rm(g.large, g.small, n.small, n.large, g.list)
+    gc()
+    theta = matrix(0, p, p)
+
+    if (graph == "random") {
+        if (is.null(u)) 
+            u = 0.1
+        if (is.null(rho)) 
+            rho = 0.3
+        tmp = matrix(runif(p^2, 0, 0.5), p, p)
+        tmp = tmp + t(tmp)
+        theta[tmp < prob] = 1
+        rm(tmp)
+        gc()
+    }
+
+    diag(theta) = 0
+    omega = theta * rho
+    diag(omega) = abs(min(eigen(omega)$values)) + 0.1
+    sigma = cov2cor(solve(omega))
+    #omega = solve(sigma)
+    diag(omega) <- 1
+    x = mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cor(x)
+    if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
+    }
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+        omega = omega, theta = Matrix(theta, sparse = TRUE), 
+        sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
+    class(sim) = "sim"
+    return(sim)
+}
+```
 

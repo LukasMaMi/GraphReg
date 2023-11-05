@@ -6,75 +6,76 @@ output: github_document
 
 ```{r}
 
-configs <- names(results)
-methods <- names(results[[1]])
+load("session_settings.RData")
+load(paste0(dir_path3, "/performance_results.RData"))
 
-# Create the dataframe dynamically
-df <- data.frame()
+# Define the directory for estimated results
+dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
 
-for(config in configs) {
-    for(method in methods) {
-        temp <- data.frame(
-            np_setting = config,
-            method = method,
-            F1_mean = results[[config]][[method]]$Mean_F1,
-            F1_lower = results[[config]][[method]]$CI_F1[1],
-            F1_upper = results[[config]][[method]]$CI_F1[2],
-            Jaccard_mean = results[[config]][[method]]$Mean_Jaccard,
-            Jaccard_lower = results[[config]][[method]]$CI_Jaccard[1],
-            Jaccard_upper = results[[config]][[method]]$CI_Jaccard[2]
-        )
-        df <- rbind(df, temp)
-    }
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Initialize an empty data frame to store the results
+mean_f1_df <- data.frame(Config = character(), 
+                         Method = character(), 
+                         Mean_F1 = numeric(), 
+                         CI_Lower = numeric(), 
+                         CI_Upper = numeric(), 
+                         stringsAsFactors = FALSE)
+
+# Loop through the results list and extract the relevant data
+for (config_name in names(results)) {
+  for (method in names(results[[config_name]])) {
+    mean_f1 <- results[[config_name]][[method]]$Mean_F1
+    ci_f1 <- results[[config_name]][[method]]$CI_F1
+    
+    # Create a temporary data frame
+    temp_df <- data.frame(Config = config_name, 
+                          Method = method, 
+                          Mean_F1 = mean_f1, 
+                          CI_Lower = ci_f1[1], 
+                          CI_Upper = ci_f1[2])
+    
+    # Bind the temporary data frame to the main data frame
+    mean_f1_df <- rbind(mean_f1_df, temp_df)
+  }
 }
 
+# Convert factors to ensure the levels are in order for plotting
+mean_f1_df$Config <- factor(mean_f1_df$Config, levels = unique(mean_f1_df$Config))
+mean_f1_df$Method <- factor(mean_f1_df$Method, levels = c("Stars", "GStars", "Oracle"))
+
+
+
+
 ```
 
-
+## Hub Plots
 ```{r}
-library(ggplot2)
-
-f1_plot <- ggplot(df, aes(x=np_setting)) + 
-  geom_line(aes(y=F1_mean, color=method, group=method), linetype="dotted", linewidth=1.5) + 
-  geom_point(aes(y=F1_mean, color=method), size=1.5) +
-  geom_errorbar(aes(ymin=F1_lower, ymax=F1_upper, color=method), width=0.2) +
-  labs(title = "Hub", y = "F1-score") + 
+# Mean F1-Scores Plot
+F1_Hub <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
+  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
+  geom_point(size = 1.5) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +  
+  labs(title = "Hub", y = "Max F1-score", x = "") +  
   theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
-  scale_color_manual(values=c("Stars"="lightblue", "GStars"="darkorange", "Oracle"="black"), 
-                     name="Method",
-                     breaks=c("Stars", "GStars", "Oracle"))
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    axis.title.x = element_blank() 
+  ) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
+  theme(legend.title = element_blank())
 
-print(f1_plot)
+# Display the plot
+F1_Hub
 ```
 
 
 
-```{r}
-
-jaccard_plot <- ggplot(df, aes(x=np_setting)) + 
-  geom_line(aes(y=Jaccard_mean, color=method, group=method), linetype="dotted", linewidth=1.5) + 
-  geom_point(aes(y=Jaccard_mean, color=method), size=1.5) +
-  geom_errorbar(aes(ymin=Jaccard_lower, ymax=Jaccard_upper, color=method), width=0.2) +
-  labs(title = "Hub", y = "Jaccard Index") + 
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14)) + 
-  scale_color_manual(values=c("Stars"="lightblue", "GStars"="darkorange", "Oracle"="black"), 
-                     name="Method",
-                     breaks=c("Stars", "GStars", "Oracle"))
-
-print(jaccard_plot)
-
-```
 
 
-```{r}
 
-# Replace with your specific path
-path_to_folder <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
 
-ggsave(filename=paste0(path_to_folder, "f1_plot.png"), plot=f1_plot, width=10, height=6)
-ggsave(filename=paste0(path_to_folder, "jaccard_plot.png"), plot=jaccard_plot, width=10, height=6)
 
-```
 
