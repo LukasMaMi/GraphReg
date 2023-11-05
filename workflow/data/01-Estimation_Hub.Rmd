@@ -108,17 +108,23 @@ print("Adjacency matrices for Hub generated and saved!")
 ```
 
 
-## Check
+## Huge.plot
 ```{r}
-# Specify the filename
-filename <- "estimation_rep_2_n_800_p_40.RData"
 
-# Load the .RData file
-load(paste0(dir_path2, "/", filename))
+# Get a list of all .RData files in the directory
+files <- list.files(path = dir_path2, pattern = "n_800_p_40.*\\.RData$", full.names = TRUE)
+files <- list.files(path = dir_path2, pattern = "n_400_p_100.*\\.RData$", full.names = TRUE)
+files <- list.files(path = dir_path2, pattern = "n_200_p_200.*\\.RData$", full.names = TRUE)
 
-print(stars_graph)
-print(gstars_graph)
-print(oracle_graph)
+# Load all .RData files in the list
+for (file in files) {
+  load(file)
+  Hub_oracle <- huge.plot(oracle_graph)
+  Hub_stars <- huge.plot(stars_graph)
+  Hub_gstars <- huge.plot(gstars_graph)
+}
+
+
 
 ```
 

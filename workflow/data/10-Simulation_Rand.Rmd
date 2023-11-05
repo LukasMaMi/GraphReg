@@ -31,10 +31,6 @@ generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE)
     theta = matrix(0, p, p)
 
     if (graph == "random") {
-        if (is.null(u)) 
-            u = 0.1
-        if (is.null(rho)) 
-            rho = 0.3
         tmp = matrix(runif(p^2, 0, 0.5), p, p)
         tmp = tmp + t(tmp)
         theta[tmp < prob] = 1
@@ -46,7 +42,6 @@ generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE)
     omega = theta * rho
     diag(omega) = abs(min(eigen(omega)$values)) + 0.1
     sigma = cov2cor(solve(omega))
-    #omega = solve(sigma)
     diag(omega) <- 1
     x = mvrnorm(n, rep(0, p), sigma)
     sigmahat = cor(x)
@@ -74,6 +69,38 @@ generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE)
         sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
     class(sim) = "sim"
     return(sim)
+}
+```
+
+```{r}
+generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE) 
+{
+    g.large = p%%g
+    g.small = g - g.large
+    n.small = floor(p/g)
+    n.large = n.small + 1
+    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
+    g.ind = rep(c(1:g), g.list)
+    rm(g.large, g.small, n.small, n.large, g.list)
+    gc()
+    theta = matrix(0, p, p)
+
+    if (graph == "random") {
+        tmp = matrix(runif(p^2, 0, 0.5), p, p)
+        tmp = tmp + t(tmp)
+        theta[tmp < prob] = 1
+        rm(tmp)
+        gc()
+    }
+
+    diag(theta) = 0
+    omega = theta * rho
+    diag(omega) = abs(min(eigen(omega)$values)) + 0.1
+    sigma = cov2cor(solve(omega))
+    diag(omega) <- 1
+    x = mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cor(x)
+    
 }
 ```
 
