@@ -13,24 +13,23 @@ library(Matrix)
 library(igraph)
 library(huge)
 
-generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE) 
+generator_rand <- function (n, p, graph, prob, vis = FALSE, verbose = TRUE, rho) 
 {
     gcinfo(FALSE)
     if (verbose) 
         cat("Generating data from the multivariate normal distribution with the", 
             graph, "graph structure....")
+  
+    if (graph == "random") {
+          prob = sqrt(prob/2) * (prob < 0.5) + (1 - sqrt(0.5 - 
+              0.5 * prob)) * (prob >= 0.5)
+      }
 
-    g.large = p%%g
-    g.small = g - g.large
-    n.small = floor(p/g)
-    n.large = n.small + 1
-    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
-    g.ind = rep(c(1:g), g.list)
-    rm(g.large, g.small, n.small, n.large, g.list)
-    gc()
     theta = matrix(0, p, p)
 
     if (graph == "random") {
+        if (is.null(rho)) 
+            rho = 0.3
         tmp = matrix(runif(p^2, 0, 0.5), p, p)
         tmp = tmp + t(tmp)
         theta[tmp < prob] = 1
@@ -66,41 +65,70 @@ generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE)
     gc()
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
         omega = omega, theta = Matrix(theta, sparse = TRUE), 
-        sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
+        sparsity = sum(theta)/(p * (p - 1)), graph.type = graph) #Percentage of present edges in the graph (sum(theta)) divided by the total number of possible edges (p*(p-1))
     class(sim) = "sim"
     return(sim)
 }
 ```
 
 ```{r}
-generator_rand <- function (n, p, g, prob = NULL, vis = FALSE, verbose = TRUE) 
-{
-    g.large = p%%g
-    g.small = g - g.large
-    n.small = floor(p/g)
-    n.large = n.small + 1
-    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
-    g.ind = rep(c(1:g), g.list)
-    rm(g.large, g.small, n.small, n.large, g.list)
-    gc()
-    theta = matrix(0, p, p)
 
-    if (graph == "random") {
-        tmp = matrix(runif(p^2, 0, 0.5), p, p)
-        tmp = tmp + t(tmp)
-        theta[tmp < prob] = 1
-        rm(tmp)
-        gc()
-    }
+```
 
-    diag(theta) = 0
-    omega = theta * rho
-    diag(omega) = abs(min(eigen(omega)$values)) + 0.1
-    sigma = cov2cor(solve(omega))
-    diag(omega) <- 1
-    x = mvrnorm(n, rep(0, p), sigma)
-    sigmahat = cor(x)
-    
-}
+
+```{r}
+
+#Set Parameters
+n <- 800 
+p <- 40 
+
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+#Number of Subsamples N
+N = 20
+#Probability for an edge to appear
+prob = 3/(p-1)
+3/p
+
+set.seed(123)
+ER <- generator_rand(n = n, p = p, prob = prob, graph = "random", rho = NULL, vis = TRUE)
+ER_data <- ER$data
+
+ER$omega
+ER$theta
+ER$sparsity
+
+#Plot Adjacency Matrix
+huge.plot(ER$theta)
+
+#test
+test <-  huge.generator(
+      n = 800,
+      d = 40,
+      graph = "random",
+      v = NULL,
+      u = NULL,
+      g = NULL,
+      prob = NULL,
+      vis = FALSE,
+      verbose = TRUE
+)
+
+huge.plot(test$theta)
+test$omega
+test$sparsity
+
+
+#Plot Adjacency Matrix
+huge.plot(ER$theta)
+
+#Lambda path
+lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
+lambda <- list(lambda=lambda_path)
+
+true_graph <- as(ER$theta, "lMatrix")
+true_cov <- ER$sigma
+
+
 ```
 
