@@ -46,13 +46,12 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
   
     diag(theta) = 0
     omega = theta * rho
-    diag(omega) = abs(min(eigen(omega)$values)) + 0.1 
-    # diagonal of omega set to a specific value based on its smallest eigenvalue for more stability
-    sigma = cov2cor(solve(omega)) #Give Cov and transform it into Corr
-    #omega = solve(sigma) 
     diag(omega) = 1 #Set diagonal of precision matrix to 1 (Liu et al.)
-    x = mvrnorm(n, rep(0, p), sigma)
-    sigmahat = cor(x)
+    sigma = solve(omega) #Knackpunkt! Das ist nun das Sigma, welche zu unserem simulierten theta gehört.
+    omega = solve(sigma) #Kontrolle, ob Sigma passend zu gewolltem theta erstellt
+    x = mvrnorm(n, rep(0, p), sigma) #Dieses Sigma wird schlussendlich verwendet, um die Daten zu simulieren!!!
+    sigmahat = cov(x) #Empirical covariance matrix
+    
     if (vis == TRUE) {
         fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
             0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
@@ -104,7 +103,8 @@ save(num_repetitions, configs, dir_path, file="session_settings.RData")
 #Size of each hub group
 s <- 20
 #Off-diagonal elements
-rho <- (1/(s+1))
+rho <- (1/(s+1)) #Zu klein?!
+#rho <- 0.2
 
 # Set up outer loop for repetitions
 for(rep in 1:num_repetitions) {
