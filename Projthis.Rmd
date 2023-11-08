@@ -503,3 +503,366 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
     return(sim)
 }
 ```
+
+
+## Random Schrott
+```{r}
+
+generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal 
+            distribution with the random graph structure....")
+  
+    prob = sqrt(prob/2) * (prob < 0.5) + 
+      (1 - sqrt(0.5 - 0.5 * prob)) * (prob >= 0.5)
+    
+    theta = matrix(0, p, p)
+        tmp = matrix(runif(p^2, 0, 0.5), p, p) #set threshold
+        tmp = tmp + t(tmp)
+        theta[tmp < prob] = 1 #thresholding: If prob greater than 0.5 than edge is present (1)
+        rm(tmp)
+        gc()
+        
+    diag(theta) = 0 #To ensure that there are no self-loops in the graph
+    omega = theta * 0.3
+    diag(omega) = abs(min(eigen(omega)$values)) + 0.1 #!!!
+    sigma = cov2cor(solve(omega)) #!!!
+    omega = solve(sigma)
+    x = mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cor(x) #!!!
+    
+    if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
+    }
+    
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+    omega = omega, theta = Matrix(theta, sparse = TRUE), 
+    sparsity = sum(theta)/(p * (p - 1))) #Sparsity level = number of present edges divided by number of potential edges p x p.
+    class(sim) = "sim"
+    return(sim)
+}
+```
+
+```{r}
+
+generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal 
+            distribution with the random graph structure....")
+  
+    prob = sqrt(prob/2) * (prob < 0.5) + 
+      (1 - sqrt(0.5 - 0.5 * prob)) * (prob >= 0.5)
+    
+    theta = matrix(0, p, p)
+        tmp = matrix(runif(p^2, 0, 0.5), p, p) #set threshold
+        tmp = tmp + t(tmp)
+        theta[tmp < prob] = 1 #thresholding: If prob greater than 0.5 than edge is present (1)
+        rm(tmp)
+        gc()
+        
+    diag(theta) = 0 #To ensure that there are no self-loops in the graph
+    omega = theta
+    diag(omega) = abs(min(eigen(omega)$values)) + 0.1  #!!!
+    sigma = solve(omega) #!!!
+    omega = solve(sigma)
+    x = mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cov(x) #!!!
+    
+    if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
+    }
+    
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+    omega = omega, theta = Matrix(theta, sparse = TRUE), 
+    sparsity = sum(theta)/(p * (p - 1))) #Sparsity level = number of present edges divided by number of potential edges p x p.
+    class(sim) = "sim"
+    return(sim)
+}
+```
+
+```{r}
+
+#Set Parameters
+n <- 800 
+p <- 40 
+prob <- 3/p
+
+generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal 
+            distribution with the random graph structure....")
+
+    prob = sqrt(prob/2) * (prob < 0.5) + 
+      (1 - sqrt(0.5 - 0.5 * prob)) * (prob >= 0.5)
+    
+    theta = matrix(0, p, p)
+        tmp = matrix(runif(p^2, 0, 0.5), p, p) #set threshold
+        tmp = tmp + t(tmp)
+        theta[tmp < prob] = 1 #thresholding: If prob greater than 0.5 than edge is present (1)
+        rm(tmp)
+        gc()
+        
+    diag(theta) = 0 #To ensure that there are no self-loops in the graph
+    
+    random_matrix <- matrix(runif(p^2, -0.5, 0.5), p, p)
+    omega = theta + (random_matrix + t(random_matrix)) / 2
+    
+    # Compute eigenvalues
+    eigenvalues = eigen(omega, symmetric = TRUE)$values
+
+    # If the smallest eigenvalue is negative, add its absolute value plus a small constant to the diagonal
+    if (min(eigenvalues) < 0) {
+    diag(omega) = diag(omega) - min(eigenvalues) + 0.1
+    }
+    
+    #diag(omega) = abs(min(eigen(omega)$values)) + 0.1  #!!!
+    sigma = solve(omega) #!!!
+    omega = solve(sigma)
+    x = mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cov(x) #!!!
+    
+    
+eigenvalues    
+prob
+theta
+omega
+range(omega)
+str(omega)
+sigma
+x
+```
+
+```{r}
+
+#Set Parameters
+n <- 800 
+p <- 40 
+prob <- 3/p
+
+    prob = sqrt(prob/2) * (prob < 0.5) + 
+      (1 - sqrt(0.5 - 0.5 * prob)) * (prob >= 0.5)
+    
+    theta = matrix(0, p, p)
+        tmp = matrix(runif(p^2, 0, 0.5), p, p) #set threshold
+        tmp = tmp + t(tmp)
+        theta[tmp < prob] = 1 #thresholding: If prob greater than 0.5 than edge is present (1)
+        rm(tmp)
+        gc()
+        
+    diag(theta) = 0 #To ensure that there are no self-loops in the graph
+    
+    random_matrix <- matrix(runif(p^2, -0.5, 0.5), p, p)
+    omega = theta + (random_matrix + t(random_matrix)) / 2
+    
+    # Compute eigenvalues
+    eigenvalues = eigen(omega, symmetric = TRUE)$values
+
+    # If the smallest eigenvalue is negative, add its absolute value plus a small constant to the diagonal
+    if (min(eigenvalues) < 0) {
+    diag(omega) = diag(omega) - min(eigenvalues) + 0.1
+    }
+    
+    #diag(omega) = abs(min(eigen(omega)$values)) + 0.1  #!!!
+    sigma = solve(omega) #!!!
+    omega = solve(sigma)
+    x = mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cov(x) #!!!
+
+
+if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
+    }
+    
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+    omega = omega, theta = Matrix(theta, sparse = TRUE), 
+    sparsity = sum(theta)/(p * (p - 1))) #Sparsity level = number of present edges divided by number of potential edges p x p.
+    class(sim) = "sim"
+    return(sim)
+}
+
+
+#Set Parameters
+n <- 800 
+p <- 40 
+
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+#Number of Subsamples N
+N = 20
+
+prob <- 3/p #For p = 40, Prob = 0.075
+
+ER <- generator_rand(n = n, p = p, prob = prob, vis = TRUE)
+ER_data <- ER$data
+
+#ER_data 
+ER$omega
+range(ER$omega)
+ER$theta
+ER$sparsity
+
+huge.plot(ER$theta)
+```
+
+
+
+
+
+
+```{r}
+
+#Set Parameters
+n <- 800 
+p <- 40 
+
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+#Number of Subsamples N
+N = 20
+
+prob <- 3/p #For p = 40, Prob = 0.075
+
+ER <- generator_rand(n = n, p = p, prob = prob, vis = TRUE)
+ER_data <- ER$data
+
+#ER_data 
+ER$omega
+range(ER$omega)
+ER$theta
+ER$sparsity
+
+huge.plot(ER$theta)
+
+
+```
+
+
+```{r}
+library(MASS)
+library(pulsar)
+library(Matrix)
+library(igraph)
+library(huge)
+
+generator <- function (n, p, graph, rho, g, vis, verbose) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal distribution with the", 
+            graph, "graph structure....")
+  
+  g.large = p%%g #Rest Funktion
+    g.small = g - g.large
+    n.small = floor(p/g)
+    n.large = n.small + 1
+    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
+    g.ind = rep(c(1:g), g.list)
+    rm(g.large, g.small, n.small, n.large, g.list)
+    gc()
+    
+    theta = matrix(0, p, p) #Here Theta defined (pxp matrix with entries "0")
+  
+     if (graph == "hub") { #Define Hub connections
+        for (i in 1:g) {
+            tmp = which(g.ind == i)
+            theta[tmp[1], tmp] = 1
+            theta[tmp, tmp[1]] = 1
+            rm(tmp)
+            gc()
+        }
+    }
+  
+    diag(theta) = 0
+    omega = theta * rho
+    #diag(omega) <-  abs(min(eigen(omega)$values)) + 0.1
+    diag(omega) <- 1
+    #sigma = cov2cor(solve(omega)) #
+    sigma = solve(omega) 
+    omega = solve(sigma) 
+    x = mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cov(x)
+    if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
+    }
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+        omega = omega, theta = Matrix(theta, sparse = TRUE), 
+        sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
+    class(sim) = "sim"
+    return(sim)
+}
+```
+
+

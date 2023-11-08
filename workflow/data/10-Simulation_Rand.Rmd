@@ -7,6 +7,11 @@ params:
 ---
 
 ```{r}
+library(MASS)
+library(pulsar)
+library(Matrix)
+library(igraph)
+library(huge)
 
 generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE) 
 {
@@ -14,7 +19,7 @@ generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE)
     if (verbose) 
         cat("Generating data from the multivariate normal 
             distribution with the random graph structure....")
-  
+
     prob = sqrt(prob/2) * (prob < 0.5) + 
       (1 - sqrt(0.5 - 0.5 * prob)) * (prob >= 0.5)
     
@@ -24,16 +29,29 @@ generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE)
         theta[tmp < prob] = 1 #thresholding: If prob greater than 0.5 than edge is present (1)
         rm(tmp)
         gc()
-        
-    diag(theta) = 0 #To ensure that there are no self-loops in the graph
-    omega = theta * 0.3
-    diag(omega) = abs(min(eigen(omega)$values)) + 0.1 #!!!
-    sigma = cov2cor(solve(omega)) #!!!
-    omega = solve(sigma)
-    x = mvrnorm(n, rep(0, p), sigma)
-    sigmahat = cor(x) #!!!
     
-    if (vis == TRUE) {
+# Ensure no self-loops
+diag(theta) = 0 
+# Create a symmetric matrix with random values in the range [-1, 1] for off-diagonals
+random_matrix <- matrix(runif(p^2, -1, 1), p, p)
+omega = theta * (random_matrix + t(random_matrix)) / 2  
+# Set the diagonal values to be larger than the sum of absolute values of off-diagonals
+for (i in 1:p) {
+  omega[i, i] = sum(abs(omega[-i, i])) + 0.1  # Offset slightly for strict positivity
+}
+
+max_val <- max(abs(omega)) # Find the maximum absolute value in omega
+omega <- omega / max_val # Normalize to range [-1, 1]
+
+# Inverse of omega to get sigma (covariance matrix)
+sigma = solve(omega) 
+omega = solve(sigma)
+# Generate multivariate normal samples
+x = MASS::mvrnorm(n, mu = rep(0, p), Sigma = sigma)
+# Estimate the covariance matrix from the generated samples
+sigmahat = cov(x)
+
+if (vis == TRUE) {
         fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
             0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
         fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
@@ -60,21 +78,21 @@ generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE)
     class(sim) = "sim"
     return(sim)
 }
+
 ```
 
 
 ```{r}
-
 #Set Parameters
-n <- 800 
-p <- 40 
+n <- 400 
+p <- 100 
 
 #Subsampled dataset size 
 b = (floor(10*sqrt(n)))/n
 #Number of Subsamples N
 N = 20
 
-prob <- 0.3
+prob <- 3/p #For p = 40, Prob = 0.075
 
 ER <- generator_rand(n = n, p = p, prob = prob, vis = TRUE)
 ER_data <- ER$data
@@ -84,123 +102,17 @@ ER$omega
 range(ER$omega)
 ER$theta
 ER$sparsity
+prob
 
 huge.plot(ER$theta)
-
-test <- huge.generator(n = n, d = p, prob = prob, graph = "random", u = NULL, v = NULL, vis = TRUE)
-
-test$omega
-range(test$omega)
-
-test$theta
-test$sparsity
-
-huge.plot(test$theta)
-
 ```
 
+## Session info
 ```{r}
-library(MASS)
-library(pulsar)
-library(Matrix)
-library(igraph)
-library(huge)
-
-generator <- function (n, p, graph, rho, g, vis, verbose) 
-{
-    gcinfo(FALSE)
-    if (verbose) 
-        cat("Generating data from the multivariate normal distribution with the", 
-            graph, "graph structure....")
-  
-  g.large = p%%g #Rest Funktion
-    g.small = g - g.large
-    n.small = floor(p/g)
-    n.large = n.small + 1
-    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
-    g.ind = rep(c(1:g), g.list)
-    rm(g.large, g.small, n.small, n.large, g.list)
-    gc()
-    
-    theta = matrix(0, p, p) #Here Theta defined (pxp matrix with entries "0")
-  
-     if (graph == "hub") { #Define Hub connections
-        for (i in 1:g) {
-            tmp = which(g.ind == i)
-            theta[tmp[1], tmp] = 1
-            theta[tmp, tmp[1]] = 1
-            rm(tmp)
-            gc()
-        }
-    }
-  
-    diag(theta) = 0
-    omega = theta * rho
-    #diag(omega) <-  abs(min(eigen(omega)$values)) + 0.1
-    diag(omega) <- 1
-    #sigma = cov2cor(solve(omega)) #
-    sigma = solve(omega) 
-    omega = solve(sigma) 
-    x = mvrnorm(n, rep(0, p), sigma)
-    sigmahat = cov(x)
-    if (vis == TRUE) {
-        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
-            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
-        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
-        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
-        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
-        layout.grid = layout.fruchterman.reingold(g)
-        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
-            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
-            main = "Graph Pattern")
-        fullfig[4] = image(sigmahat, col = gray.colors(256), 
-            main = "Empirical Matrix")
-        rm(fullfig, g, layout.grid)
-        gc()
-    }
-    if (verbose) 
-        cat("done.\n")
-    rm(vis, verbose)
-    gc()
-    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-        omega = omega, theta = Matrix(theta, sparse = TRUE), 
-        sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
-    class(sim) = "sim"
-    return(sim)
-}
+sessionInfo()
 ```
 
-```{r}
-#Size of each hub group
-s <- 20
-#Off-diagonal elements
-#rho <- (1/(s+1))
-rho <- 0.2
 
 
-    
-    n <- 800
-    p <- 40
-    
-    #Number of hub groups
-    J <- floor(p/s)
-    
-    #Subsampled dataset size 
-    b = (floor(10*sqrt(n)))/n
-    #Number of Subsamples N
-    N = 20
 
-    hub <- generator(n = n, p = p, graph = "hub", rho = rho, g = J, vis = FALSE, verbose = TRUE)
-    
-    hub$omega
-    hub$theta
-    
-    huge.plot( hub$theta)
-    
-    hub_data <- hub$data
-    true_graph <- as.matrix(hub$theta)
-    
-    
-
-```
 
