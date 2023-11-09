@@ -1,6 +1,6 @@
 ---
-title: "04-Plot_Hub"
-output: github_document
+title: "23-Plot_Geom"
+output: gitGeom_document
 ---
 
 
@@ -10,7 +10,7 @@ load("session_settings.RData")
 load(paste0(dir_path3, "/performance_results.RData"))
 
 # Define the directory for estimated results
-dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
+dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom"
 
 # Load necessary libraries
 library(ggplot2)
@@ -85,14 +85,14 @@ save(mean_f1_df, mean_hamming_df, file = paste0(dir_path4, "/mean_hamming_df.RDa
 
 ```
 
-## Hub Plots
+## Geom Plots
 ```{r}
 # Mean F1-Scores Plot
-F1_Hub <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
+F1_Geom <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
   geom_point(size = 1.5) +
   geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +  
-  labs(title = "Hub", y = "Max F1-score", x = "") +  
+  labs(title = "Geom", y = "Max F1-score", x = "") +  
   theme_minimal() +
   theme(
     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
@@ -103,11 +103,11 @@ F1_Hub <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
 
 
 # Mean Hamming Distance Plot
-Hamming_Hub <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
+Hamming_Geom <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
   geom_point(size = 1.5) +
   geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +  
-  labs(title = "Hub", y = "Mean Hamming Distance", x = "") +  
+  labs(title = "Geom", y = "Mean Hamming Distance", x = "") +  
   theme_minimal() +
   theme(
     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
@@ -118,20 +118,11 @@ Hamming_Hub <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color =
 
 
 # Save the plot
-ggsave(filename = "F1_Hub_Plot.pdf", plot = F1_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-ggsave(filename = "Hamming_Hub_Plot.pdf", plot = Hamming_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
+ggsave(filename = "F1_Geom_Plot.pdf", plot = F1_Geom, path = dir_path4, width = 8, height = 6, dpi = 300)
+ggsave(filename = "Hamming_Geom_Plot.pdf", plot = Hamming_Geom, path = dir_path4, width = 8, height = 6, dpi = 300)
 
 
 # Display the plot
-F1_Hub
-Hamming_Hub
+F1_Geom
+Hamming_Geom
 ```
-
-
-
-
-
-
-
-
-

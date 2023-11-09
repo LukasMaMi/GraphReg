@@ -6,119 +6,61 @@ params:
   name: "02-Simulation_Geom" # change if you rename file
 ---
 
-
 ```{r}
+
 library(MASS)
-library(pulsar)
 library(Matrix)
 library(igraph)
 library(huge)
 
-function (n = 200, d = 50, graph = "random", v = NULL, u = NULL, 
-    g = NULL, prob = NULL, vis = FALSE, verbose = TRUE) 
+generator_geom <- function (n, p, rho, vis, verbose) 
 {
     gcinfo(FALSE)
     if (verbose) 
-        cat("Generating data from the multivariate normal distribution with the", 
-            graph, "graph structure....")
-    if (is.null(g)) {
-        g = 1
-        if (graph == "hub" || graph == "cluster") {
-            if (d > 40) 
-                g = ceiling(d/20)
-            if (d <= 40) 
-                g = 2
+        cat("Generating data from the multivariate normal distribution with the neighboorhod graph structure....")
+  
+    prob_function <- function(distance) exp(-4 * distance^2) / sqrt(2 * pi)
+
+    # Step 1: Sample points from a unit square
+    y <- matrix(runif(n * 2), ncol = 2)
+
+    # Step 2: Initialize omega with diagonal elements set to 1
+    omega <- diag(1, p)
+
+    # Step 3: Populate off-diagonal elements of omega
+    for (i in 1:(p-1)) {
+      for (j in (i+1):p) {
+        
+        # Checks whether current row have fewer non-zero off-diagonal elements than the allowed
+        if (sum(omega[i, -i] != 0) < floor(1/rho) && sum(omega[-j, j] != 0) < floor(1/rho)) { 
+          
+          # Calculates the Euclidean distance between the points in the unit square.
+          distance <- sqrt(sum((y[i, ] - y[j, ])^2)) 
+          
+          # Randomly determines, based on probability, whether to place an edge (non-zero value) between nodes 
+          if (runif(1) < prob_function(distance)) {
+            omega[i, j] <- omega[j, i] <- rho
+          }
         }
+      }
     }
-    if (graph == "random") {
-        if (is.null(prob)) 
-            prob = min(1, 3/d)
-        prob = sqrt(prob/2) * (prob < 0.5) + (1 - sqrt(0.5 - 
-            0.5 * prob)) * (prob >= 0.5)
-    }
-    if (graph == "cluster") {
-        if (is.null(prob)) {
-            if (d/g > 30) 
-                prob = 0.3
-            if (d/g <= 30) 
-                prob = min(1, 6 * g/d)
+    
+    # Step 4: Generate multivariate normal data
+    sigma <- solve(omega)  # Covariance matrix
+    theta <- matrix(0, p, p)
+    
+    # Populate theta by checking non-zero off-diagonal elements of omega
+    for (i in 1:p) {
+      for (j in 1:p) {
+        if (i != j && omega[i, j] != 0) {
+          theta[i, j] <- 1
         }
-        prob = sqrt(prob/2) * (prob < 0.5) + (1 - sqrt(0.5 - 
-            0.5 * prob)) * (prob >= 0.5)
+      }
     }
-    g.large = d%%g
-    g.small = g - g.large
-    n.small = floor(d/g)
-    n.large = n.small + 1
-    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
-    g.ind = rep(c(1:g), g.list)
-    rm(g.large, g.small, n.small, n.large, g.list)
-    gc()
-    theta = matrix(0, d, d)
-    if (graph == "band") {
-        if (is.null(u)) 
-            u = 0.1
-        if (is.null(v)) 
-            v = 0.3
-        for (i in 1:g) {
-            diag(theta[1:(d - i), (1 + i):d]) = 1
-            diag(theta[(1 + i):d, 1:(d - 1)]) = 1
-        }
-    }
-    if (graph == "cluster") {
-        if (is.null(u)) 
-            u = 0.1
-        if (is.null(v)) 
-            v = 0.3
-        for (i in 1:g) {
-            tmp = which(g.ind == i)
-            tmp2 = matrix(runif(length(tmp)^2, 0, 0.5), length(tmp), 
-                length(tmp))
-            tmp2 = tmp2 + t(tmp2)
-            theta[tmp, tmp][tmp2 < prob] = 1
-            rm(tmp, tmp2)
-            gc()
-        }
-    }
-    if (graph == "hub") {
-        if (is.null(u)) 
-            u = 0.1
-        if (is.null(v)) 
-            v = 0.3
-        for (i in 1:g) {
-            tmp = which(g.ind == i)
-            theta[tmp[1], tmp] = 1
-            theta[tmp, tmp[1]] = 1
-            rm(tmp)
-            gc()
-        }
-    }
-    if (graph == "random") {
-        if (is.null(u)) 
-            u = 0.1
-        if (is.null(v)) 
-            v = 0.3
-        tmp = matrix(runif(d^2, 0, 0.5), d, d)
-        tmp = tmp + t(tmp)
-        theta[tmp < prob] = 1
-        rm(tmp)
-        gc()
-    }
-    if (graph == "scale-free") {
-        if (is.null(u)) 
-            u = 0.1
-        if (is.null(v)) 
-            v = 0.3
-        out = .Call("_huge_SFGen", 2, d)
-        theta = matrix(as.numeric(out$G), d, d)
-    }
-    diag(theta) = 0
-    omega = theta * v
-    diag(omega) = abs(min(eigen(omega)$values)) + 0.1 + u
-    sigma = cov2cor(solve(omega))
-    omega = solve(sigma)
-    x = mvrnorm(n, rep(0, d), sigma)
-    sigmahat = cor(x)
+
+    x = mvrnorm(n, mu = rep(0, p), Sigma = sigma)
+    sigmahat = cov(x)
+    
     if (vis == TRUE) {
         fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
             0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
@@ -139,9 +81,155 @@ function (n = 200, d = 50, graph = "random", v = NULL, u = NULL,
     rm(vis, verbose)
     gc()
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-        omega = omega, theta = Matrix(theta, sparse = TRUE), 
-        sparsity = sum(theta)/(d * (d - 1)), graph.type = graph)
+        omega = omega, theta = Matrix(theta, sparse = FALSE), 
+        sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
     class(sim) = "sim"
     return(sim)
 }
+```
+
+
+```{r}
+
+# Define directory path
+#dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Simulation_Geom"
+dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Geom"
+
+# Manually set the number of repetitions
+num_repetitions <- 2 
+
+# Specify configurations
+configs <- list(
+  list(n=800, p=40),
+  list(n=400, p=100),
+  list(n=200, p=200)
+)
+
+save(num_repetitions, configs, dir_path, file="session_settings.RData")
+
+
+# Value of off-diagonal elements
+rho <- 0.245
+
+# Set up outer loop for repetitions
+for(rep in 1:num_repetitions) {
+  
+  # Set up inner loop for configurations
+  for(cfg in configs) {
+    
+    n <- cfg$n
+    p <- cfg$p
+    
+    
+    #Subsampled dataset size 
+    b = (floor(10*sqrt(n)))/n
+    #Number of Subsamples N
+    N = 20
+
+    Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
+    
+    Geom_data <- Geom$data
+    true_graph <- Geom$theta
+
+    
+    #Lambda path
+    lambda_path  <- getLamPath(max = getMaxCov(Geom_data), min = 0.01, len = 40)
+    lambda <- list(lambda=lambda_path)
+    
+    # Define the name of the file to save, including the directory path
+    file_name <- paste0(dir_path, "/Geom_rep_", rep, "_n_", n, "_p_", p, ".RData")
+    
+    # Save the Geom data to the file
+    save(Geom, Geom_data, true_graph, lambda, lambda_path, b, N, file = file_name)
+
+
+  }
+}
+
+print("Geoms generated and saved!")
+
+
+```
+
+
+
+
+```{r}
+
+# Set parameters
+n <- 800  
+p <- 40 
+rho <- 0.245
+
+Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
+
+huge.plot(Geom$theta)
+
+#Geom_data 
+Geom$omega
+Geom$sigma
+range(Geom$omega)
+kappa(Geom$omega)
+Geom$theta
+Geom$sparsity
+rho_probability
+restriction_met
+
+# Function to calculate the probability of rho appearing
+calculate_rho_probability <- function(omega, theta) {
+  # Count the total number of off-diagonal elements in theta
+  total_possible_connections = sum(lower.tri(theta))
+
+  # Count the number of rho values in omega
+  number_of_rhos = sum(omega[lower.tri(omega)] == rho)
+
+  # Calculate the probability
+  probability_rho = number_of_rhos / total_possible_connections
+
+  return(round(probability_rho, 5))
+}
+
+rho_probability <- calculate_rho_probability(Geom$omega, Geom$theta)
+
+
+check_omega_restriction <- function(omega, rho) {
+  max_elements = floor(1/rho)
+  p = ncol(omega)
+  
+  for (i in 1:p) {
+    # Count non-zero off-diagonal elements in each row and column
+    non_zero_count_row = sum(omega[i, -i] != 0)
+    non_zero_count_col = sum(omega[-i, i] != 0)
+
+    # Check if the counts exceed the allowed maximum
+    if (non_zero_count_row > max_elements || non_zero_count_col > max_elements) {
+      return(FALSE)  # Restriction violated
+    }
+  }
+
+  return(TRUE)  # Restriction met for all rows and columns
+}
+
+# Example of how to use the function
+restriction_met <- check_omega_restriction(Geom$omega, rho)
+
+
+compare_off_diagonal_elements <- function(matrix1, matrix2) {
+  # Function to count non-zero off-diagonal elements
+  count_non_zero_off_diagonal <- function(matrix) {
+    sum(matrix[upper.tri(matrix)] != 0) + sum(matrix[lower.tri(matrix)] != 0)
+  }
+
+  # Count non-zero off-diagonal elements in each matrix
+  count_matrix1 = count_non_zero_off_diagonal(matrix1)
+  count_matrix2 = count_non_zero_off_diagonal(matrix2)
+
+  # Compare and print results
+  print(paste("Non-zero off-diagonal elements in first matrix:", count_matrix1))
+  print(paste("Non-zero off-diagonal elements in second matrix:", count_matrix2))
+}
+
+# Example usage
+compare_off_diagonal_elements(Geom$omega, Geom$theta)
+
 ```

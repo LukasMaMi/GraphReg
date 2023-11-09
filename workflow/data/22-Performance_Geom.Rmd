@@ -1,0 +1,95 @@
+---
+title: "22-Performance_Geom"
+output: gitGeom_document
+---
+
+```{r}
+# Step 3: Performance Evaluation
+
+# Load session settings
+load("session_settings.RData")
+
+# Define the directory for estimated results
+dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Geom"
+
+# Save the session settings with the new directory path
+save(num_repetitions, configs, dir_path, dir_path2, dir_path3, file="session_settings.RData")
+
+# Function to generate file names based on configurations and repetition number
+get_filename <- function(config, rep, prefix = "Geom") {
+  sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
+}
+
+# Function to calculate F1-score and Hamming distance
+compute_metrics <- function(est_graph, true_graph) {
+  TP <- sum(est_graph == 1 & true_graph == 1)
+  FP <- sum(est_graph == 1 & true_graph == 0)
+  FN <- sum(est_graph == 0 & true_graph == 1)
+  precision <- TP / (TP + FP)
+  recall <- TP / (TP + FN)
+  F1 <- ifelse((precision + recall) > 0, 2 * (precision * recall) / (precision + recall), 0)
+  hamming_distance <- sum(est_graph != true_graph)
+  
+  list(F1 = F1, Hamming = hamming_distance)
+}
+
+# Initialize list to store results
+results <- list()
+
+# Loop over configurations and repetitions to compute metrics
+for(cfg in configs) {
+  cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
+  stars_results <- list()
+  gstars_results <- list()
+  oracle_results <- list()
+
+  for(rep in 1:num_repetitions) {
+    sim_filename <- get_filename(cfg, rep, prefix="Geom")
+    load(paste0(dir_path, "/", sim_filename))
+
+    result_filename <- get_filename(cfg, rep, prefix="estimation")
+    load(paste0(dir_path2, "/", result_filename))
+
+    # Extract the lower triangular part of the matrices excluding the diagonal
+    lower_tri_indices <- lower.tri(true_graph)
+
+    stars_metrics <- compute_metrics(stars_graph[lower_tri_indices], true_graph[lower_tri_indices])
+    gstars_metrics <- compute_metrics(gstars_graph[lower_tri_indices], true_graph[lower_tri_indices])
+    oracle_metrics <- compute_metrics(oracle_graph[lower_tri_indices], true_graph[lower_tri_indices])
+
+    stars_results[[rep]] <- stars_metrics
+    gstars_results[[rep]] <- gstars_metrics
+    oracle_results[[rep]] <- oracle_metrics
+  }
+
+  # Calculate mean and confidence intervals for the metrics
+  results[[cfg_key]] <- list(
+    Stars = list(
+      Mean_F1 = mean(sapply(stars_results, `[[`, "F1")),
+      CI_F1 = quantile(sapply(stars_results, `[[`, "F1"), probs = c(0.025, 0.975)),
+      Mean_Hamming = mean(sapply(stars_results, `[[`, "Hamming")),
+      CI_Hamming = quantile(sapply(stars_results, `[[`, "Hamming"), probs = c(0.025, 0.975))
+    ),
+    GStars = list(
+      Mean_F1 = mean(sapply(gstars_results, `[[`, "F1")),
+      CI_F1 = quantile(sapply(gstars_results, `[[`, "F1"), probs = c(0.025, 0.975)),
+      Mean_Hamming = mean(sapply(gstars_results, `[[`, "Hamming")),
+      CI_Hamming = quantile(sapply(gstars_results, `[[`, "Hamming"), probs = c(0.025, 0.975))
+    ),
+    Oracle = list(
+      Mean_F1 = mean(sapply(oracle_results, `[[`, "F1")),
+      CI_F1 = quantile(sapply(oracle_results, `[[`, "F1"), probs = c(0.025, 0.975)),
+      Mean_Hamming = mean(sapply(oracle_results, `[[`, "Hamming")),
+      CI_Hamming = quantile(sapply(oracle_results, `[[`, "Hamming"), probs = c(0.025, 0.975))
+    )
+  )
+}
+
+# Save the overall results to a file
+result_filename <- "performance_results.RData"
+save(results, file=paste0(dir_path3, "/", result_filename))
+
+cat("Performance metrics calculated and saved!\n")
+results
+
+```

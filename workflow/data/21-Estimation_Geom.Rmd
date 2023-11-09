@@ -1,0 +1,128 @@
+---
+title: "21-Estimation_Geom"
+output: gitGeom_document
+---
+
+# Run StARS, G-StARS and Oracle
+```{r}
+
+load("session_settings.RData")
+
+# Define directory path
+#dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Geom"
+dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom"
+
+save(num_repetitions, configs, dir_path, dir_path2, file="session_settings.RData")
+
+# 1. Generate list of file names based on configs
+get_filename <- function(config, rep, prefix = "Geom") {
+  return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
+}
+
+# 2. Loop over each file, load dataset, and compute adjacency matrices
+for(rep in 1:num_repetitions) {
+  for(i in seq_along(configs)) {
+    # Get filename for the current configuration and repetition
+    filename <- get_filename(configs[[i]], rep)
+    
+    # Load the dataset
+    load(paste0(dir_path, "/", filename))
+
+    
+#Define QUIC as method of choice for stars and gstars
+library(QUIC)
+
+quicr <- function(data, lambda, ...) {
+  S <- cov(data)
+  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+  est$path <- lapply(seq(length(lambda)), function(i) {
+  ## convert precision array to adj list
+  tmp <- est$X[,,i]; diag(tmp) <- 0
+  tmp <- ifelse(tmp != 0, 1, 0)
+  return(tmp)
+  })
+  est
+}
+
+#Run pulsar package
+library(orca)
+out.p <- pulsar(
+      data = Geom_data,
+      fun = quicr,
+      fargs = (lambda = lambda),
+      criterion = c('stars', 'gcd'),
+      thresh = 0.1,
+      subsample.ratio = b,
+      rep.num = N,
+      seed = 123,
+      lb.stars = TRUE,
+      ub.stars = TRUE,
+      ncores = 1,
+      refit = FALSE
+)
+
+#Get optimal index for gcd
+lam_gam <- get.opt.index(out.p, criterion = "gcd")
+#Set optimal index for gcd
+opt.index(out.p, criterion = "gcd") <- lam_gam
+
+fit  <- refit(out.p, criterion = c("stars", "gcd"))
+
+stars_graph <- fit[["refit"]][["stars"]]
+gstars_graph <- fit[["refit"]][["gcd"]]
+
+
+# Oracle procedure
+oracle_results <- quicr(Geom_data, lambda_path)
+
+#Define Hamming Distance as criterium for Oracle
+hamming_distance <- function(matrix1, matrix2) {
+    return(sum(matrix1 != matrix2))
+}
+
+# Minimize total number of different edges between the estimated and true graph
+best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+  estimated_graph <- oracle_results$path[[i]]
+  hamming_distance(estimated_graph, true_graph)
+}))
+
+best_lambda_oracle <- lambda_path[best_lambda_index]
+
+# Extract the oracle precision matrix for the best lambda:
+oracle_graph <- oracle_results$X[,,best_lambda_index]
+
+# Convert precision matrix to adjacency matrix
+oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
+diag(oracle_graph) <- 0
+
+    
+  # Save results to file
+  result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
+  save(stars_graph, gstars_graph, oracle_graph, file=paste0(dir_path2, "/", ... = result_filename))
+
+  }
+}
+
+print("Adjacency matrices for Geom generated and saved!")
+```
+
+
+## Huge.plot
+```{r}
+
+# Get a list of all .RData files in the directory
+files <- list.files(path = dir_path2, pattern = "n_800_p_40.*\\.RData$", full.names = TRUE)
+files <- list.files(path = dir_path2, pattern = "n_400_p_100.*\\.RData$", full.names = TRUE)
+files <- list.files(path = dir_path2, pattern = "n_200_p_200.*\\.RData$", full.names = TRUE)
+
+# Load all .RData files in the list
+for (file in files) {
+  load(file)
+  Geom_oracle <- huge.plot(oracle_graph)
+  Geom_stars <- huge.plot(stars_graph)
+  Geom_gstars <- huge.plot(gstars_graph)
+}
+
+
+
+```

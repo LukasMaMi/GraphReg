@@ -16,12 +16,11 @@ library(Matrix)
 library(igraph)
 library(huge)
 
-generator <- function (n, p, graph, rho, g, vis, verbose) 
+generator <- function (n, p, rho, g, vis, verbose) 
 {
     gcinfo(FALSE)
     if (verbose) 
-        cat("Generating data from the multivariate normal distribution with the", 
-            graph, "graph structure....")
+        cat("Generating data from the multivariate normal distribution with the hub graph structure....")
   
   g.large = p%%g #Rest Funktion
     g.small = g - g.large
@@ -34,14 +33,12 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
     
     theta = matrix(0, p, p) #Here Theta defined (pxp matrix with entries "0")
   
-     if (graph == "hub") { #Define Hub connections
-        for (i in 1:g) {
-            tmp = which(g.ind == i)
-            theta[tmp[1], tmp] = 1
-            theta[tmp, tmp[1]] = 1
-            rm(tmp)
-            gc()
-        }
+    for (i in 1:g) {
+        tmp = which(g.ind == i)
+        theta[tmp[1], tmp] = 1
+        theta[tmp, tmp[1]] = 1
+        rm(tmp)
+        gc()
     }
   
     diag(theta) = 0
@@ -72,7 +69,7 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
     rm(vis, verbose)
     gc()
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-        omega = omega, theta = Matrix(theta, sparse = TRUE), 
+        omega = omega, theta = Matrix(theta, sparse = FALSE), 
         sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
     class(sim) = "sim"
     return(sim)
@@ -123,10 +120,10 @@ for(rep in 1:num_repetitions) {
     #Number of Subsamples N
     N = 20
 
-    hub <- generator(n = n, p = p, graph = "hub", rho = rho, g = J, vis = FALSE, verbose = TRUE)
+    hub <- generator(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
     
     hub_data <- hub$data
-    true_graph <- as.matrix(hub$theta)
+    true_graph <- hub$theta
 
     
     #Lambda path
