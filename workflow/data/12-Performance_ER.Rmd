@@ -4,6 +4,7 @@ output: gitER_document
 ---
 
 ```{r}
+
 # Step 3: Performance Evaluation
 
 # Load session settings
@@ -42,6 +43,14 @@ for(cfg in configs) {
   stars_results <- list()
   gstars_results <- list()
   oracle_results <- list()
+  
+  stars_lambda_values <- list()
+  gstars_lambda_values <- list()
+  oracle_lambda_values <- list()
+  
+  stars_sparsity_values <- list()
+  gstars_sparsity_values <- list()
+  oracle_sparsity_values <- list()
 
   for(rep in 1:num_repetitions) {
     sim_filename <- get_filename(cfg, rep, prefix="ER")
@@ -60,7 +69,23 @@ for(cfg in configs) {
     stars_results[[rep]] <- stars_metrics
     gstars_results[[rep]] <- gstars_metrics
     oracle_results[[rep]] <- oracle_metrics
+    
+    stars_lambda_values[rep] <- best_lambda_stars
+    gstars_lambda_values[rep] <- best_lambda_gstars
+    oracle_lambda_values[rep] <- best_lambda_oracle
+    
+    stars_sparsity_values[rep] <- act_sparsity_stars
+    gstars_sparsity_values[rep] <- act_sparsity_gstars
+    oracle_sparsity_values[rep] <- act_sparsity_oracle
   }
+  
+  mean_lambda_stars <- mean(unlist(stars_lambda_values))
+  mean_lambda_gstars <- mean(unlist(gstars_lambda_values))
+  mean_lambda_oracle <- mean(unlist(oracle_lambda_values))
+  
+  mean_sparsity_stars <- mean(unlist(stars_sparsity_values))
+  mean_sparsity_gstars <- mean(unlist(gstars_sparsity_values))
+  mean_sparsity_oracle <- mean(unlist(oracle_sparsity_values))
 
   # Calculate mean and confidence intervals for the metrics
   results[[cfg_key]] <- list(
@@ -83,6 +108,13 @@ for(cfg in configs) {
       CI_Hamming = quantile(sapply(oracle_results, `[[`, "Hamming"), probs = c(0.025, 0.975))
     )
   )
+  results[[cfg_key]]$Stars$Mean_Lambda <- mean_lambda_stars
+  results[[cfg_key]]$GStars$Mean_Lambda <- mean_lambda_gstars
+  results[[cfg_key]]$Oracle$Mean_Lambda <- mean_lambda_oracle
+  
+  results[[cfg_key]]$Stars$Mean_Sparsity <- mean_sparsity_stars
+  results[[cfg_key]]$GStars$Mean_Sparsity <- mean_sparsity_gstars
+  results[[cfg_key]]$Oracle$Mean_Sparsity <- mean_sparsity_oracle
 }
 
 # Save the overall results to a file

@@ -15,7 +15,7 @@ dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Mast
 library(ggplot2)
 library(dplyr)
 
-# Initialize an empty data frame to store the results
+# F1 Score: Empty data frame
 mean_f1_df <- data.frame(Config = character(), 
                          Method = character(), 
                          Mean_F1 = numeric(), 
@@ -23,7 +23,7 @@ mean_f1_df <- data.frame(Config = character(),
                          CI_Upper = numeric(), 
                          stringsAsFactors = FALSE)
 
-# Initialize an empty data frame to store the Hamming scores results
+# Hamming distance: Empty data frame 
 mean_hamming_df <- data.frame(Config = character(),
                               Method = character(),
                               Mean_Hamming = numeric(),
@@ -31,8 +31,20 @@ mean_hamming_df <- data.frame(Config = character(),
                               CI_Upper = numeric(),
                               stringsAsFactors = FALSE)
 
+# Sparsity
+mean_sparsity_df <- data.frame(Config = character(), 
+                               Method = character(), 
+                               Mean_Sparsity = numeric(), 
+                               stringsAsFactors = FALSE)
 
-# Loop through the results list and extract the relevant data
+# Optimal Lambda
+mean_lambda_df <- data.frame(Config = character(), 
+                             Method = character(), 
+                             Mean_Lambda = numeric(), 
+                             stringsAsFactors = FALSE)
+
+
+# F1 Score Loop
 for (config_name in names(results)) {
   for (method in names(results[[config_name]])) {
     mean_f1 <- results[[config_name]][[method]]$Mean_F1
@@ -51,7 +63,7 @@ for (config_name in names(results)) {
 }
 
 
-# Loop through the results list and extract the relevant data for Hamming scores
+# Hamming Distance Loop
 for (config_name in names(results)) {
   for (method in names(results[[config_name]])) {
     mean_hamming <- results[[config_name]][[method]]$Mean_Hamming
@@ -70,6 +82,27 @@ for (config_name in names(results)) {
 }
 
 
+# Sparsity and lambda Loop
+for (config_name in names(results)) {
+  for (method in names(results[[config_name]])) {
+    mean_sparsity <- results[[config_name]][[method]]$Mean_Sparsity
+    mean_lambda <- results[[config_name]][[method]]$Mean_Lambda
+    
+    # Temporary data frames for sparsity and lambda
+    temp_sparsity_df <- data.frame(Config = config_name, 
+                                   Method = method, 
+                                   Mean_Sparsity = mean_sparsity)
+    
+    temp_lambda_df <- data.frame(Config = config_name, 
+                                 Method = method, 
+                                 Mean_Lambda = mean_lambda)
+    
+    # Bind to main data frames
+    mean_sparsity_df <- rbind(mean_sparsity_df, temp_sparsity_df)
+    mean_lambda_df <- rbind(mean_lambda_df, temp_lambda_df)
+  }
+}
+
 # Convert factors to ensure the levels are in order for plotting
 mean_f1_df$Config <- factor(mean_f1_df$Config, levels = unique(mean_f1_df$Config))
 mean_f1_df$Method <- factor(mean_f1_df$Method, levels = c("Stars", "GStars", "Oracle"))
@@ -78,50 +111,67 @@ mean_f1_df$Method <- factor(mean_f1_df$Method, levels = c("Stars", "GStars", "Or
 mean_hamming_df$Config <- factor(mean_hamming_df$Config, levels = unique(mean_hamming_df$Config))
 mean_hamming_df$Method <- factor(mean_hamming_df$Method, levels = c("Stars", "GStars", "Oracle"))
 
+# Convert factors for plotting
+mean_sparsity_df$Config <- factor(mean_sparsity_df$Config, levels = unique(mean_sparsity_df$Config))
+mean_sparsity_df$Method <- factor(mean_sparsity_df$Method, levels = c("Stars", "GStars", "Oracle"))
+
+mean_lambda_df$Config <- factor(mean_lambda_df$Config, levels = unique(mean_lambda_df$Config))
+mean_lambda_df$Method <- factor(mean_lambda_df$Method, levels = c("Stars", "GStars", "Oracle"))
+
 # Save the prepared data frame to a file
-save(mean_f1_df, mean_hamming_df, file = paste0(dir_path4, "/mean_hamming_df.RData"))
+save(mean_f1_df, mean_hamming_df, mean_sparsity_df, mean_lambda_df, file = paste0(dir_path4, "/mean_hamming_df.RData"))
 
 
 ```
 
 ## ER Plots
 ```{r}
-# Mean F1-Scores Plot
-F1_ER <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
+
+# Merge lambda values with F1 and Hamming data frames
+merged_f1_df <- merge(mean_f1_df, mean_lambda_df, by = c("Config", "Method"))
+merged_hamming_df <- merge(mean_hamming_df, mean_lambda_df, by = c("Config", "Method"))
+
+# Prepare custom labels for configurations
+config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
+names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep="_"))
+
+# Update Config column in merged data frames
+merged_f1_df$Config <- factor(merged_f1_df$Config, levels = names(config_labels), labels = config_labels)
+merged_hamming_df$Config <- factor(merged_hamming_df$Config, levels = names(config_labels), labels = config_labels)
+
+# Plotting
+F1_ER <- ggplot(merged_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
   geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +  
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
+  geom_text(aes(label = paste("λ =", round(Mean_Lambda, 3))), vjust = -1, 
+            position = position_dodge(width = 0.9)) +
   labs(title = "ER", y = "Max F1-score", x = "") +  
   theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-    axis.title.x = element_blank() 
-  ) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
-  theme(legend.title = element_blank())
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black"))
 
-
-# Mean Hamming Distance Plot
-Hamming_ER <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
+Hamming_ER <- ggplot(merged_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
   geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +  
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
+  geom_text(aes(label = paste("λ =", round(Mean_Lambda, 3))), vjust = -1, 
+            position = position_dodge(width = 0.9)) +
   labs(title = "ER", y = "Mean Hamming Distance", x = "") +  
   theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-    axis.title.x = element_blank()
-  ) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
-  theme(legend.title = element_blank())
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black"))
 
-
-# Save the plot
+# Save the plots (if needed)
 ggsave(filename = "F1_ER_Plot.pdf", plot = F1_ER, path = dir_path4, width = 8, height = 6, dpi = 300)
 ggsave(filename = "Hamming_ER_Plot.pdf", plot = Hamming_ER, path = dir_path4, width = 8, height = 6, dpi = 300)
 
-
-# Display the plot
+# Display the plots
 F1_ER
 Hamming_ER
+
 ```
