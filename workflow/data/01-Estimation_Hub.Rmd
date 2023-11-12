@@ -1,6 +1,6 @@
 ---
 title: "01-Estimation_Hub"
-output: github_document
+output: gitHub_document
 ---
 
 
@@ -16,7 +16,7 @@ dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Mast
 save(num_repetitions, configs, dir_path, dir_path2, file="session_settings.RData")
 
 # 1. Generate list of file names based on configs
-get_filename <- function(config, rep, prefix = "hub") {
+get_filename <- function(config, rep, prefix = "Hub") {
   return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
 }
 
@@ -48,7 +48,7 @@ quicr <- function(data, lambda, ...) {
 #Run pulsar package
 library(orca)
 out.p <- pulsar(
-      data = hub_data,
+      data = Hub_data,
       fun = quicr,
       fargs = (lambda = lambda),
       criterion = c('stars', 'gcd'),
@@ -74,11 +74,12 @@ gstars_graph <- fit[["refit"]][["gcd"]]
 
 
 # Oracle procedure
-oracle_results <- quicr(hub_data, lambda_path)
+set.seed(123)
+oracle_results <- quicr(Hub_data, lambda_path)
 
 #Define Hamming Distance as criterium for Oracle
 hamming_distance <- function(matrix1, matrix2) {
-    return(sum(matrix1 != matrix2))
+     return(sum(matrix1[lower.tri(matrix1)] != matrix2[lower.tri(matrix2)]))
 }
 
 # Minimize total number of different edges between the estimated and true graph

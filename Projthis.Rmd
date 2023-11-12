@@ -866,3 +866,116 @@ generator <- function (n, p, graph, rho, g, vis, verbose)
 ```
 
 
+```{r}
+library(MASS)
+library(pulsar)
+library(Matrix)
+library(igraph)
+library(huge)
+
+generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal 
+            distribution with the random graph structure....")
+
+    #prob = sqrt(prob/2) * (prob < 0.5) + 
+     # (1 - sqrt(0.5 - 0.5 * prob)) * (prob >= 0.5)
+    
+    theta = matrix(0, p, p)
+        tmp = matrix(runif(p^2, 0, 0.5), p, p) #set threshold
+        tmp = tmp + t(tmp)
+        theta[tmp < prob] = 1 #thresholding: If prob greater than 0.5 than edge is present (1)
+        rm(tmp)
+        gc()
+    
+    # Ensure no self-loops
+    diag(theta) = 0 
+    # Create a symmetric matrix with random values in the range [-1, 1] for off-diagonals
+    random_matrix <- matrix(runif(p^2, -1, 1), p, p) # increase range
+    omega = theta * (random_matrix + t(random_matrix)) / 2
+    eigen_omega = eigen(omega) # Calculate eigenvalues of omega
+    adjustment_factor = 1 # Initialize an adjustment factor
+    current_condition_number = kappa(omega) # Calculate current condition number
+    desired_condition_number = 100 # max(eigenvalue)/ min(eigenvalue) = 10
+    
+    #diagonal to 1, then off-diagonal between -1, 1 and then we rerun it until positve definite this!!!
+    # set diagonal based on condition number let the rest as it is (diagonal greater than one)
+    #matrix, change diagonal such that condition = 10, 100 (newton-raphson alg)
+
+    # Adjust the diagonal elements
+    while (current_condition_number > desired_condition_number) {
+      # Adjust the smallest eigenvalue to change the condition number
+      eigen_omega$values = pmax(eigen_omega$values, adjustment_factor * max(eigen_omega$values) / desired_condition_number)
+      omega = eigen_omega$vectors %*% diag(eigen_omega$values) %*% t(eigen_omega$vectors) # Reconstruct omega with the adj eigenvalues
+      current_condition_number = kappa(omega) # Recalculate condition number
+      adjustment_factor = adjustment_factor * 1.01 # slightly increase the adjustment_factor to ensure the loop will terminate
+    }
+    
+    omega = abs(omega) * (1 - diag(nrow(omega))) + diag(nrow(omega))
+    
+    # Inverse of omega to get sigma (covariance matrix)
+    sigma = solve(omega) 
+    # Generate multivariate normal samples
+    x = MASS::mvrnorm(n, mu = rep(0, p), Sigma = sigma)
+    # Estimate the covariance matrix from the generated samples
+    sigmahat = cov(x)
+
+  if (vis == TRUE) {
+          fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+              0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+          fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+          fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+          g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+          layout.grid = layout.fruchterman.reingold(g)
+          fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+              vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+              main = "Graph Pattern")
+          fullfig[4] = image(sigmahat, col = gray.colors(256), 
+              main = "Empirical Matrix")
+          rm(fullfig, g, layout.grid)
+          gc()
+    }
+    
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+    omega = omega, theta = Matrix(theta, sparse = FALSE), #Matrix configuration
+    sparsity = sum(theta)/(p * (p - 1))) #Sparsity level = number of present edges divided by number of potential edges p x p.
+    class(sim) = "sim"
+    return(sim)
+}
+
+```
+
+# To Do List
+## Implement sparsity levels in plot
+## Check confidence intervals
+## Relocate settings file
+
+# 
+```{r}
+
+'
+Oracles Objective: In your Oracle method, the goal is to choose the lambda value that minimizes the discrepancy (via Hamming distance) between the estimated and true graphs. This method inherently treats edges and non-edges equally.
+
+High-Dimensional Settings: In high-dimensional settings (like n=200,p=200), where the number of potential edges (p(p−1)/2) is very large and the true graph is sparse, the majority of the entries in the adjacency matrix are zeros (non-edges). Thus, a method that equally weighs edges and non-edges might be biased towards predicting non-edges.
+'
+
+#Define Hamming Distance as criterium for Oracle
+hamming_distance <- function(matrix1, matrix2) {
+    return(sum(matrix1[lower.tri(matrix1)] != matrix2[lower.tri(matrix2)]))
+}
+
+# Minimize total number of different edges between the estimated and true graph
+best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+  estimated_graph <- oracle_results$path[[i]]
+  hamming_distance(estimated_graph, true_graph)
+}))
+
+```
+

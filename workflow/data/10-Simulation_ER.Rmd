@@ -13,47 +13,38 @@ library(Matrix)
 library(igraph)
 library(huge)
 
-generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE) 
+generator_rand <- function (n, p, sparsity, vis = FALSE, verbose = TRUE) 
 {
     gcinfo(FALSE)
     if (verbose) 
         cat("Generating data from the multivariate normal 
             distribution with the random graph structure....")
 
-    prob = sqrt(prob/2) * (prob < 0.5) + 
-      (1 - sqrt(0.5 - 0.5 * prob)) * (prob >= 0.5)
-    
-    theta = matrix(0, p, p)
-        tmp = matrix(runif(p^2, 0, 0.5), p, p) #set threshold
-        tmp = tmp + t(tmp)
-        theta[tmp < prob] = 1 #thresholding: If prob greater than 0.5 than edge is present (1)
-        rm(tmp)
-        gc()
-    
-    # Ensure no self-loops
-    diag(theta) = 0 
-    # Create a symmetric matrix with random values in the range [-1, 1] for off-diagonals
-    random_matrix <- matrix(runif(p^2, -1, 1), p, p)
-    omega = theta * (random_matrix + t(random_matrix)) / 2
-    eigen_omega = eigen(omega) # Calculate eigenvalues of omega
-    adjustment_factor = 1 # Initialize an adjustment factor
-    current_condition_number = kappa(omega) # Calculate current condition number
-    desired_condition_number = 10 # max(eigenvalue)/ min(eigenvalue) = 10
+  
+    # Step 1: Generate random graph (Adjacency Matrix Theta)
+    num_edges <- p * (p - 1) / 2 * sparsity # Exact number of edges for sparsity 3/p
+    theta <- matrix(0, p, p)
+    edges <- which(lower.tri(matrix(1, p, p)), arr.ind = TRUE)
+    edges <- edges[sample(nrow(edges), num_edges),] # Randomly pick edges
+    theta[edges] <- 1
+    theta <- theta + t(theta)
 
-    # Adjust the diagonal elements
-    while (current_condition_number > desired_condition_number) {
-      # Adjust the smallest eigenvalue to change the condition number
-      eigen_omega$values = pmax(eigen_omega$values, adjustment_factor * max(eigen_omega$values) / desired_condition_number)
-      omega = eigen_omega$vectors %*% diag(eigen_omega$values) %*% t(eigen_omega$vectors) # Reconstruct omega with the adj eigenvalues
-      current_condition_number = kappa(omega) # Recalculate condition number
-      adjustment_factor = adjustment_factor * 1.01 # slightly increase the adjustment_factor to ensure the loop will terminate
+
+    # Create a symmetric matrix with random values in the range [-1, 1] for off-diagonals
+    random_matrix <- matrix(runif(p^2, -1, 1), p, p) # increase range
+    # Initialize Omega with larger diagonal elements
+    omega = theta * (random_matrix + t(random_matrix)) / 2
+    diag(omega) <- abs(min(eigen(omega)$values)) + 0.1
+
+    # Adjust the diagonal elements based on condition number
+    desired_condition_number = 10
+    while (kappa(omega) > desired_condition_number) {
+      # Allow some flexibility in the adjustment
+      diag(omega) <- diag(omega) * 1.01  # Incrementally increase diagonal elements
     }
-    
-    omega = abs(omega) * (1 - diag(nrow(omega))) + diag(nrow(omega))
     
     # Inverse of omega to get sigma (covariance matrix)
     sigma = solve(omega) 
-    omega = solve(sigma)
     # Generate multivariate normal samples
     x = MASS::mvrnorm(n, mu = rep(0, p), Sigma = sigma)
     # Estimate the covariance matrix from the generated samples
@@ -82,7 +73,7 @@ generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE)
     
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
     omega = omega, theta = Matrix(theta, sparse = FALSE), #Matrix configuration
-    sparsity = sum(theta)/(p * (p - 1))) #Sparsity level = number of present edges divided by number of potential edges p x p.
+    act_sparsity = sum(theta)/(p * (p - 1))) #Sparsity level = number of present edges divided by number of potential edges p x p.
     class(sim) = "sim"
     return(sim)
 }
@@ -96,7 +87,7 @@ generator_rand <- function (n, p, prob, vis = FALSE, verbose = TRUE)
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
 
 # Manually set the number of repetitions
-num_repetitions <- 2 
+num_repetitions <- 3 
 
 # Specify configurations
 configs <- list(
@@ -119,17 +110,16 @@ for(rep in 1:num_repetitions) {
     #Subsampled dataset size 
     b = (floor(10*sqrt(n)))/n
     #Number of Subsamples N
-    N = 20
+    N = 30
 
-    prob <- 3/p #For p = 40, Prob = 0.075
-
-    ER <- generator_rand(n = n, p = p, prob = prob, vis = TRUE)
+    sparsity <- 3/p #For p = 40, Prob = 0.075
+    
+    ER <- generator_rand(n = n, p = p, sparsity = sparsity, vis = TRUE)
 
     ER_data <- ER$data
     true_graph <- ER$theta
-    #true_graph <- as.matrix(ER$theta)
+    act_sparsity <- ER$act_sparsity
 
-    
     #Lambda path
     lambda_path  <- getLamPath(max = getMaxCov(ER_data), min = 0.01, len = 40)
     lambda <- list(lambda=lambda_path)
@@ -138,7 +128,7 @@ for(rep in 1:num_repetitions) {
     file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
     
     # Save the hub data to the file
-    save(ER, ER_data, true_graph, lambda, lambda_path, b, N, file = file_name)
+    save(ER, ER_data, true_graph, lambda, act_sparsity, lambda_path, b, N, file = file_name) #Save sparsity, also lambda index also
 
 
   }
@@ -161,9 +151,9 @@ b = (floor(10*sqrt(n)))/n
 #Number of Subsamples N
 N = 20
 
-prob <- 3/p #For p = 40, Prob = 0.075
+sparsity <- 3/p #For p = 40, Prob = 0.075
 
-ER <- generator_rand(n = n, p = p, prob = prob, vis = TRUE)
+ER <- generator_rand(n = n, p = p, sparsity = sparsity, vis = TRUE)
 ER_data <- ER$data
 
 #ER_data 
@@ -171,8 +161,7 @@ ER$omega
 range(ER$omega)
 kappa(ER$omega)
 ER$theta
-ER$sparsity
-prob
+ER$act_sparsity #Check for exact number !
 
 huge.plot(ER$theta)
 
@@ -211,7 +200,7 @@ out.p <- pulsar(
       thresh = 0.1,
       subsample.ratio = b,
       rep.num = N,
-      seed = 123,
+      seed = NULL,
       lb.stars = TRUE,
       ub.stars = TRUE,
       ncores = 1,
@@ -228,6 +217,11 @@ fit  <- refit(out.p, criterion = c("stars", "gcd"))
 stars_graph <- fit[["refit"]][["stars"]]
 gstars_graph <- fit[["refit"]][["gcd"]]
 
+stars_index <- out.p[["stars"]][["opt.index"]]
+best_lambda_stars <- round(lambda_path[stars_index], 3)
+
+gstars_index <- out.p[["gcd"]][["opt.index"]]
+best_lambda_gstars <- round(lambda_path[gstars_index], 3)
 
 # Oracle procedure
 oracle_results <- quicr(ER_data, lambda_path)

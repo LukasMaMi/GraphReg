@@ -1,7 +1,7 @@
 ---
 title: "00-Simulation_Hub"
 date: "Compiled at `r format(Sys.time(), '%Y-%m-%d %H:%M:%S', tz = 'UTC')` UTC"
-output: github_document
+output: gitHub_document
 params:
   name: "00-Simulation_Hub" # change if you rename file
 ---
@@ -16,11 +16,11 @@ library(Matrix)
 library(igraph)
 library(huge)
 
-generator <- function (n, p, rho, g, vis, verbose) 
+generator_Hub <- function (n, p, rho, g, vis, verbose) 
 {
     gcinfo(FALSE)
     if (verbose) 
-        cat("Generating data from the multivariate normal distribution with the hub graph structure....")
+        cat("Generating data from the multivariate normal distribution with the Hub graph structure....")
   
   g.large = p%%g #Rest Funktion
     g.small = g - g.large
@@ -45,7 +45,6 @@ generator <- function (n, p, rho, g, vis, verbose)
     omega = theta * rho
     diag(omega) = 1 #Set diagonal of precision matrix to 1 (Liu et al.)
     sigma = solve(omega) #Knackpunkt! Das ist nun das Sigma, welche zu unserem simulierten theta gehört.
-    omega = solve(sigma) #Kontrolle, ob Sigma passend zu gewolltem theta erstellt
     x = mvrnorm(n, rep(0, p), sigma) #Dieses Sigma wird schlussendlich verwendet, um die Daten zu simulieren!!!
     sigmahat = cov(x) #Empirical covariance matrix
     
@@ -69,8 +68,8 @@ generator <- function (n, p, rho, g, vis, verbose)
     rm(vis, verbose)
     gc()
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-        omega = omega, theta = Matrix(theta, sparse = FALSE), 
-        sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
+        omega = omega, theta = theta, 
+        sparsity = sum(theta)/(p * (p - 1)))
     class(sim) = "sim"
     return(sim)
 }
@@ -85,7 +84,7 @@ generator <- function (n, p, rho, g, vis, verbose)
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub"
 
 # Manually set the number of repetitions
-num_repetitions <- 2 
+num_repetitions <- 3 
 
 # Specify configurations
 configs <- list(
@@ -97,11 +96,11 @@ configs <- list(
 save(num_repetitions, configs, dir_path, file="session_settings.RData")
 
 
-#Size of each hub group
+#Size of each Hub group
 s <- 20
 #Off-diagonal elements
-rho <- (1/(s+1)) #Zu klein?!
-#rho <- 0.2
+#rho <- (1/(s+1))
+rho <- 0.15
 
 # Set up outer loop for repetitions
 for(rep in 1:num_repetitions) {
@@ -112,29 +111,30 @@ for(rep in 1:num_repetitions) {
     n <- cfg$n
     p <- cfg$p
     
-    #Number of hub groups
+    #Number of Hub groups
     J <- floor(p/s)
     
     #Subsampled dataset size 
     b = (floor(10*sqrt(n)))/n
     #Number of Subsamples N
-    N = 20
+    N = 30
 
-    hub <- generator(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
+    Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
     
-    hub_data <- hub$data
-    true_graph <- hub$theta
+    Hub_data <- Hub$data
+    true_graph <- Hub$theta
+    sparsity <- Hub$sparsity
 
     
     #Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(hub_data), min = 0.01, len = 40)
+    lambda_path  <- getLamPath(max = getMaxCov(Hub_data), min = 0.01, len = 50)
     lambda <- list(lambda=lambda_path)
     
     # Define the name of the file to save, including the directory path
-    file_name <- paste0(dir_path, "/hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
+    file_name <- paste0(dir_path, "/Hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
     
-    # Save the hub data to the file
-    save(hub, hub_data, true_graph, lambda, lambda_path, b, N, file = file_name)
+    # Save the Hub data to the file
+    save(Hub, Hub_data, true_graph, lambda, lambda_path, b, N, sparsity, file = file_name)
 
 
   }
@@ -144,6 +144,185 @@ print("Hubs generated and saved!")
 
 
 ```
+##Check true graphs
+```{r}
+# Define the directory path where your files are stored
+dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub"
+
+# List all RData files in the directory
+file_true_Hub <- list.files(dir_path, pattern = "\\.RData$", full.names = TRUE)
+
+# Adjacency matrices of true graph
+extract_true_graph <- function(file_path) {
+  e <- new.env()
+  load(file_path, envir = e)
+  return(e$true_graph)
+}
+
+# Extract and store the true graphs
+true_graphs <- lapply(file_true_Hub, extract_true_graph)
+true_graphs
+
+image(true_graphs[[1]], col = gray.colors(256), main = "First True Graph")
+
+# Sparsity of true graphs
+extract_sparsity_true_graph <- function(file_path) {
+  e <- new.env()
+  load(file_path, envir = e)
+  return(e$sparsity)
+}
+
+# Extract and store the true graphs
+true_sparsity <- lapply(file_true_Hub, extract_sparsity_true_graph)
+true_sparsity 
+
+```
+
+
+
+```{r}
+
+n = 800
+p = 40
+s = 20
+#rho <- 1/(s+1)
+rho <- 0.15
+
+#Number of Hub groups
+J <- floor(p/s)
+
+#Subsampled dataset size 
+b = (floor(10*sqrt(n)))/n
+#Number of Subsamples N
+N = 20
+
+Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
+
+Hub_data <- Hub$data
+true_graph <- Hub$theta
+lambda_path  <- getLamPath(max = getMaxCov(Hub_data), min = 0.01, len = 40)
+lambda <- list(lambda=lambda_path)
+
+huge.plot(Hub$theta)
+
+#Hub_data 
+Hub$omega
+Hub$theta
+Hub$sigma
+range(Hub$omega)
+kappa(Hub$omega)
+
+Hub$sparsity
+rho_probability
+
+# Function to calculate the probability of rho appearing
+calculate_rho_probability <- function(omega, theta) {
+  # Count the total number of off-diagonal elements in theta
+  total_possible_connections = sum(lower.tri(theta))
+
+  # Count the number of rho values in omega
+  number_of_rhos = sum(omega[lower.tri(omega)] == rho)
+
+  # Calculate the probability
+  probability_rho = number_of_rhos / total_possible_connections
+
+  return(round(probability_rho, 5))
+}
+
+rho_probability <- calculate_rho_probability(Hub$omega, Hub$theta)
+
+
+compare_off_diagonal_elements <- function(matrix1, matrix2) {
+  # Function to count non-zero off-diagonal elements
+  count_non_zero_off_diagonal <- function(matrix) {
+    sum(matrix[upper.tri(matrix)] != 0) + sum(matrix[lower.tri(matrix)] != 0)
+  }
+
+  # Count non-zero off-diagonal elements in each matrix
+  count_matrix1 = count_non_zero_off_diagonal(matrix1)
+  count_matrix2 = count_non_zero_off_diagonal(matrix2)
+
+  # Compare and print results
+  print(paste("Non-zero off-diagonal elements in first matrix:", count_matrix1))
+  print(paste("Non-zero off-diagonal elements in second matrix:", count_matrix2))
+}
+
+# Example usage
+compare_off_diagonal_elements(Hub$omega, Hub$theta)
+```
+
+
+```{r}
+library(QUIC)
+
+quicr <- function(data, lambda, ...) {
+  S <- cov(data)
+  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+  est$path <- lapply(seq(length(lambda)), function(i) {
+  ## convert precision array to adj list
+  tmp <- est$X[,,i]; diag(tmp) <- 0
+  tmp <- ifelse(tmp != 0, 1, 0)
+  return(tmp)
+  })
+  est
+}
+
+#Run pulsar package
+library(orca)
+out.p <- pulsar(
+      data = Hub_data,
+      fun = quicr,
+      fargs = (lambda = lambda),
+      criterion = c('stars', 'gcd'),
+      thresh = 0.1,
+      subsample.ratio = b,
+      rep.num = N,
+      seed = 123,
+      lb.stars = TRUE,
+      ub.stars = TRUE,
+      ncores = 1,
+      refit = FALSE
+)
+
+#Get optimal index for gcd
+lam_gam <- get.opt.index(out.p, criterion = "gcd")
+#Set optimal index for gcd
+opt.index(out.p, criterion = "gcd") <- lam_gam
+
+out.p
+
+fit  <- refit(out.p, criterion = c("stars", "gcd"))
+
+stars_graph <- fit[["refit"]][["stars"]]
+gstars_graph <- fit[["refit"]][["gcd"]]
+
+
+
+# Oracle procedure
+oracle_results <- quicr(Hub_data, lambda_path)
+
+#Define Hamming Distance as criterium for Oracle
+hamming_distance <- function(matrix1, matrix2) {
+     return(sum(matrix1[lower.tri(matrix1)] != matrix2[lower.tri(matrix2)]))
+}
+
+# Minimize total number of different edges between the estimated and true graph
+best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+  estimated_graph <- oracle_results$path[[i]]
+  hamming_distance(estimated_graph, true_graph)
+}))
+
+best_lambda_oracle <- lambda_path[best_lambda_index]
+
+# Extract the oracle precision matrix for the best lambda:
+oracle_graph <- oracle_results$X[,,best_lambda_index]
+
+# Convert precision matrix to adjacency matrix
+oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
+diag(oracle_graph) <- 0
+
+```
+
 
 ## Session info
 ```{r}

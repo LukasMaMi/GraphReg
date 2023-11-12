@@ -49,7 +49,7 @@ library(orca)
 out.p <- pulsar(
       data = Geom_data,
       fun = quicr,
-      fargs = (lambda = lambda),
+      fargs = (lambda = lambda), #Lambda path wrong way around!
       criterion = c('stars', 'gcd'),
       thresh = 0.1,
       subsample.ratio = b,
@@ -77,11 +77,11 @@ oracle_results <- quicr(Geom_data, lambda_path)
 
 #Define Hamming Distance as criterium for Oracle
 hamming_distance <- function(matrix1, matrix2) {
-    return(sum(matrix1 != matrix2))
+    return(sum(matrix1[lower.tri(matrix1)] != matrix2[lower.tri(matrix2)]))
 }
 
 # Minimize total number of different edges between the estimated and true graph
-best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) { #Highest F1 score instead!!! as criterium
   estimated_graph <- oracle_results$path[[i]]
   hamming_distance(estimated_graph, true_graph)
 }))
@@ -120,9 +120,10 @@ for (file in files) {
   load(file)
   Geom_oracle <- huge.plot(oracle_graph)
   Geom_stars <- huge.plot(stars_graph)
-  Geom_gstars <- huge.plot(gstars_graph)
+  Geom_gstars <- huge.plot(gstars_graph) #table which lambda is selected + level of sparsity
 }
 
-
+st <- load("/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Geom/Geom_rep_2_n_200_p_200.RData")
+st[4]
 
 ```

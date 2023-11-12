@@ -31,13 +31,13 @@ generator_geom <- function (n, p, rho, vis, verbose)
     for (i in 1:(p-1)) {
       for (j in (i+1):p) {
         
-        # Checks whether current row have fewer non-zero off-diagonal elements than the allowed
+        # Checks current row have fewer non-zero off-diagonal elements than the allowed
         if (sum(omega[i, -i] != 0) < floor(1/rho) && sum(omega[-j, j] != 0) < floor(1/rho)) { 
           
-          # Calculates the Euclidean distance between the points in the unit square.
+          # Euclidean distance between points in the unit square.
           distance <- sqrt(sum((y[i, ] - y[j, ])^2)) 
           
-          # Randomly determines, based on probability, whether to place an edge (non-zero value) between nodes 
+          # Randomly determines place an edge (non-zero value) between nodes 
           if (runif(1) < prob_function(distance)) {
             omega[i, j] <- omega[j, i] <- rho
           }
@@ -46,7 +46,7 @@ generator_geom <- function (n, p, rho, vis, verbose)
     }
     
     # Step 4: Generate multivariate normal data
-    sigma <- solve(omega)  # Covariance matrix
+    sigma <- solve(omega)  
     theta <- matrix(0, p, p)
     
     # Populate theta by checking non-zero off-diagonal elements of omega
@@ -124,7 +124,7 @@ for(rep in 1:num_repetitions) {
     #Subsampled dataset size 
     b = (floor(10*sqrt(n)))/n
     #Number of Subsamples N
-    N = 20
+    N = 30
 
     Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
     
@@ -155,13 +155,21 @@ print("Geoms generated and saved!")
 
 
 ```{r}
+#grpahlet correlation of true graph 
+#graphlet corr only for subsamples
+#Compare distance (hamming)
+#Select lambda with min graphlet correlation distance
 
+lambda_path  <- getLamPath(max = getMaxCov(Geom_data), min = 0.01, len = 40)
+    lambda <- list(lambda=lambda_path)
+    
 # Set parameters
-n <- 800  
-p <- 40 
+n <- 200 
+p <- 200 
 rho <- 0.245
 
 Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
+Geom_data <- Geom$data
 
 huge.plot(Geom$theta)
 
@@ -231,5 +239,68 @@ compare_off_diagonal_elements <- function(matrix1, matrix2) {
 
 # Example usage
 compare_off_diagonal_elements(Geom$omega, Geom$theta)
+
+quicr <- function(data, lambda, ...) {
+  S <- cov(data)
+  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+  est$path <- lapply(seq(length(lambda)), function(i) {
+  ## convert precision array to adj list
+  tmp <- est$X[,,i]; diag(tmp) <- 0
+  tmp <- ifelse(tmp != 0, 1, 0)
+  return(tmp)
+  })
+  est
+}
+
+#Run pulsar package
+library(orca)
+out.p <- pulsar(
+      data = Geom_data,
+      fun = quicr,
+      fargs = (lambda = lambda),
+      criterion = c('stars', 'gcd'),
+      thresh = 0.1,
+      subsample.ratio = b,
+      rep.num = N,
+      seed = 123,
+      lb.stars = TRUE,
+      ub.stars = TRUE,
+      ncores = 1,
+      refit = FALSE
+)
+
+#Get optimal index for gcd
+lam_gam <- get.opt.index(out.p, criterion = "gcd")
+#Set optimal index for gcd
+opt.index(out.p, criterion = "gcd") <- lam_gam
+
+fit  <- refit(out.p, criterion = c("stars", "gcd"))
+
+stars_graph <- fit[["refit"]][["stars"]]
+gstars_graph <- fit[["refit"]][["gcd"]]
+
+
+# Oracle procedure
+oracle_results <- quicr(Geom_data, lambda_path)
+
+#Define Hamming Distance as criterium for Oracle
+hamming_distance <- function(matrix1, matrix2) {
+    return(sum(matrix1[lower.tri(matrix1)] != matrix2[lower.tri(matrix2)]))
+}
+
+# Minimize total number of different edges between the estimated and true graph
+best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
+  estimated_graph <- oracle_results$path[[i]]
+  hamming_distance(estimated_graph, true_graph)
+}))  
+  
+  best_lambda_oracle <- lambda_path[best_lambda_index]
+
+# Extract the oracle precision matrix for the best lambda:
+oracle_graph <- oracle_results$X[,,best_lambda_index]
+
+# Convert precision matrix to adjacency matrix
+oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
+diag(oracle_graph) <- 0
 
 ```

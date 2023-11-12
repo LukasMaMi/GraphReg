@@ -20,7 +20,7 @@ get_filename <- function(config, rep, prefix = "ER") {
   sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
 }
 
-# Function to calculate F1-score and Hamming distance
+# Function to calculate F1-score and Hamming distance #Frobinius (matrix norm)
 compute_metrics <- function(est_graph, true_graph) {
   TP <- sum(est_graph == 1 & true_graph == 1)
   FP <- sum(est_graph == 1 & true_graph == 0)
