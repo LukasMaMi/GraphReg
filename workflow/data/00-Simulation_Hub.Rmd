@@ -69,7 +69,7 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
     gc()
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
         omega = omega, theta = theta, 
-        sparsity = sum(theta)/(p * (p - 1)))
+        act_sparsity = sum(theta)/(p * (p - 1)))
     class(sim) = "sim"
     return(sim)
 }
@@ -123,8 +123,7 @@ for(rep in 1:num_repetitions) {
     
     Hub_data <- Hub$data
     true_graph <- Hub$theta
-    sparsity <- Hub$sparsity
-
+    act_sparsity <- Hub$act_sparsity
     
     #Lambda path
     lambda_path  <- getLamPath(max = getMaxCov(Hub_data), min = 0.01, len = 50)
@@ -134,7 +133,7 @@ for(rep in 1:num_repetitions) {
     file_name <- paste0(dir_path, "/Hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
     
     # Save the Hub data to the file
-    save(Hub, Hub_data, true_graph, lambda, lambda_path, b, N, sparsity, file = file_name)
+    save(Hub, Hub_data, true_graph, lambda, lambda_path, b, N, act_sparsity, file = file_name)
 
 
   }

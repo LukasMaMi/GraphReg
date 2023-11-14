@@ -114,7 +114,7 @@ f1_score <- function(predicted, actual) {
     return(f1)
 }
 
-# Example usage in Oracle method
+# Best lambda Oracle
 best_lambda_index <- which.max(sapply(1:length(lambda_path), function(i) {
   estimated_graph <- oracle_results$path[[i]]
   f1_score(estimated_graph, true_graph)
@@ -217,5 +217,12 @@ for (file in files) {
   #ER_gstars <- huge.plot(gstars_graph)
 }
 
+'
+weighted_hamming_distance <- function(matrix1, matrix2, edge_weight = 10) {
+    edge_diff = sum((matrix1[lower.tri(matrix1)] != 0) != (matrix2[lower.tri(matrix2)] != 0))
+    non_edge_diff = sum((matrix1[lower.tri(matrix1)] == 0) != (matrix2[lower.tri(matrix2)] == 0))
+    return(edge_diff * edge_weight + non_edge_diff)
+}
+'
 
 ```

@@ -121,6 +121,18 @@ mean_lambda_df$Method <- factor(mean_lambda_df$Method, levels = c("Stars", "GSta
 # Save the prepared data frame to a file
 save(mean_f1_df, mean_hamming_df, mean_sparsity_df, mean_lambda_df, file = paste0(dir_path4, "/mean_hamming_df.RData"))
 
+# Merge lambda values with F1 and Hamming data frames
+merged_f1_df <- merge(mean_f1_df, mean_lambda_df, by = c("Config", "Method"))
+merged_hamming_df <- merge(mean_hamming_df, mean_lambda_df, by = c("Config", "Method"))
+
+# Prepare custom labels for configurations
+config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
+names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep="_"))
+
+# Update Config column in merged data frames
+merged_f1_df$Config <- factor(merged_f1_df$Config, levels = names(config_labels), labels = config_labels)
+merged_hamming_df$Config <- factor(merged_hamming_df$Config, levels = names(config_labels), labels = config_labels)
+
 
 ```
 
@@ -141,11 +153,11 @@ merged_hamming_df$Config <- factor(merged_hamming_df$Config, levels = names(conf
 
 # Plotting
 F1_ER <- ggplot(merged_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
+  geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
   geom_point(size = 1.5) +
   geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
   geom_text(aes(label = paste("λ =", round(Mean_Lambda, 3))), vjust = -1, 
-            position = position_dodge(width = 0.9)) +
+          position = position_nudge(y = 0.07), angle = 30, size = 2.5) +
   labs(title = "ER", y = "Max F1-score", x = "") +  
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
@@ -154,7 +166,7 @@ F1_ER <- ggplot(merged_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
   scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black"))
 
 Hamming_ER <- ggplot(merged_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
+  geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
   geom_point(size = 1.5) +
   geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
   geom_text(aes(label = paste("λ =", round(Mean_Lambda, 3))), vjust = -1, 
@@ -175,3 +187,6 @@ F1_ER
 Hamming_ER
 
 ```
+
+
+

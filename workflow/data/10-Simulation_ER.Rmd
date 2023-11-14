@@ -87,7 +87,7 @@ generator_rand <- function (n, p, sparsity, vis = FALSE, verbose = TRUE)
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
 
 # Manually set the number of repetitions
-num_repetitions <- 3 
+num_repetitions <- 5 
 
 # Specify configurations
 configs <- list(
@@ -121,7 +121,7 @@ for(rep in 1:num_repetitions) {
     act_sparsity <- ER$act_sparsity
 
     #Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(ER_data), min = 0.01, len = 40)
+    lambda_path  <- getLamPath(max = getMaxCov(ER_data), min = 0.01, len = 50)
     lambda <- list(lambda=lambda_path)
     
     # Define the name of the file to save, including the directory path
