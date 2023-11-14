@@ -7,13 +7,13 @@ output: gitHub_document
 # Run StARS, G-StARS and Oracle
 ```{r}
 
-load("session_settings.RData")
+load("Hub_settings.RData")
 
 # Define directory path
 #dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Hub"
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub"
 
-save(num_repetitions, configs, dir_path, dir_path2, file="session_settings.RData")
+save(num_repetitions, configs, dir_path, dir_path2, file="Hub_settings.RData")
 
 # 1. Generate list of file names based on configs
 get_filename <- function(config, rep, prefix = "Hub") {

@@ -22,7 +22,7 @@ generator_geom <- function (n, p, rho, vis, verbose)
     prob_function <- function(distance) exp(-4 * distance^2) / sqrt(2 * pi)
 
     # Step 1: Sample points from a unit square
-    y <- matrix(runif(n * 2), ncol = 2)
+    y <- matrix(runif(p * 2), ncol = 2)
 
     # Step 2: Initialize omega with diagonal elements set to 1
     omega <- diag(1, p)
@@ -96,16 +96,17 @@ generator_geom <- function (n, p, rho, vis, verbose)
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Geom"
 
 # Manually set the number of repetitions
-num_repetitions <- 3 
+num_repetitions <- 5 
 
 # Specify configurations
 configs <- list(
   list(n=800, p=40),
   list(n=400, p=100),
   list(n=200, p=200)
+  #list(n=100, p=400)
 )
 
-save(num_repetitions, configs, dir_path, file="session_settings.RData")
+save(num_repetitions, configs, dir_path, file="Geom_settings.RData")
 
 
 # Value of off-diagonal elements
@@ -124,7 +125,7 @@ for(rep in 1:num_repetitions) {
     #Subsampled dataset size 
     b = (floor(10*sqrt(n)))/n
     #Number of Subsamples N
-    N = 40
+    N = 30
 
     Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
     
@@ -153,154 +154,10 @@ print("Geoms generated and saved!")
 
 
 
-
+## Session info
 ```{r}
-#grpahlet correlation of true graph 
-#graphlet corr only for subsamples
-#Compare distance (hamming)
-#Select lambda with min graphlet correlation distance
-
-lambda_path  <- getLamPath(max = getMaxCov(Geom_data), min = 0.01, len = 40)
-    lambda <- list(lambda=lambda_path)
-    
-# Set parameters
-n <- 200 
-p <- 200 
-rho <- 0.245
-
-Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
-Geom_data <- Geom$data
-
-huge.plot(Geom$theta)
-
-#Geom_data 
-Geom$omega
-Geom$sigma
-range(Geom$omega)
-kappa(Geom$omega)
-Geom$theta
-Geom$sparsity
-rho_probability
-restriction_met
-
-# Function to calculate the probability of rho appearing
-calculate_rho_probability <- function(omega, theta) {
-  # Count the total number of off-diagonal elements in theta
-  total_possible_connections = sum(lower.tri(theta))
-
-  # Count the number of rho values in omega
-  number_of_rhos = sum(omega[lower.tri(omega)] == rho)
-
-  # Calculate the probability
-  probability_rho = number_of_rhos / total_possible_connections
-
-  return(round(probability_rho, 5))
-}
-
-rho_probability <- calculate_rho_probability(Geom$omega, Geom$theta)
-
-
-check_omega_restriction <- function(omega, rho) {
-  max_elements = floor(1/rho)
-  p = ncol(omega)
-  
-  for (i in 1:p) {
-    # Count non-zero off-diagonal elements in each row and column
-    non_zero_count_row = sum(omega[i, -i] != 0)
-    non_zero_count_col = sum(omega[-i, i] != 0)
-
-    # Check if the counts exceed the allowed maximum
-    if (non_zero_count_row > max_elements || non_zero_count_col > max_elements) {
-      return(FALSE)  # Restriction violated
-    }
-  }
-
-  return(TRUE)  # Restriction met for all rows and columns
-}
-
-# Example of how to use the function
-restriction_met <- check_omega_restriction(Geom$omega, rho)
-
-
-compare_off_diagonal_elements <- function(matrix1, matrix2) {
-  # Function to count non-zero off-diagonal elements
-  count_non_zero_off_diagonal <- function(matrix) {
-    sum(matrix[upper.tri(matrix)] != 0) + sum(matrix[lower.tri(matrix)] != 0)
-  }
-
-  # Count non-zero off-diagonal elements in each matrix
-  count_matrix1 = count_non_zero_off_diagonal(matrix1)
-  count_matrix2 = count_non_zero_off_diagonal(matrix2)
-
-  # Compare and print results
-  print(paste("Non-zero off-diagonal elements in first matrix:", count_matrix1))
-  print(paste("Non-zero off-diagonal elements in second matrix:", count_matrix2))
-}
-
-# Example usage
-compare_off_diagonal_elements(Geom$omega, Geom$theta)
-
-quicr <- function(data, lambda, ...) {
-  S <- cov(data)
-  est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
-  est$path <- lapply(seq(length(lambda)), function(i) {
-  ## convert precision array to adj list
-  tmp <- est$X[,,i]; diag(tmp) <- 0
-  tmp <- ifelse(tmp != 0, 1, 0)
-  return(tmp)
-  })
-  est
-}
-
-#Run pulsar package
-library(orca)
-out.p <- pulsar(
-      data = Geom_data,
-      fun = quicr,
-      fargs = (lambda = lambda),
-      criterion = c('stars', 'gcd'),
-      thresh = 0.1,
-      subsample.ratio = b,
-      rep.num = N,
-      seed = 123,
-      lb.stars = TRUE,
-      ub.stars = TRUE,
-      ncores = 1,
-      refit = FALSE
-)
-
-#Get optimal index for gcd
-lam_gam <- get.opt.index(out.p, criterion = "gcd")
-#Set optimal index for gcd
-opt.index(out.p, criterion = "gcd") <- lam_gam
-
-fit  <- refit(out.p, criterion = c("stars", "gcd"))
-
-stars_graph <- fit[["refit"]][["stars"]]
-gstars_graph <- fit[["refit"]][["gcd"]]
-
-
-# Oracle procedure
-oracle_results <- quicr(Geom_data, lambda_path)
-
-#Define Hamming Distance as criterium for Oracle
-hamming_distance <- function(matrix1, matrix2) {
-    return(sum(matrix1[lower.tri(matrix1)] != matrix2[lower.tri(matrix2)]))
-}
-
-# Minimize total number of different edges between the estimated and true graph
-best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
-  estimated_graph <- oracle_results$path[[i]]
-  hamming_distance(estimated_graph, true_graph)
-}))  
-  
-  best_lambda_oracle <- lambda_path[best_lambda_index]
-
-# Extract the oracle precision matrix for the best lambda:
-oracle_graph <- oracle_results$X[,,best_lambda_index]
-
-# Convert precision matrix to adjacency matrix
-oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
-diag(oracle_graph) <- 0
-
+sessionInfo()
 ```
+
+
+

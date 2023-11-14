@@ -979,3 +979,84 @@ best_lambda_index <- which.min(sapply(1:length(lambda_path), function(i) {
 
 ```
 
+```{r}
+
+library(MASS)
+library(Matrix)
+library(igraph)
+library(huge)
+
+generator_geom <- function (n, p, rho, vis, verbose) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal distribution with the neighboorhod graph structure....")
+  
+    prob_function <- function(distance) exp(-4 * distance^2) / sqrt(2 * pi)
+
+    # Step 1: Sample points from a unit square
+    y <- matrix(runif(n * 2), ncol = 2)
+
+    # Step 2: Initialize omega with diagonal elements set to 1
+    omega <- diag(1, p)
+
+    # Step 3: Populate off-diagonal elements of omega
+    for (i in 1:(p-1)) {
+      for (j in (i+1):p) {
+        
+        # Checks current row have fewer non-zero off-diagonal elements than the allowed
+        if (sum(omega[i, -i] != 0) < floor(1/rho) && sum(omega[-j, j] != 0) < floor(1/rho)) { 
+          
+          # Euclidean distance between points in the unit square.
+          distance <- sqrt(sum((y[i, ] - y[j, ])^2)) 
+          
+          # Randomly determines place an edge (non-zero value) between nodes 
+          if (runif(1) < prob_function(distance)) {
+            omega[i, j] <- omega[j, i] <- rho
+          }
+        }
+      }
+    }
+    
+    # Step 4: Generate multivariate normal data
+    sigma <- solve(omega)  
+    theta <- matrix(0, p, p)
+    
+    # Populate theta by checking non-zero off-diagonal elements of omega
+    for (i in 1:p) {
+      for (j in 1:p) {
+        if (i != j && omega[i, j] != 0) {
+          theta[i, j] <- 1
+        }
+      }
+    }
+
+    x = mvrnorm(n, mu = rep(0, p), Sigma = sigma)
+    sigmahat = cov(x)
+    
+    if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
+    }
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+        omega = omega, theta = Matrix(theta, sparse = FALSE), 
+        act_sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
+    class(sim) = "sim"
+    return(sim)
+}
+```
