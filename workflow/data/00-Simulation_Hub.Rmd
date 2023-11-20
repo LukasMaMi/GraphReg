@@ -11,7 +11,6 @@ params:
 ## Generator Function for Hub Graphs
 ```{r}
 library(MASS)
-library(pulsar)
 library(Matrix)
 library(igraph)
 library(huge)
@@ -90,8 +89,8 @@ num_repetitions <- 5
 configs <- list(
   list(n=800, p=40),
   list(n=400, p=100),
-  list(n=200, p=200)
-  #list(n=100, p=400)
+  list(n=200, p=200),
+  list(n=100, p=400)
 )
 
 save(num_repetitions, configs, dir_path, file="Hub_settings.RData")
@@ -100,7 +99,7 @@ save(num_repetitions, configs, dir_path, file="Hub_settings.RData")
 s <- 20
 #Off-diagonal elements
 #rho <- (1/(s+1))
-rho <- 0.15
+rho <- 0.20
 
 # Set up outer loop for repetitions
 for(rep in 1:num_repetitions) {
@@ -117,7 +116,7 @@ for(rep in 1:num_repetitions) {
     #Subsampled dataset size 
     b = (floor(10*sqrt(n)))/n
     #Number of Subsamples N
-    N = 30
+    N = 20
 
     Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
     
@@ -126,14 +125,14 @@ for(rep in 1:num_repetitions) {
     act_sparsity <- Hub$act_sparsity
     
     #Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(Hub_data), min = 0.01, len = 50)
+    lambda_path  <- getLamPath(max = getMaxCov(Hub_data), min = 0.01, len = 40)
     lambda <- list(lambda=lambda_path)
     
     # Define the name of the file to save, including the directory path
     file_name <- paste0(dir_path, "/Hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
     
     # Save the Hub data to the file
-    save(Hub, Hub_data, true_graph, lambda, lambda_path, b, N, act_sparsity, file = file_name)
+    save(Hub_data, true_graph, lambda, lambda_path, b, N, act_sparsity, file = file_name)
 
 
   }

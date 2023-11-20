@@ -7,6 +7,8 @@ output: gitHub_document
 # Run StARS, G-StARS and Oracle
 ```{r}
 
+library(pulsar)
+
 load("Hub_settings.RData")
 
 # Define directory path

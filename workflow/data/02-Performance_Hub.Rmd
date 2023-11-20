@@ -13,7 +13,7 @@ load("Hub_settings.RData")
 dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 # Save the session settings with the new directory path
-save(num_repetitions, configs, dir_path, dir_path2, dir_path3, file="Hub_settings.RData")
+#save(num_repetitions, configs, dir_path, dir_path2, dir_path3, file="Hub_settings.RData")
 
 # Function to generate file names based on configurations and repetition number
 get_filename <- function(config, rep, prefix = "hub") {
