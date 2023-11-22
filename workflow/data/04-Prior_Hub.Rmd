@@ -5,8 +5,11 @@ output: github_document
 
 ```{r}
 
-n = 800
-p = 40
+library(pulsar)
+library(orca)
+
+n = 400
+p = 100
 
 #Size of each Hub group
 s <- 20
@@ -28,10 +31,10 @@ rho <- 0.20
     true_graph <- Hub$theta
     act_sparsity <- Hub$act_sparsity
     
-        #Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(Hub_data), min = 0.01, len = 40)
-    lambda <- list(lambda=lambda_path)
-    
+  #Lambda path
+  lambda_path  <- getLamPath(max = getMaxCov(Hub_data), min = 0.01, len = 40)
+  lambda <- list(lambda=lambda_path)
+  
     
 #Define QUIC as method of choice for stars and gstars
   library(QUIC)
@@ -65,12 +68,42 @@ rho <- 0.20
         refit = FALSE
   )
   
+  # Great Question: Is bounded lambda path optimally selected for Stars and NOT gstars?
+    library(orca)
+  out.p2 <- pulsar(
+        data = Hub_data,
+        fun = quicr,
+        fargs = (lambda = lambda),
+        criterion = c('stars', 'gcd'),
+        thresh = 0.1,
+        subsample.ratio = b,
+        rep.num = N,
+        seed = NULL,
+        lb.stars = FALSE,
+        ub.stars = FALSE,
+        ncores = 1,
+        refit = FALSE
+  )
+  
+  plot(out.p, legends = F, scale = T)
+  plot(out.p2, legends = F)
+  
   #Get optimal index for gcd
   lam_gam <- get.opt.index(out.p, criterion = "gcd")
-  #Set optimal index for gcd
   opt.index(out.p, criterion = "gcd") <- lam_gam
+
+  lam_gam <- get.opt.index(out.p2, criterion = "gcd")
+  opt.index(out.p2, criterion = "gcd") <- lam_gam
   
   fit  <- refit(out.p, criterion = c("stars", "gcd"))
+  
+  fit2  <- refit(out.p2, criterion = c("stars", "gcd"))
+  
+  out.p
+  out.p2
+  
+  fit
+  fit2
   
   stars_graph <- fit[["refit"]][["stars"]]
   gstars_graph <- fit[["refit"]][["gcd"]]
@@ -80,6 +113,10 @@ rho <- 0.20
   
   gstars_index <- out.p[["gcd"]][["opt.index"]]
   best_lambda_gstars <- round(lambda_path[gstars_index], 3)
+  
+  fit
+  (act_sparsity_stars = sum(stars_graph) / (p * (p - 1)))
+  (act_sparsity_gstars = sum(gstars_graph) / (p * (p - 1)))
   
   # Oracle procedure
   oracle_results <- quicr(Hub_data, lambda_path)
@@ -105,7 +142,7 @@ rho <- 0.20
   
   best_lambda_oracle <- lambda_path[best_lambda_index]
   
-  # Extract the oracle precision matrix for the best lambda:
+  # Extract oracle precision matrix for the best lambda:
   oracle_graph <- oracle_results$X[,,best_lambda_index]
   
   # Convert precision matrix to adjacency matrix
@@ -116,14 +153,17 @@ rho <- 0.20
 library(orca)
 
 # Converting Hub adjacency matrix to an nx2 edge matrix
-true_graph
-stars_graph
+#true_graph
+#stars_graph
 
 true_edge <- which(true_graph == 1, arr.ind=TRUE) 
 stars_edge <- which(stars_graph == 1, arr.ind=TRUE) 
 
 true_edge
 stars_edge
+
+#Look at igraph
+#Plot it plot.igraph
 
 # Function to convert adjacency matrix to nx2 edge matrix, considering only the lower triangle
 convert_to_edge_matrix <- function(adj_matrix) {
@@ -143,7 +183,7 @@ stars_edge_matrix
 true_graphlets <- count4(true_edge_matrix)
 stars_graphlets <- count4(stars_edge_matrix)
 
-# Each row in this matrix corresponds to a node in your graph, and each column represents a different orbit type within 4-node graphlets. 
+# Each row in this matrix corresponds to a node in the graph, and each column represents a different orbit type within 4-node graphlets. 
 # The values in the matrix are the counts of how many times a node participates in a particular orbit.
 true_graphlets
 stars_graphlets
@@ -152,8 +192,21 @@ stars_graphlets
 true_non_redun <- true_graphlets[, c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12)]
 stars_non_redun <- stars_graphlets[, c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12)]
 
+# GDM (Graphlet Degree Matrix)
 true_non_redun
 stars_non_redun
+
+#huge.plot(true_graph)
+#huge.plot(stars_graph)
+
+# GCM (Graphlet Correlation Matrix)
+# Calculate the Graphlet Correlation Matrix (GCM) using Spearman's correlation
+# Measuring the pairwise correlation between each type of graphlet orbit across all nodes.
+gcm_true <- cor(true_non_redun, method = "spearman")
+gcm_stars <- cor(stars_non_redun, method = "spearman")
+
+gcm_true
+gcm_stars # Set NA's to 0?
 
 
 ```

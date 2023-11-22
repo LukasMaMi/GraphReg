@@ -83,7 +83,7 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub"
 
 # Manually set the number of repetitions
-num_repetitions <- 5 
+num_repetitions <- 10 
 
 # Specify configurations
 configs <- list(
@@ -93,15 +93,19 @@ configs <- list(
   list(n=100, p=400)
 )
 
-save(num_repetitions, configs, dir_path, file="Hub_settings.RData")
+Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
+save(num_repetitions, configs, dir_path, file = hub_settings_file)
+
 
 #Size of each Hub group
 s <- 20
+
 #Off-diagonal elements
 #rho <- (1/(s+1))
-rho <- 0.20
+rho <- 0.1 # 1)
 
-# Set up outer loop for repetitions
+# Set up outer loop for repetitions ##Macht dieser outer Loop überhaupt Sinn? Es reicht doch einen true graph für jedes Setting zu erstellen???
 for(rep in 1:num_repetitions) {
   
   # Set up inner loop for configurations

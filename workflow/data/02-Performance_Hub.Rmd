@@ -4,19 +4,16 @@ output: github_document
 ---
 
 ```{r}
-# Step 3: Performance Evaluation
 
 # Load session settings
-load("Hub_settings.RData")
+Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
+load(hub_settings_file)
 
-# Define the directory for estimated results
 dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 
-# Save the session settings with the new directory path
-#save(num_repetitions, configs, dir_path, dir_path2, dir_path3, file="Hub_settings.RData")
-
-# Function to generate file names based on configurations and repetition number
-get_filename <- function(config, rep, prefix = "hub") {
+# Function to generate file names
+get_filename <- function(config, rep, prefix = "Hub") {
   sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
 }
 
@@ -33,194 +30,92 @@ compute_metrics <- function(est_graph, true_graph) {
   list(F1 = F1, Hamming = hamming_distance)
 }
 
-# Initialize list to store results
-results <- list()
+# Initialize list to store results for each configuration
+config_results <- list()
 
-# Loop over configurations and repetitions to compute metrics
+# Loop over configurations and repetitions
 for(cfg in configs) {
   cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
-  stars_results <- list()
-  gstars_results <- list()
-  oracle_results <- list()
+  individual_results <- list()
+  aggregated_metrics <- list(stars = NULL, gstars = NULL, oracle = NULL)
   
-  stars_lambda_values <- list()
-  gstars_lambda_values <- list()
-  oracle_lambda_values <- list()
-  
-  stars_sparsity_values <- list()
-  gstars_sparsity_values <- list()
-  oracle_sparsity_values <- list()
+  lambda_values <- list(stars = numeric(), gstars = numeric(), oracle = numeric())
+  sparsity_values <- list(stars = numeric(), gstars = numeric(), oracle = numeric())
 
+  # Loop over repetitions for the current configuration
   for(rep in 1:num_repetitions) {
-    sim_filename <- get_filename(cfg, rep, prefix="hub")
-    load(paste0(dir_path, "/", sim_filename))
+    load(paste0(dir_path2, "/", get_filename(cfg, rep, "estimation")))
 
-    result_filename <- get_filename(cfg, rep, prefix="estimation")
-    load(paste0(dir_path2, "/", result_filename))
+    # Compute metrics
+    stars_metrics <- compute_metrics(stars_graph, true_graph)
+    gstars_metrics <- compute_metrics(gstars_graph, true_graph)
+    oracle_metrics <- compute_metrics(oracle_graph, true_graph)
 
-    # Extract the lower triangular part of the matrices excluding the diagonal
-    lower_tri_indices <- lower.tri(true_graph)
-
-    stars_metrics <- compute_metrics(stars_graph[lower_tri_indices], true_graph[lower_tri_indices])
-    gstars_metrics <- compute_metrics(gstars_graph[lower_tri_indices], true_graph[lower_tri_indices])
-    oracle_metrics <- compute_metrics(oracle_graph[lower_tri_indices], true_graph[lower_tri_indices])
-
-    stars_results[[rep]] <- stars_metrics
-    gstars_results[[rep]] <- gstars_metrics
-    oracle_results[[rep]] <- oracle_metrics
-    
-    stars_lambda_values[rep] <- best_lambda_stars
-    gstars_lambda_values[rep] <- best_lambda_gstars
-    oracle_lambda_values[rep] <- best_lambda_oracle
-    
-    stars_sparsity_values[rep] <- act_sparsity_stars
-    gstars_sparsity_values[rep] <- act_sparsity_gstars
-    oracle_sparsity_values[rep] <- act_sparsity_oracle
-  }
-  
-  mean_lambda_stars <- mean(unlist(stars_lambda_values))
-  mean_lambda_gstars <- mean(unlist(gstars_lambda_values))
-  mean_lambda_oracle <- mean(unlist(oracle_lambda_values))
-  
-  mean_sparsity_stars <- mean(unlist(stars_sparsity_values))
-  mean_sparsity_gstars <- mean(unlist(gstars_sparsity_values))
-  mean_sparsity_oracle <- mean(unlist(oracle_sparsity_values))
-
-  # Calculate mean and confidence intervals for the metrics
-  results[[cfg_key]] <- list(
-    Stars = list(
-      Mean_F1 = mean(sapply(stars_results, `[[`, "F1")),
-      CI_F1 = quantile(sapply(stars_results, `[[`, "F1"), probs = c(0.025, 0.975)),
-      Mean_Hamming = mean(sapply(stars_results, `[[`, "Hamming")),
-      CI_Hamming = quantile(sapply(stars_results, `[[`, "Hamming"), probs = c(0.025, 0.975))
-    ),
-    GStars = list(
-      Mean_F1 = mean(sapply(gstars_results, `[[`, "F1")),
-      CI_F1 = quantile(sapply(gstars_results, `[[`, "F1"), probs = c(0.025, 0.975)),
-      Mean_Hamming = mean(sapply(gstars_results, `[[`, "Hamming")),
-      CI_Hamming = quantile(sapply(gstars_results, `[[`, "Hamming"), probs = c(0.025, 0.975))
-    ),
-    Oracle = list(
-      Mean_F1 = mean(sapply(oracle_results, `[[`, "F1")),
-      CI_F1 = quantile(sapply(oracle_results, `[[`, "F1"), probs = c(0.025, 0.975)),
-      Mean_Hamming = mean(sapply(oracle_results, `[[`, "Hamming")),
-      CI_Hamming = quantile(sapply(oracle_results, `[[`, "Hamming"), probs = c(0.025, 0.975))
+    # Additional metrics: lambda values and sparsity
+    additional_metrics <- list(
+      stars_lambda = best_lambda_stars,
+      gstars_lambda = best_lambda_gstars,
+      oracle_lambda = best_lambda_oracle,
+      true_sparsity = act_sparsity,
+      stars_sparsity = act_sparsity_stars,
+      gstars_sparsity = act_sparsity_gstars,
+      oracle_sparsity = act_sparsity_oracle,
+      stars_index = stars_index,
+      stars_lb = stars_lb,
+      stars_ub = stars_ub,
+      gstars_index = gstars_index,
+      oracle_index = oracle_index
     )
-  )
-  
-  results[[cfg_key]]$Stars$Mean_Lambda <- mean_lambda_stars
-  results[[cfg_key]]$GStars$Mean_Lambda <- mean_lambda_gstars
-  results[[cfg_key]]$Oracle$Mean_Lambda <- mean_lambda_oracle
-  
-  results[[cfg_key]]$Stars$Mean_Sparsity <- mean_sparsity_stars
-  results[[cfg_key]]$GStars$Mean_Sparsity <- mean_sparsity_gstars
-  results[[cfg_key]]$Oracle$Mean_Sparsity <- mean_sparsity_oracle
-}
 
-# Save the overall results to a file
-result_filename <- "performance_results.RData"
-save(results, file=paste0(dir_path3, "/", result_filename))
+    # Store individual results
+    individual_results[[paste("Rep", rep)]] <- list(
+      Stars = stars_metrics,
+      GStars = gstars_metrics,
+      Oracle = oracle_metrics,
+      Additional = additional_metrics
+    )
 
-cat("Performance metrics calculated and saved!\n")
-results
-
-```
-
-
-
-
-
-```{r}
-
-load("session_settings.RData")
-
-# Define the directory for estimated results
-#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
-dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
-
-save(num_repetitions, configs, dir_path, dir_path2, dir_path3, file="session_settings.RData")
-
-# 1. Generate list of file names based on configs
-get_filename <- function(config, rep, prefix = "hub") {
-  return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
-}
-
-# Updated function to calculate F1-score and Hamming distance
-compute_metrics <- function(est_graph, true_graph) {
-  TP <- sum(est_graph == 1 & true_graph == 1)
-  FP <- sum(est_graph == 1 & true_graph == 0)
-  FN <- sum(est_graph == 0 & true_graph == 1)
-  TN <- sum(est_graph == 0 & true_graph == 0)
-
-  precision <- TP / (TP + FP)
-  recall <- TP / (TP + FN)
-  F1 <- 2 * (precision * recall) / (precision + recall)
-  hamming_distance <- sum(est_graph != true_graph)
-
-  return(list(F1 = F1, Hamming = hamming_distance))
-}
-
-# Loop over configurations
-results <- list()
-
-for(cfg in configs) {
-  
-  # Initialize lists to store metrics for each repetition
-  stars_results <- list()
-  gstars_results <- list()
-  oracle_results <- list()
-
-  for(rep in 1:num_repetitions) {
+    # Accumulate metrics for aggregation
+    # Convert to numeric and convert to a matrix format
+    aggregated_metrics$stars <- rbind(aggregated_metrics$stars, as.numeric(unlist(stars_metrics)))
+    aggregated_metrics$gstars <- rbind(aggregated_metrics$gstars, as.numeric(unlist(gstars_metrics)))
+    aggregated_metrics$oracle <- rbind(aggregated_metrics$oracle, as.numeric(unlist(oracle_metrics)))
     
-    # Load the simulated data
-    sim_filename <- get_filename(cfg, rep, prefix="hub")
-    load(paste0(dir_path, "/", sim_filename))
-    
-    # Load the results
-    result_filename <- get_filename(cfg, rep, prefix="estimation")
-    load(paste0(dir_path2, "/", result_filename))
-
-    # Compute metrics for each method
-    stars_results[[rep]] <- compute_metrics(stars_graph[lower.tri(stars_graph)], true_graph[lower.tri(true_graph)])
-    gstars_results[[rep]] <- compute_metrics(gstars_graph[lower.tri(gstars_graph)], true_graph[lower.tri(true_graph)])
-    oracle_results[[rep]] <- compute_metrics(oracle_graph[lower.tri(oracle_graph)], true_graph[lower.tri(true_graph)])
+     # Accumulate lambda and sparsity values
+    lambda_values$stars <- c(lambda_values$stars, additional_metrics$stars_lambda)
+    sparsity_values$stars <- c(sparsity_values$stars, additional_metrics$stars_sparsity)
+    lambda_values$gstars <- c(lambda_values$gstars, additional_metrics$gstars_lambda)
+    sparsity_values$gstars <- c(sparsity_values$gstars, additional_metrics$gstars_sparsity)
+    lambda_values$oracle <- c(lambda_values$oracle, additional_metrics$oracle_lambda)
+    sparsity_values$oracle <- c(sparsity_values$oracle, additional_metrics$oracle_sparsity)
   }
 
-  # Compute mean and confidence intervals, now including Hamming distance
-  cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
-  results[[cfg_key]] <- list(
-    Stars = list(
-      Mean_F1 = mean(sapply(stars_results, \(x) x$F1)),
-      CI_F1 = quantile(sapply(stars_results, \(x) x$F1), probs = c(0.025, 0.975)),
-      Mean_Hamming = mean(sapply(stars_results, \(x) x$Hamming)),
-      CI_Hamming = quantile(sapply(stars_results, \(x) x$Hamming), probs = c(0.025, 0.975))
-    ),
-    GStars = list(
-      Mean_F1 = mean(sapply(gstars_results, \(x) x$F1)),
-      CI_F1 = quantile(sapply(gstars_results, \(x) x$F1), probs = c(0.025, 0.975)),
-      Mean_Hamming = mean(sapply(gstars_results, \(x) x$Hamming)),
-      CI_Hamming = quantile(sapply(gstars_results, \(x) x$Hamming), probs = c(0.025, 0.975))
-    ),
-    Oracle = list(
-      Mean_F1 = mean(sapply(oracle_results, \(x) x$F1)),
-      CI_F1 = quantile(sapply(oracle_results, \(x) x$F1), probs = c(0.025, 0.975)),
-      Mean_Hamming = mean(sapply(oracle_results, \(x) x$Hamming)),
-      CI_Hamming = quantile(sapply(oracle_results, \(x) x$Hamming), probs = c(0.025, 0.975))
-    )
+  # Calculate means and confidence intervals
+  calc_mean_ci <- function(data, lambda, sparsity) {
+    mean_data <- colMeans(data, na.rm = TRUE)
+    ci_data <- apply(data, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
+    mean_lambda <- mean(lambda, na.rm = TRUE)
+    mean_sparsity <- mean(sparsity, na.rm = TRUE)
+    list(Mean = mean_data, CI = ci_data, Lambda = mean_lambda, Sparsity = mean_sparsity)
+  }
+  
+  # Include mean lambda and sparsity in aggregated metrics
+  aggregated_metrics$stars <- calc_mean_ci(aggregated_metrics$stars, lambda_values$stars, sparsity_values$stars)
+  aggregated_metrics$gstars <- calc_mean_ci(aggregated_metrics$gstars, lambda_values$gstars, sparsity_values$gstars)
+  aggregated_metrics$oracle <- calc_mean_ci(aggregated_metrics$oracle, lambda_values$oracle, sparsity_values$oracle)
+
+  # Store results for the current configuration
+  config_results[[cfg_key]] <- list(
+    Individual = individual_results,
+    Aggregated = aggregated_metrics
   )
 }
 
-# Save results to file
-result_filename <- get_filename(configs[[i]], rep, prefix="performance")
-save(results, file=paste0(dir_path3, "/", ... = result_filename))
+# Save the results to a file
+performance_filename <- "all_performance_results.RData"
+save(config_results, file = file.path(dir_path3, performance_filename))
 
-print("Performance metrics calculated and saved!")
-
-```
-
-## Check
-```{r}
-print(results)
+cat("Performance metrics for each configuration and repetition calculated and saved!\n")
 
 ```
 
