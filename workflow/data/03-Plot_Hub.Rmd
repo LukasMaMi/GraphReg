@@ -68,177 +68,6 @@ for (cfg_key in names(config_results)) {
 ## Hub Plots
 ```{r}
 
-# Create custom labels for configurations
-config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
-names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
-
-# Set factor levels for 'Config' in data frames with custom labels
-mean_f1_df$Config <- factor(mean_f1_df$Config, levels = names(config_labels), labels = config_labels)
-mean_hamming_df$Config <- factor(mean_hamming_df$Config, levels = names(config_labels), labels = config_labels)
-
-
-# Plotting F1 scores
-F1_Hub <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  geom_text(aes(label = paste(# "Lamb. =", round(mean_lambda_df$Mean_Lambda, 3), 
-                              "", round(mean_sparsity_df$Mean_Sparsity, 3))), 
-            vjust = -0.9, position = position_dodge(width = 0.8), size = 3) +
-  labs(title = "Hub F1 Scores", y = "Mean F1 Score", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank()) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black"))
-
-# Plotting Hamming distances
-Hamming_Hub <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  geom_text(aes(label = paste(# "Lamb. =", round(mean_lambda_df$Mean_Lambda, 3), 
-                              "", round(mean_sparsity_df$Mean_Sparsity, 3))), 
-            vjust = -1, position = position_nudge(y = 0.8), angle = 30, size = 3) +
-  labs(title = "Hub Hamming Distances", y = "Mean Hamming Distance", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank()) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black"))
-
-# Save the plots
-ggsave(filename = "F1_Hub_Plot.pdf", plot = F1_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-ggsave(filename = "Hamming_Hub_Plot.pdf", plot = Hamming_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-
-# Display the plots
-F1_Hub
-Hamming_Hub
-
-```
-
-
-
-```{r}
-
-# Create custom labels for configurations
-config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
-names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
-
-# Ensure that config_labels matches the unique values in mean_f1_df$Config
-unique_configs <- unique(mean_f1_df$Config)
-config_labels <- sapply(unique_configs, function(cfg_key) {
-  sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
-  sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
-  sparsity_oracle <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Oracle", "Mean_Sparsity"], 3)
-  paste(cfg_key, "\nStars:", sparsity_stars, "\nGStars:", sparsity_gstars, "\nOracle:", sparsity_oracle)
-}, simplify = FALSE)
-
-# Update the Config column in mean_f1_df and mean_hamming_df
-mean_f1_df$Config <- factor(mean_f1_df$Config, levels = unique_configs, labels = config_labels)
-mean_hamming_df$Config <- factor(mean_hamming_df$Config, levels = unique_configs, labels = config_labels)
-
-
-# Plotting F1 scores
-F1_Hub <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub F1 Scores", y = "Mean F1 Score", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-# Plotting Hamming distances
-Hamming_Hub <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub Hamming Distances", y = "Mean Hamming Distance", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-
-
-
-# Save the plots
-ggsave(filename = "F1_Hub_Plot.pdf", plot = F1_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-ggsave(filename = "Hamming_Hub_Plot.pdf", plot = Hamming_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-
-# Display the plots
-F1_Hub
-Hamming_Hub
-```
-
-
-```{r}
-
-library(ggtext)
-
-# Create custom labels for configurations
-config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
-names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
-
-# Add sparsity values with color coding
-config_labels_with_sparsity <- sapply(names(config_labels), function(cfg_key) {
-  sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
-  sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
-  sparsity_oracle <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Oracle", "Mean_Sparsity"], 3)
-
-  # Color coding (adjust colors to match your plot)
-  paste(config_labels[cfg_key], 
-        "<span style='color:lightblue;'>Stars:", sparsity_stars, "</span>",
-        "<span style='color:darkorange;'>GStars:", sparsity_gstars, "</span>",
-        "<span style='color:black;'>Oracle:", sparsity_oracle, "</span>")
-}, simplify = FALSE)
-
-# Update the Config column in mean_f1_df and mean_hamming_df
-mean_f1_df$Config <- factor(mean_f1_df$Config, levels = names(config_labels_with_sparsity), labels = config_labels_with_sparsity)
-mean_hamming_df$Config <- factor(mean_hamming_df$Config, levels = names(config_labels_with_sparsity), labels = config_labels_with_sparsity)
-
-# The rest of your plotting code remains the same, except for adding ggtext::element_markdown() to the axis.text.x theme
-F1_Hub <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub F1 Scores", y = "Mean F1 Score", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
-
-Hamming_Hub <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub Hamming Distances", y = "Mean Hamming Distance", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
-
-# Display the plots
-F1_Hub
-Hamming_Hub
-
-```
-```{r}
-
 library(ggtext)
 
 # Create custom labels for configurations
@@ -290,11 +119,65 @@ Hamming_Hub <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color =
   scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
   theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
 
+# Save the plots
+ggsave(filename = "F1_Hub_Plot.pdf", plot = F1_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
+ggsave(filename = "Hamming_Hub_Plot.pdf", plot = Hamming_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
+
 # Display the plots
 F1_Hub
 Hamming_Hub
 ```
 
+## Alternative Plots
+```{r}
 
+# Create custom labels for configurations
+config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
+names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
+
+# Set factor levels for 'Config' in data frames with custom labels
+mean_f1_df$Config <- factor(mean_f1_df$Config, levels = names(config_labels), labels = config_labels)
+mean_hamming_df$Config <- factor(mean_hamming_df$Config, levels = names(config_labels), labels = config_labels)
+
+
+# Plotting F1 scores
+F1_Hub <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
+  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
+  geom_point(size = 1.5) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
+  geom_text(aes(label = paste(# "Lamb. =", round(mean_lambda_df$Mean_Lambda, 3), 
+                              "", round(mean_sparsity_df$Mean_Sparsity, 3))), 
+            vjust = -0.9, position = position_dodge(width = 0.8), size = 3) +
+  labs(title = "Hub F1 Scores", y = "Mean F1 Score", x = "") +  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black"))
+
+# Plotting Hamming distances
+Hamming_Hub <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
+  geom_line(aes(group = Method), linetype = "dotted", size = 1.5) + 
+  geom_point(size = 1.5) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
+  geom_text(aes(label = paste(# "Lamb. =", round(mean_lambda_df$Mean_Lambda, 3), 
+                              "", round(mean_sparsity_df$Mean_Sparsity, 3))), 
+            vjust = -1, position = position_nudge(y = 0.8), angle = 30, size = 3) +
+  labs(title = "Hub Hamming Distances", y = "Mean Hamming Distance", x = "") +  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black"))
+
+# Save the plots
+ggsave(filename = "F1_Hub_Plot.pdf", plot = F1_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
+ggsave(filename = "Hamming_Hub_Plot.pdf", plot = Hamming_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
+
+# Display the plots
+F1_Hub
+Hamming_Hub
+
+```
 
 
