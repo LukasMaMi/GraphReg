@@ -103,9 +103,11 @@ s <- 20
 
 #Off-diagonal elements
 #rho <- (1/(s+1))
-rho <- 0.1 # 1)
+#rho <- 0.1 # 1)
+#rho <- 0.15 # 2)
+rho <- 0.2
 
-# Set up outer loop for repetitions ##Macht dieser outer Loop überhaupt Sinn? Es reicht doch einen true graph für jedes Setting zu erstellen???
+# Set up outer loop for repetitions 
 for(rep in 1:num_repetitions) {
   
   # Set up inner loop for configurations
