@@ -137,7 +137,7 @@ print("Adjacency matrices for Hub generated and saved!")
 ```
 
 
-## Huge.plot
+## Check
 ```{r}
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub"
 

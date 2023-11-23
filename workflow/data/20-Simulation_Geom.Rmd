@@ -110,8 +110,9 @@ save(num_repetitions, configs, dir_path, file="Geom_settings.RData")
 
 
 # Value of off-diagonal elements
-#rho <- 0.245
-rho <- 0.35
+rho <- 0.145 # 1)
+#rho <- 0.245 # 2)
+#rho <- 0.235 # 3)
 
 # Set up outer loop for repetitions
 for(rep in 1:num_repetitions) {

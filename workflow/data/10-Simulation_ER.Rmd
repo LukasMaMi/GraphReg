@@ -7,13 +7,14 @@ params:
 ---
 
 ```{r}
+
 library(MASS)
 library(pulsar)
 library(Matrix)
 library(igraph)
 library(huge)
 
-generator_rand <- function (n, p, sparsity, vis = FALSE, verbose = TRUE) 
+generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE) 
 {
     gcinfo(FALSE)
     if (verbose) 
@@ -29,15 +30,38 @@ generator_rand <- function (n, p, sparsity, vis = FALSE, verbose = TRUE)
     theta[edges] <- 1
     theta <- theta + t(theta)
 
+    
+    # Check and adjust sparsity
+    actual_sparsity <- sum(theta) / (p * (p - 1))
+    while (actual_sparsity != sparsity) {
+      if (actual_sparsity < sparsity) {
+        # Add edges
+        possible_edges <- which(theta == 0, arr.ind = TRUE)
+        to_add <- sample(nrow(possible_edges), 1)
+        row_idx <- possible_edges[to_add, 1]
+        col_idx <- possible_edges[to_add, 2]
+        theta[row_idx, col_idx] <- 1
+        theta[col_idx, row_idx] <- 1 # Add symmetric counterpart
+      } else if (actual_sparsity > sparsity) {
+        # Remove edges
+        existing_edges <- which(theta == 1, arr.ind = TRUE)
+        to_remove <- sample(nrow(existing_edges), 1)
+        row_idx <- existing_edges[to_remove, 1]
+        col_idx <- existing_edges[to_remove, 2]
+        theta[row_idx, col_idx] <- 0
+        theta[col_idx, row_idx] <- 0 # Remove symmetric counterpart
+      }
+      actual_sparsity <- sum(theta) / (p * (p - 1))
+    }
 
-    # Create a symmetric matrix with random values in the range [-1, 1] for off-diagonals
-    random_matrix <- matrix(runif(p^2, -1, 1), p, p) # increase range
+    # Create a symmetric matrix with random values in the range rho = [lower, upper] for off-diagonals
+    random_matrix <- matrix(runif(p^2, min = rho$lower, max = rho$upper), p, p)
     # Initialize Omega with larger diagonal elements
     omega = theta * (random_matrix + t(random_matrix)) / 2
     diag(omega) <- abs(min(eigen(omega)$values)) + 0.1
 
     # Adjust the diagonal elements based on condition number
-    desired_condition_number = 10
+    desired_condition_number = cn
     while (kappa(omega) > desired_condition_number) {
       # Allow some flexibility in the adjustment
       diag(omega) <- diag(omega) * 1.01  # Incrementally increase diagonal elements
@@ -82,6 +106,7 @@ generator_rand <- function (n, p, sparsity, vis = FALSE, verbose = TRUE)
 
 
 ```{r}
+
 # Define directory path
 #dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Simulation_Hub"
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
@@ -93,11 +118,15 @@ num_repetitions <- 1
 configs <- list(
   list(n=800, p=40),
   list(n=400, p=100),
-  list(n=200, p=200),
-  list(n=100, p=400)
+  list(n=200, p=200)
+  #list(n=100, p=400)
 )
 
-save(num_repetitions, configs, dir_path, file="ER_settings.RData")
+#ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+ER_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+ER_settings_file <- file.path(ER_setting_path, "ER_settings.RData")
+save(num_repetitions, configs, dir_path, file = ER_settings_file)
+
 
 # Set up outer loop for repetitions
 for(rep in 1:num_repetitions) {
@@ -108,29 +137,43 @@ for(rep in 1:num_repetitions) {
     n <- cfg$n
     p <- cfg$p
     
-    #Subsampled dataset size 
+    # Subsampled dataset size 
     b = (floor(10*sqrt(n)))/n
     #Number of Subsamples N
     N = 30
 
-    #sparsity <- 3/p #For p = 40, Prob = 0.075
-    sparsity <- 5/p
+    # Desired Sparsity level
+    sparsity <- 3/p # 1)
+    #sparsity <- 5/p # 2)
     
-    ER <- generator_rand(n = n, p = p, sparsity = sparsity, vis = TRUE)
+    # Allowed range for off-diagonal elements
+    rho <- list(lower = -1, upper = 1)       # 1) 
+    #rho <- list(lower = -1, upper = -0.05)  # 2) 
+    #rho <- list(lower = 0.05, upper = 1)    # 3) 
+    #rho <- list(lower = -1, upper = -0.01)  # 4) 
+    
+    # Desired condition number
+    cn <- 10  # 1)
+    #cn <- 100 # 2)
+    
+    ER <- generator_rand(n = n, p = p, sparsity = sparsity, rho = rho, cn = cn, vis = F)
 
     ER_data <- ER$data
     true_graph <- ER$theta
     act_sparsity <- ER$act_sparsity
+    true_prec <- ER$omega
 
-    #Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(ER_data), min = 0.01, len = 50)
+    # Lambda path
+    lambda_path  <- getLamPath(max = getMaxCov(ER_data, cov = F, abs = T, diag = T), min = 0.001, len = 40)
     lambda <- list(lambda=lambda_path)
+    #lambda_path
+    #lambda
     
     # Define the name of the file to save, including the directory path
     file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
     
     # Save the hub data to the file
-    save(ER, ER_data, true_graph, lambda, act_sparsity, lambda_path, b, N, file = file_name) #Save sparsity, also lambda index also
+    save(ER, ER_data, true_graph, lambda, sparsity, act_sparsity, true_prec, lambda_path, b, N, file = file_name) 
 
 
   }
@@ -138,15 +181,54 @@ for(rep in 1:num_repetitions) {
 
 print("ER generated and saved!")
 ```
+##Check
+```{r}
 
+# Define directory path
+dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
+
+# Configurations and number of repetitions as previously defined
+configs <- list(
+  list(n=800, p=40),
+  list(n=400, p=100),
+  list(n=200, p=200),
+  list(n=100, p=400)
+)
+num_repetitions <- 1
+
+# Loop through each configuration and repetition
+for(cfg in configs) {
+  for(rep in 1:num_repetitions) {
+    # Construct the file name
+    n <- cfg$n
+    p <- cfg$p
+    file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
+    
+    # Load the data from the file
+    load(file_name)
+    
+    # Inspect the loaded data
+    print(paste("Data for configuration n =", n, "p =", p, "Repetition =", rep))
+    print("Desired Sparsity Level:")
+    print(sparsity)
+    print("Actual Sparsity Level:")
+    print(act_sparsity)
+    #print("True Graph:")
+    #print(true_graph)
+    print("Omega:")
+    print(kappa(true_prec))
+    #print(true_prec)
+
+  }
+}
+
+```
 
 
 ## Session info
 ```{r}
 sessionInfo()
 ```
-
-
 
 
 
