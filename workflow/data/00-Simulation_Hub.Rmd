@@ -14,6 +14,8 @@ library(MASS)
 library(Matrix)
 library(igraph)
 library(huge)
+library(orca)
+library(pulsar)
 
 generator_Hub <- function (n, p, rho, g, vis, verbose) 
 {
