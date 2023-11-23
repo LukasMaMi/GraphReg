@@ -79,8 +79,8 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 ```{r}
 
 # Define directory path
-#dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Simulation_Hub"
-dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub"
+dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Simulation_Hub"
+#dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub"
 
 # Manually set the number of repetitions
 num_repetitions <- 10 
@@ -93,7 +93,8 @@ configs <- list(
   list(n=100, p=400)
 )
 
-Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+#Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
 hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
 save(num_repetitions, configs, dir_path, file = hub_settings_file)
 
