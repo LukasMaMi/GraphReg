@@ -96,7 +96,7 @@ generator_geom <- function (n, p, rho, vis, verbose)
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Geom"
 
 # Manually set the number of repetitions
-num_repetitions <- 1 
+num_repetitions <- 10 
 
 # Specify configurations
 configs <- list(
@@ -127,7 +127,7 @@ for(rep in 1:num_repetitions) {
     #Subsampled dataset size 
     b = (floor(10*sqrt(n)))/n
     #Number of Subsamples N
-    N = 30
+    N = 20
 
     Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
     
@@ -136,7 +136,7 @@ for(rep in 1:num_repetitions) {
     act_sparsity <- Geom$act_sparsity
     
     #Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(Geom_data), min = 0.01, len = 50)
+    lambda_path  <- getLamPath(max = getMaxCov(Geom_data), min = 0.01, len = 40)
     lambda <- list(lambda=lambda_path)
     
     # Define the name of the file to save, including the directory path
