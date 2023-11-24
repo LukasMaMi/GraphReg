@@ -8,8 +8,8 @@ output: gitGeom_document
 
 library(pulsar)
 
-Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
-#Geom_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+Geom_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
 Geom_settings_file <- file.path(Geom_setting_path, "Geom_settings.RData")
 load(Geom_settings_file)
 
@@ -123,8 +123,8 @@ get_filename <- function(config, rep, prefix = "Geom") {
       
   
 # Save results to file
-dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Geom"
-#dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom"
+#dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Geom"
+dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom"
 save(num_repetitions, configs, dir_path, dir_path2, file = Geom_settings_file)
 result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
 save(true_graph, stars_graph, gstars_graph, oracle_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle, best_lambda_oracle, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index, stars_lb, stars_ub, out.p,  file=paste0(dir_path2, "/", ... = result_filename))

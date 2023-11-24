@@ -106,7 +106,10 @@ configs <- list(
   list(n=100, p=400)
 )
 
-save(num_repetitions, configs, dir_path, file="Geom_settings.RData")
+#Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
+Geom_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+Geom_settings_file <- file.path(Geom_setting_path, "Geom_settings.RData")
+save(num_repetitions, configs, dir_path, file = Geom_settings_file)
 
 
 # Value of off-diagonal elements
