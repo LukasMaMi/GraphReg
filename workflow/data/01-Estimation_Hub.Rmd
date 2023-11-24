@@ -85,6 +85,8 @@ get_filename <- function(config, rep, prefix = "Hub") {
   stars_graph <- fit[["refit"]][["stars"]]
   ## GStars
   gstars_graph <- fit[["refit"]][["gcd"]]
+  
+  lambd_plot <- plot(out.p, legends = F)
  
   # Oracle procedure
   oracle_results <- quicr(Hub_data, lambda_path)
@@ -128,7 +130,7 @@ dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Hub"
 #dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub"
 save(num_repetitions, configs, dir_path, dir_path2, file = hub_settings_file)
 result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(true_graph, stars_graph, gstars_graph, oracle_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle, best_lambda_oracle, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index, stars_lb, stars_ub, out.p,  file=paste0(dir_path2, "/", ... = result_filename))
+save(true_graph, stars_graph, gstars_graph, oracle_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle, best_lambda_oracle, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index, stars_lb, stars_ub, out.p, lambd_plot, file=paste0(dir_path2, "/", ... = result_filename))
 
   }
 }
