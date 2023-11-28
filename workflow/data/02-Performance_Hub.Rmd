@@ -6,27 +6,29 @@ output: github_document
 ```{r}
 
 # Load session settings
-Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
-#Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
 hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
 load(hub_settings_file)
 
-dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
-#dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
+#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
+dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 # Function to generate file names
 get_filename <- function(config, rep, prefix = "Hub") {
   sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
 }
 
+
 # Function to calculate F1-score and Hamming distance
-compute_metrics <- function(est_graph, true_graph) {
-  TP <- sum(est_graph == 1 & true_graph == 1)
-  FP <- sum(est_graph == 1 & true_graph == 0)
-  FN <- sum(est_graph == 0 & true_graph == 1)
-  precision <- TP / (TP + FP)
-  recall <- TP / (TP + FN)
-  F1 <- ifelse((precision + recall) > 0, 2 * (precision * recall) / (precision + recall), 0)
+compute_metrics <- function(true_graph, est_graph) {
+
+  TP <- sum(est_graph & true_graph)
+  FP <- sum(est_graph & !true_graph)
+  FN <- sum(!est_graph & true_graph)
+  Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
+  Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
+  F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
   hamming_distance <- sum(est_graph != true_graph)
   
   list(F1 = F1, Hamming = hamming_distance)
