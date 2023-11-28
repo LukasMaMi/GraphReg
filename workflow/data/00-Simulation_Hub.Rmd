@@ -95,14 +95,14 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub/"
 
-num_repetitions <- 1
+num_repetitions <- 10
 
 # Specify configurations
 configs <- list(
   list(n=800, p=40),
-  list(n=400, p=100)
-  #list(n=200, p=200),
-  #list(n=100, p=400)
+  list(n=400, p=100),
+  list(n=200, p=200),
+  list(n=100, p=400)
 )
 
 #Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
@@ -123,10 +123,10 @@ for(rep in 1:num_repetitions) {
   s <- 20    # Size Hub Group
   J <- floor(p/s) # Number of Hubs
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-  N = 5 # Number of Repetitions
-  rho <- 0.1 # Off-Diagonal Effect Strength
+  N = 20 # Number of Repetitions
+  rho <- 0.15 # Off-Diagonal Effect Strength
 
-  Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = TRUE, verbose = TRUE)
+  Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
   Hub_data <- Hub$data
   true_graph <- Hub$theta
   act_sparsity <- Hub$act_sparsity

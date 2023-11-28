@@ -81,7 +81,7 @@ generator_geom <- function (n, p, rho, vis, verbose)
     rm(vis, verbose)
     gc()
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-        omega = omega, theta = Matrix(theta, sparse = FALSE), 
+        omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
         act_sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
     class(sim) = "sim"
     return(sim)
@@ -113,9 +113,7 @@ save(num_repetitions, configs, dir_path, file = Geom_settings_file)
 
 
 # Value of off-diagonal elements
-rho <- 0.145 # 1)
-#rho <- 0.245 # 2)
-#rho <- 0.235 # 3)
+
 
 # Set up outer loop for repetitions
 for(rep in 1:num_repetitions) {
@@ -123,30 +121,33 @@ for(rep in 1:num_repetitions) {
   # Set up inner loop for configurations
   for(cfg in configs) {
     
-    n <- cfg$n
-    p <- cfg$p
-    
-    
-    #Subsampled dataset size 
-    b = (floor(10*sqrt(n)))/n
-    #Number of Subsamples N
-    N = 20
+  n <- cfg$n # Samples
+  p <- cfg$p # Dimensions
+  s <- 20    # Size Hub Group
+  J <- floor(p/s) # Number of Hubs
+  b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
+  N = 20 # Number of Repetitions
+  rho <- 0.145 # 1)  # Value of off-diagonal elements
+  #rho <- 0.245 # 2)
+  #rho <- 0.235 # 3) 
 
-    Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
-    
-    Geom_data <- Geom$data
-    true_graph <- Geom$theta
-    act_sparsity <- Geom$act_sparsity
-    
-    #Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(Geom_data), min = 0.01, len = 40)
-    lambda <- list(lambda=lambda_path)
-    
-    # Define the name of the file to save, including the directory path
-    file_name <- paste0(dir_path, "/Geom_rep_", rep, "_n_", n, "_p_", p, ".RData")
-    
-    # Save the Geom data to the file
-    save(Geom, Geom_data, true_graph, lambda, lambda_path, act_sparsity, b, N, file = file_name)
+  Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
+  Geom_data <- Geom$data
+  true_graph <- Geom$theta
+  act_sparsity <- Geom$act_sparsity
+  
+  maxCov <- getMaxCov(Geom_data)
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
+  lambda <- list(lambda=lambda_path)
+  
+  print('Condition number: ')
+  print(kappa(Geom$omega))
+  
+  # Define the name of the file to save, including the directory path
+  file_name <- paste0(dir_path, "/Geom_rep_", rep, "_n_", n, "_p_", p, ".RData")
+  
+  # Save the Geom data to the file
+  save(Geom_data, true_graph, lambda, lambda_path, act_sparsity, b, N, file = file_name)
 
 
   }

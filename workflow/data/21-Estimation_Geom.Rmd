@@ -6,7 +6,14 @@ output: gitGeom_document
 # Run StARS, G-StARS and Oracle
 ```{r}
 
-library(pulsar)
+#install.packages("htmltools")
+#install.packages("devtools")
+#install.packages("batchtools)
+#install_gitGeom("zdk123/pulsar")
+#install.packages("BigQuic")
+
+
+dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom/"
 
 #Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
 Geom_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
@@ -14,7 +21,6 @@ Geom_settings_file <- file.path(Geom_setting_path, "Geom_settings.RData")
 load(Geom_settings_file)
 
 
-# 1. Generate list of file names based on configs
 get_filename <- function(config, rep, prefix = "Geom") {
   return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
 }
@@ -27,107 +33,132 @@ get_filename <- function(config, rep, prefix = "Geom") {
       
       # Load the dataset
       load(paste0(dir_path, "/", filename))
-  
+
+
+    # Using QUIC
+    library(BigQuic)
+    quicr <- function(data, lambda) {
+        p <- ncol(data)
+        est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+        est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+        path <-  lapply(seq(length(lambda)), function(i) {
+                    tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                    diag(tmp) <- 0
+                    as(tmp!=0, "lMatrix")
+        })
+        est$path <- path
+        est
+    }
+    
+    # Using Huge GLASSO
+    #library(huge)
+    #huger <- function(data, lambda) {
+      #est  <- huge::huge(data, lambda = lambda, method = "glasso")
+      #path <- lapply(seq(length(lambda)), function(i) {
+        ## convert precision array to adj list
+        #tmp <- est$path[[i]]
+        #tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
+        #return(tmp)
+      #})
+      #est$path <- path
+      #est
+    #}
       
-  #Define QUIC as method of choice for stars and gstars
-  library(QUIC)
   
-  quicr <- function(data, lambda, ...) {
-    S <- cov(data)
-    est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
-    est$path <- lapply(seq(length(lambda)), function(i) {
-    ## convert precision array to adj list
-    tmp <- est$X[,,i]; diag(tmp) <- 0
-    tmp <- ifelse(tmp != 0, 1, 0)
-    return(tmp)
-    })
-    est
-  }
-  
-  #Run pulsar package
-  library(orca)
-  out.p <- pulsar(
-        data = Geom_data,
-        fun = quicr,
-        fargs = (lambda = lambda),
-        criterion = c('stars', 'gcd'),
-        thresh = 0.1,
-        subsample.ratio = b,
-        rep.num = N,
-        seed = NULL,
-        lb.stars = TRUE,
-        ub.stars = TRUE,
-        ncores = 1,
-        refit = FALSE
-  )
+  quicargs <- list(lambda = lambda_path)
+  #hugeargs <- list(lambda = lambda_path, method = "glasso", verbose = FALSE)
+    
+  library(batchtools)
+  library(pulsar)
+  out.p <- batch.pulsar(
+    Geom_data, 
+    fun = quicr, 
+    fargs = quicargs, 
+    rep.num = N,
+    thresh = 0.1,
+    subsample.ratio = b,
+    criterion=c('stars', 'gcd'), 
+    lb.stars = TRUE, 
+    ub.stars = TRUE, 
+    seed = NULL,
+    refit = FALSE)
   
   
   # Optimal Index Stars
-  stars_index <- out.p[["stars"]][["opt.index"]]
+  stars_index <-  opt.index(out.p, 'stars')
   # Optimal Lambda
   best_lambda_stars <- round(lambda_path[stars_index], 3)
   # Lower Bound
   stars_lb <- out.p[["stars"]][["lb.index"]]
   # Upper Bound
   stars_ub <- out.p[["stars"]][["ub.index"]]
-
+  
   # Optimal Index Gstars
-  lam_gam <- get.opt.index(out.p, criterion = "gcd")
-  opt.index(out.p, criterion = "gcd") <- lam_gam
-  gstars_index <- out.p[["gcd"]][["opt.index"]][["gcd"]]
+  opt.index(out.p, criterion = "gcd") <- get.opt.index(out.p, criterion = "gcd")
+  gstars_index <- opt.index(out.p, 'gcd')
   # Optimal Lambda
   best_lambda_gstars <- round(lambda_path[gstars_index], 3)
-
+  
   
   fit  <- refit(out.p, criterion = c("stars", "gcd"))
   ## Stars
   stars_graph <- fit[["refit"]][["stars"]]
   ## GStars
   gstars_graph <- fit[["refit"]][["gcd"]]
- 
-  # Oracle procedure
+  
+  get_plot_filename <- function(config, rep, prefix = "Plot") {
+  sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
+  }
+
+  plot_filename <- get_plot_filename(configs[[i]], rep)
+  # Save the plot as a PDF
+  pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
+  plot(out.p, legends = F)
+  dev.off()
+
+  
+  ## Oracle procedure
   oracle_results <- quicr(Geom_data, lambda_path)
   
   # F1-Score as criterium for Oracle
-  f1_score <- function(predicted, actual) {
-      true_positives = sum(predicted[lower.tri(predicted)] & actual[lower.tri(actual)])
-      predicted_positives = sum(predicted[lower.tri(predicted)])
-      actual_positives = sum(actual[lower.tri(actual)])
-  
-      precision = ifelse(predicted_positives > 0, true_positives / predicted_positives, 0)
-      recall = ifelse(actual_positives > 0, true_positives / actual_positives, 0)
-      f1 = ifelse((precision + recall) > 0, 2 * precision * recall / (precision + recall), 0)
-  
-      return(f1)
+  f1_score <- function(actual, predicted) {
+  if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
+    stop("Matrices should be of class lgCMatrix")
+  }
+
+  # Calculating TP, FP, and FN using sparse matrix operations
+  TP <- sum(predicted & actual)
+  FP <- sum(predicted & !actual)
+  FN <- sum(!predicted & actual)
+
+  # Calculate Precision and Recall
+  Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
+  Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
+
+  # Calculate F1 Score
+  f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
+
+  return(f1)
   }
   
   # Best lambda Oracle
-  oracle_index <- which.max(sapply(1:length(lambda_path), function(i) {
-    estimated_graph <- oracle_results$path[[i]]
+  oracle_index <- which.max(sapply(1:length(lambda_path), function(j) {
+    estimated_graph <- oracle_results$path[[j]]
     f1_score(estimated_graph, true_graph)
   }))
   
-  best_lambda_oracle <- lambda_path[oracle_index]
+  best_lambda_oracle <- round(lambda_path[oracle_index], 3)
   
-  # Extract the oracle precision matrix for the best lambda:
-  oracle_graph <- oracle_results$X[,,oracle_index]
+  oracle_graph <- oracle_results$path[[oracle_index]]
   
-  # Convert precision matrix to adjacency matrix
-  oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
-  diag(oracle_graph) <- 0
-  
-      
   act_sparsity_stars = sum(stars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
   act_sparsity_gstars = sum(gstars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
   act_sparsity_oracle = sum(oracle_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-      
   
-# Save results to file
-#dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Geom"
-dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom"
+
 save(num_repetitions, configs, dir_path, dir_path2, file = Geom_settings_file)
 result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(true_graph, stars_graph, gstars_graph, oracle_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle, best_lambda_oracle, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index, stars_lb, stars_ub, out.p,  file=paste0(dir_path2, "/", ... = result_filename))
+save(true_graph, stars_graph, gstars_graph, oracle_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle, best_lambda_oracle, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index, stars_lb, stars_ub, out.p, file=paste0(dir_path2, "/", ... = result_filename))
 
   }
 }
@@ -136,94 +167,31 @@ print("Adjacency matrices for Geom generated and saved!")
 ```
 
 
-
-## Check
 ```{r}
-dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom"
-
-# Get a list of all .RData files in the directory
-files <- list.files(path = dir_path2, pattern = "n_800_p_40.*\\.RData$", full.names = TRUE)
-files <- list.files(path = dir_path2, pattern = "n_400_p_100.*\\.RData$", full.names = TRUE)
-files <- list.files(path = dir_path2, pattern = "n_200_p_200.*\\.RData$", full.names = TRUE)
-
-# Check sparsity
-for (file in files) {
-  load(file)
-  print(act_sparsity)
-  print(act_sparsity_oracle)
-  print(act_sparsity_stars)
-  print(act_sparsity_gstars)
-}
-
-# Check lambda index
-for (file in files) {
-  load(file)
-  print(oracle_index)
-  print(stars_index)
-  print(gstars_index)
-}
-
-#Check Plot
-for (file in files) {
-  load(file)
-  print(stars_lb)
-  print(stars_ub)
-  plot(out.p, legends = F)
-}
-
-# Check sparsity differences
-for (file in files) {
-  load(file)
-  print(abs(act_sparsity - act_sparsity_oracle))
-  print(abs(act_sparsity - act_sparsity_stars))
-  print(abs(act_sparsity - act_sparsity_gstars))
-}
+## Short evaluation
+truenet  <- network::network(as.matrix(dat$theta))
+starsnet <- network::network(summary(fit.q2$refit$stars))
+gcdnet   <- network::network(summary(fit.q2$refit$gcd))
+par(mfrow=c(1,3))
+coords <- plot(truenet, usearrows=FALSE, main="TRUE")
+plot(starsnet, coord=coords, usearrows=FALSE, main="StARS")
+plot(gcdnet, coord=coords, usearrows=FALSE, main="gcd+StARS")
 
 
-# Check adjacency matrices
-for (file in files) {
-  load(file)
-  #print(true_graph)
-  #print(oracle_graph)
-  print(stars_graph)
-  #print(gstars_graph)
-}
-
-
-# Check hamming differences in repetition
-oracle_graphs <- list()
-stars_graphs <- list()
-gstars_graphs <- list()
-
-for (i in 1:length(files)) {
-  load(files[i])
-  oracle_graphs[[i]] <- oracle_graph
-  stars_graphs[[i]] <- stars_graph
-  gstars_graphs[[i]] <- gstars_graph
-}
-
-difference <- list(sum(oracle_graphs[[1]] != oracle_graphs[[2]]), sum(stars_graphs[[1]] != stars_graphs[[2]]), sum(gstars_graphs[[1]] != gstars_graphs[[2]]))
-  print(difference)
-
-  
-# Check hamming fit
-for (file in files) {
-  load(file)
-  print(sum(true_graph != true_graph))
-  print(sum(oracle_graph != true_graph))
-  print(sum(stars_graph != true_graph))
-  print(sum(gstars_graph != true_graph))
-}
-
-  
-# Check plots
-for (file in files) {
-  load(file)
-  Geom <- huge.plot(true_graph)
-  Geom_oracle <- huge.plot(oracle_graph)
-  Geom_stars <- huge.plot(stars_graph)
-  #ER_gstars <- huge.plot(gstars_graph)
-}
-
-
+  #EVENTUELLE VERSCHLECHTERUNG VON ORACLE
+  # Extract the oracle precision matrix for the best lambda:
+  #oracle_graph <- oracle_results$X[,,oracle_index]
+  # Convert precision matrix to adjacency matrix
+  #oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
+  #diag(oracle_graph) <- 0
 ```
+
+
+## Session info
+```{r}
+sessionInfo()
+```
+
+
+
+

@@ -96,8 +96,8 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
     gc()
     
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-    omega = omega, theta = Matrix(theta, sparse = FALSE), #Matrix configuration
-    act_sparsity = sum(theta)/(p * (p - 1))) #Sparsity level = number of present edges divided by number of potential edges p x p.
+    omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
+    act_sparsity = sum(theta)/(p * (p - 1))) 
     class(sim) = "sim"
     return(sim)
 }
@@ -134,47 +134,34 @@ for(rep in 1:num_repetitions) {
   # Set up inner loop for configurations
   for(cfg in configs) {
     
-    n <- cfg$n
-    p <- cfg$p
-    
-    # Subsampled dataset size 
-    b = (floor(10*sqrt(n)))/n
-    #Number of Subsamples N
-    N = 30
+  n <- cfg$n # Samples
+  p <- cfg$p # Dimensions
+  s <- 20    # Size Hub Group
+  J <- floor(p/s) # Number of Hubs
+  b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
+  N = 20 # Number of Repetitions
+  rho <- list(lower = -1, upper = 1) # Off-Diagonal Value Range
+  sparsity <- 3/p # Sparsity level
+  cn <- 10  # Condition number
 
-    # Desired Sparsity level
-    sparsity <- 3/p # 1)
-    #sparsity <- 5/p # 2)
-    
-    # Allowed range for off-diagonal elements
-    rho <- list(lower = -1, upper = 1)       # 1) 
-    #rho <- list(lower = -1, upper = -0.05)  # 2) 
-    #rho <- list(lower = 0.05, upper = 1)    # 3) 
-    #rho <- list(lower = -1, upper = -0.01)  # 4) 
-    
-    # Desired condition number
-    cn <- 10  # 1)
-    #cn <- 100 # 2)
-    
-    ER <- generator_rand(n = n, p = p, sparsity = sparsity, rho = rho, cn = cn, vis = F)
+  ER <- generator_rand(n = n, p = p, sparsity = sparsity, rho = rho, cn = cn, vis = F)
 
-    ER_data <- ER$data
-    true_graph <- ER$theta
-    act_sparsity <- ER$act_sparsity
-    true_prec <- ER$omega
+  ER_data <- ER$data
+  true_graph <- ER$theta
+  act_sparsity <- ER$act_sparsity
 
-    # Lambda path
-    lambda_path  <- getLamPath(max = getMaxCov(ER_data, cov = F, abs = T, diag = T), min = 0.001, len = 40)
-    lambda <- list(lambda=lambda_path)
-    #lambda_path
-    #lambda
-    
-    # Define the name of the file to save, including the directory path
-    file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
-    
-    # Save the hub data to the file
-    save(ER, ER_data, true_graph, lambda, sparsity, act_sparsity, true_prec, lambda_path, b, N, file = file_name) 
-
+  maxCov <- getMaxCov(ER_data)
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
+  lambda <- list(lambda=lambda_path)
+  
+  print('Condition number: ')
+  print(kappa(Hub$omega))
+  
+  # Define the name of the file to save, including the directory path
+  file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
+  
+  # Save the hub data to the file
+  save(ER_data, true_graph, lambda, lambda_path, b, N, act_sparsity, file = file_name) 
 
   }
 }
