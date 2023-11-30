@@ -112,14 +112,14 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
 
 # Manually set the number of repetitions
-num_repetitions <- 1 
+num_repetitions <- 10 
 
 # Specify configurations
 configs <- list(
   list(n=800, p=40),
   list(n=400, p=100),
-  list(n=200, p=200)
-  #list(n=100, p=400)
+  list(n=200, p=200),
+  list(n=100, p=400)
 )
 
 #ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
@@ -141,7 +141,8 @@ for(rep in 1:num_repetitions) {
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
   N = 20 # Number of Repetitions
   rho <- list(lower = -1, upper = 1) # Off-Diagonal Value Range
-  sparsity <- 3/p # Sparsity level
+  #sparsity <- 3/p # Sparsity level
+  sparsity <- 5/p
   cn <- 10  # Condition number
 
   ER <- generator_rand(n = n, p = p, sparsity = sparsity, rho = rho, cn = cn, vis = F)
@@ -155,7 +156,7 @@ for(rep in 1:num_repetitions) {
   lambda <- list(lambda=lambda_path)
   
   print('Condition number: ')
-  print(kappa(Hub$omega))
+  print(kappa(ER$omega))
   
   # Define the name of the file to save, including the directory path
   file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
@@ -168,48 +169,7 @@ for(rep in 1:num_repetitions) {
 
 print("ER generated and saved!")
 ```
-##Check
-```{r}
 
-# Define directory path
-dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
-
-# Configurations and number of repetitions as previously defined
-configs <- list(
-  list(n=800, p=40),
-  list(n=400, p=100),
-  list(n=200, p=200),
-  list(n=100, p=400)
-)
-num_repetitions <- 1
-
-# Loop through each configuration and repetition
-for(cfg in configs) {
-  for(rep in 1:num_repetitions) {
-    # Construct the file name
-    n <- cfg$n
-    p <- cfg$p
-    file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
-    
-    # Load the data from the file
-    load(file_name)
-    
-    # Inspect the loaded data
-    print(paste("Data for configuration n =", n, "p =", p, "Repetition =", rep))
-    print("Desired Sparsity Level:")
-    print(sparsity)
-    print("Actual Sparsity Level:")
-    print(act_sparsity)
-    #print("True Graph:")
-    #print(true_graph)
-    print("Omega:")
-    print(kappa(true_prec))
-    #print(true_prec)
-
-  }
-}
-
-```
 
 
 ## Session info
