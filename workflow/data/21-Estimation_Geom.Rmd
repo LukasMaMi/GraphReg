@@ -9,7 +9,7 @@ output: gitGeom_document
 #install.packages("htmltools")
 #install.packages("devtools")
 #install.packages("batchtools)
-#install_gitGeom("zdk123/pulsar")
+#install_github("zdk123/pulsar")
 #install.packages("BigQuic")
 
 
@@ -120,7 +120,7 @@ get_filename <- function(config, rep, prefix = "Geom") {
   ## Oracle procedure
   oracle_results <- quicr(Geom_data, lambda_path)
   
-  # F1-Score as criterium for Oracle
+  #F1-Score as criterium for Oracle
   f1_score <- function(actual, predicted) {
   if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
     stop("Matrices should be of class lgCMatrix")
@@ -141,24 +141,38 @@ get_filename <- function(config, rep, prefix = "Geom") {
   return(f1)
   }
   
-  # Best lambda Oracle
-  oracle_index <- which.max(sapply(1:length(lambda_path), function(j) {
+  # Hamming distance as criterium for Oracle
+  hamming_distance <- function(actual, predicted) {
+    sum(tril(predicted) != tril(actual))
+  }
+  
+  # F1 score - best lambda Oracle
+  oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
     estimated_graph <- oracle_results$path[[j]]
-    f1_score(estimated_graph, true_graph)
+    f1_score(true_graph, estimated_graph)
   }))
   
-  best_lambda_oracle <- round(lambda_path[oracle_index], 3)
+  # Hamming distance - best lambda Oracle
+    oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
+    estimated_graph <- oracle_results$path[[j]]
+    hamming_distance(true_graph, estimated_graph)
+  }))
   
-  oracle_graph <- oracle_results$path[[oracle_index]]
+  best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
+  best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
+  
+  oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
+  oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
   
   act_sparsity_stars = sum(stars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
   act_sparsity_gstars = sum(gstars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_oracle = sum(oracle_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
+  act_sparsity_oracle_f1 = sum(oracle_graph_f1) / (configs[[i]]$p * (configs[[i]]$p - 1))
+  act_sparsity_oracle_hamming = sum(oracle_graph_hamming) / (configs[[i]]$p * (configs[[i]]$p - 1))
   
 
 save(num_repetitions, configs, dir_path, dir_path2, file = Geom_settings_file)
 result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(true_graph, stars_graph, gstars_graph, oracle_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle, best_lambda_oracle, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index, stars_lb, stars_ub, out.p, file=paste0(dir_path2, "/", ... = result_filename))
+save(true_graph, stars_graph, gstars_graph, oracle_graph_f1, oracle_graph_hamming, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle_f1, act_sparsity_oracle_hamming, best_lambda_oracle_f1, best_lambda_oracle_hamming, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index_f1, oracle_index_hamming, stars_lb, stars_ub, out.p, file=paste0(dir_path2, "/", ... = result_filename))
 
   }
 }
@@ -167,24 +181,6 @@ print("Adjacency matrices for Geom generated and saved!")
 ```
 
 
-```{r}
-## Short evaluation
-truenet  <- network::network(as.matrix(dat$theta))
-starsnet <- network::network(summary(fit.q2$refit$stars))
-gcdnet   <- network::network(summary(fit.q2$refit$gcd))
-par(mfrow=c(1,3))
-coords <- plot(truenet, usearrows=FALSE, main="TRUE")
-plot(starsnet, coord=coords, usearrows=FALSE, main="StARS")
-plot(gcdnet, coord=coords, usearrows=FALSE, main="gcd+StARS")
-
-
-  #EVENTUELLE VERSCHLECHTERUNG VON ORACLE
-  # Extract the oracle precision matrix for the best lambda:
-  #oracle_graph <- oracle_results$X[,,oracle_index]
-  # Convert precision matrix to adjacency matrix
-  #oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
-  #diag(oracle_graph) <- 0
-```
 
 
 ## Session info

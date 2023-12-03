@@ -144,7 +144,7 @@ get_filename <- function(config, rep, prefix = "Hub") {
   
   # Hamming distance as criterium for Oracle
   hamming_distance <- function(actual, predicted) {
-    sum((predicted[lower.tri(predicted)] != actual[lower.tri(actual)]))
+    sum(tril(predicted) != tril(actual))
   }
   
   # F1 score - best lambda Oracle
@@ -179,26 +179,6 @@ save(true_graph, stars_graph, gstars_graph, oracle_graph_f1, oracle_graph_hammin
 }
 
 print("Adjacency matrices for Hub generated and saved!")
-```
-
-
-```{r}
-## Short evaluation
-truenet  <- network::network(as.matrix(dat$theta))
-starsnet <- network::network(summary(fit.q2$refit$stars))
-gcdnet   <- network::network(summary(fit.q2$refit$gcd))
-par(mfrow=c(1,3))
-coords <- plot(truenet, usearrows=FALSE, main="TRUE")
-plot(starsnet, coord=coords, usearrows=FALSE, main="StARS")
-plot(gcdnet, coord=coords, usearrows=FALSE, main="gcd+StARS")
-
-
-  #EVENTUELLE VERSCHLECHTERUNG VON ORACLE
-  # Extract the oracle precision matrix for the best lambda:
-  #oracle_graph <- oracle_results$X[,,oracle_index]
-  # Convert precision matrix to adjacency matrix
-  #oracle_graph <- ifelse(oracle_graph != 0, 1, 0)
-  #diag(oracle_graph) <- 0
 ```
 
 

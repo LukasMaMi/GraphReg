@@ -1,6 +1,6 @@
 ---
 title: "13-Plot_ER"
-output: gitER_document
+output: github_document
 ---
 
 
@@ -39,7 +39,7 @@ for (cfg_key in names(config_results)) {
   cfg <- config_results[[cfg_key]]
 
   # Loop over methods (Stars, GStars, Oracle)
-  for (method in c("Stars", "GStars", "Oracle")) {
+  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming")) {
     # Aggregated metrics
     aggregated_metrics <- cfg[["Aggregated"]][[tolower(method)]]
 
@@ -83,25 +83,44 @@ config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$
 names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
 
 # Add sparsity values with color coding
-config_labels_with_sparsity <- sapply(names(config_labels), function(cfg_key) {
+# For the F1 Plot
+config_labels_with_sparsity_f1 <- sapply(names(config_labels), function(cfg_key) {
   sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
   sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
-  sparsity_oracle <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Oracle", "Mean_Sparsity"], 3)
+  sparsity_oracle_f1 <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Oracle_f1", "Mean_Sparsity"], 3)
 
-  # Color coding (adjust colors to match your plot)
   paste(config_labels[cfg_key], 
         "<span style='color:lightblue;'>", sparsity_stars, "</span>",
         "<span style='color:darkorange;'>", sparsity_gstars, "</span>",
-        "<span style='color:black;'>", sparsity_oracle, "</span>", 
+        "<span style='color:black;'>", sparsity_oracle_f1, "</span>", 
         sep = "<br>")
 }, simplify = FALSE)
 
-# Update the Config column in mean_f1_df and mean_hamming_df
-mean_f1_df$Config <- factor(mean_f1_df$Config, levels = names(config_labels_with_sparsity), labels = config_labels_with_sparsity)
-mean_hamming_df$Config <- factor(mean_hamming_df$Config, levels = names(config_labels_with_sparsity), labels = config_labels_with_sparsity)
+# For the Hamming Plot
+config_labels_with_sparsity_hamming <- sapply(names(config_labels), function(cfg_key) {
+  sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
+  sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
+  sparsity_oracle_hamming <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Oracle_hamming", "Mean_Sparsity"], 3)
 
-# The rest of your plotting code remains the same, except for adding ggtext::element_markdown() to the axis.text.x theme
-F1_ER <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
+  paste(config_labels[cfg_key], 
+        "<span style='color:lightblue;'>", sparsity_stars, "</span>",
+        "<span style='color:darkorange;'>", sparsity_gstars, "</span>",
+        "<span style='color:black;'>", sparsity_oracle_hamming, "</span>", 
+        sep = "<br>")
+}, simplify = FALSE)
+
+
+# Filter Data Frames
+mean_f1_df_filtered <- mean_f1_df %>% filter(Method != "Oracle_hamming")
+mean_hamming_df_filtered <- mean_hamming_df %>% filter(Method != "Oracle_f1")
+
+# Update the Config column in mean_f1_df and mean_hamming_df for the F1 plot
+mean_f1_df_filtered$Config <- factor(mean_f1_df_filtered$Config, levels = names(config_labels_with_sparsity_f1), labels = config_labels_with_sparsity_f1)
+
+# Update the Config column in mean_f1_df and mean_hamming_df for the Hamming plot
+mean_hamming_df_filtered$Config <- factor(mean_hamming_df_filtered$Config, levels = names(config_labels_with_sparsity_hamming), labels = config_labels_with_sparsity_hamming)
+
+F1_ER <- ggplot(mean_f1_df_filtered, aes(x = Config, y = Mean_F1, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
   geom_point(size = 1.5) +
   geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
@@ -111,10 +130,11 @@ F1_ER <- ggplot(mean_f1_df, aes(x = Config, y = Mean_F1, color = Method)) +
         axis.title.x = element_blank(),
         legend.title = element_blank(),
         axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_f1" = "black")) +
+  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1)) +
+  scale_y_continuous(limits = c(0, 1)) # Set y-axis limits to [0, 1]
 
-Hamming_ER <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = Method)) +
+Hamming_ER <- ggplot(mean_hamming_df_filtered, aes(x = Config, y = Mean_Hamming, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
   geom_point(size = 1.5) +
   geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
@@ -124,7 +144,7 @@ Hamming_ER <- ggplot(mean_hamming_df, aes(x = Config, y = Mean_Hamming, color = 
         axis.title.x = element_blank(),
         legend.title = element_blank(),
         axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle" = "black")) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_hamming" = "black")) +
   theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
 
 # Save the plots
@@ -137,7 +157,7 @@ Hamming_ER
 ```
 
 
-## Tables for different rhos
+## Tables for different parameter settings
 ```{r}
 
 ## Rho 0.1
@@ -184,6 +204,62 @@ rho_0_2 <- config_results
 rm(config_results)
 #
 
+generate_df_for_rho <- function(data_list, rho_descriptor) {
+  results_df <- data.frame(Configuration = paste("Results for", rho_descriptor),
+                           Method = NA,
+                           MeanF1Score = NA,
+                           MeanHammingDistance = NA,
+                           Sparsity = NA,
+                           stringsAsFactors = FALSE)
+
+  add_row <- function(results_df, config, method, data_list) {
+    return(rbind(results_df, data.frame(
+      Configuration = config,
+      Method = method,
+      MeanF1Score = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[1]],
+      MeanHammingDistance = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[2]],
+      Sparsity = data_list[[config]][["Aggregated"]][[method]][["Sparsity"]]
+    )))
+  }
+
+  configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
+  methods <- c("Oracle_f1", "Oracle_hamming", "Stars", "GStars")  # Updated methods
+
+  for (config in configs) {
+    for (method in methods) {
+      results_df <- add_row(results_df, config, method, data_list)
+    }
+  }
+
+  return(results_df)
+}
+
+
+# Generate data frames for each rho value
+df_rho_0_1 <- generate_df_for_rho(rho_0_1, "rho = 0.1")
+df_rho_0_15 <- generate_df_for_rho(rho_0_15, "rho = 0.15")
+df_rho_0_2 <- generate_df_for_rho(rho_0_2, "rho = 0.2")
+
+# Combine the data frames
+combined_df <- rbind(df_rho_0_1, df_rho_0_15, df_rho_0_2)
+
+# Display the combined results
+print(combined_df)
+
+library(gridExtra)
+table_plot <- tableGrob(combined_df)
+
+library(ggplot2)
+ggsave("ER_graph_rho.pdf", table_plot, width = 20, height = 15, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/")
+
+
+
+```
+
+
+
+##Alte Sicherung
+```{r}
 
 generate_df_for_rho <- function(data_list, rho_descriptor) {
   results_df <- data.frame(Configuration = paste("Results for", rho_descriptor),
@@ -232,8 +308,6 @@ table_plot <- tableGrob(combined_df)
 library(ggplot2)
 ggsave("ER_graph_rho.pdf", table_plot, width = 20, height = 15, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/")
 
-
 ```
-
 
 

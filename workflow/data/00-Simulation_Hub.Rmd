@@ -83,7 +83,7 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub/"
 
-num_repetitions <- 10
+num_repetitions <- 1
 
 # Specify configurations
 configs <- list(
@@ -120,7 +120,7 @@ for(rep in 1:num_repetitions) {
   act_sparsity <- Hub$act_sparsity
 
   maxCov <- getMaxCov(Hub_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   print('Condition number: ')

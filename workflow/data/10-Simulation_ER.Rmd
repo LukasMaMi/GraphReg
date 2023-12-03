@@ -136,13 +136,11 @@ for(rep in 1:num_repetitions) {
     
   n <- cfg$n # Samples
   p <- cfg$p # Dimensions
-  s <- 20    # Size Hub Group
-  J <- floor(p/s) # Number of Hubs
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
   N = 20 # Number of Repetitions
-  rho <- list(lower = -1, upper = 1) # Off-Diagonal Value Range
+  rho <- list(lower = 0.05, upper = 0.50) # Off-Diagonal Value Range #0.55
   #sparsity <- 3/p # Sparsity level
-  sparsity <- 5/p
+  sparsity <- 2/p
   cn <- 10  # Condition number
 
   ER <- generator_rand(n = n, p = p, sparsity = sparsity, rho = rho, cn = cn, vis = F)
@@ -152,11 +150,15 @@ for(rep in 1:num_repetitions) {
   act_sparsity <- ER$act_sparsity
 
   maxCov <- getMaxCov(ER_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   print('Condition number: ')
   print(kappa(ER$omega))
+  print('Desired sparsity: ')
+  print(sparsity)
+  print('Actual sparsity: ')
+  print(act_sparsity)
   
   # Define the name of the file to save, including the directory path
   file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")

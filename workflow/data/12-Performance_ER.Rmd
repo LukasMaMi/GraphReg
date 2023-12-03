@@ -1,6 +1,6 @@
 ---
 title: "12-Performance_ER"
-output: gitER_document
+output: github_document
 ---
 
 ```{r}
@@ -21,6 +21,7 @@ get_filename <- function(config, rep, prefix = "ER") {
 
 
 # Function to calculate F1-score and Hamming distance
+library(Matrix)
 compute_metrics <- function(true_graph, est_graph) {
 
   TP <- sum(est_graph & true_graph)
@@ -29,7 +30,9 @@ compute_metrics <- function(true_graph, est_graph) {
   Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
   Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
   F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-  hamming_distance <- sum(est_graph != true_graph)
+  # Calculate Hamming distance for the lower triangle only
+  hamming_distance <- sum(tril(est_graph) != tril(true_graph))
+
   
   list(F1 = F1, Hamming = hamming_distance)
 }
@@ -41,7 +44,7 @@ config_results <- list()
 for(cfg in configs) {
   cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
   individual_results <- list()
-  aggregated_metrics <- list(stars = NULL, gstars = NULL, oracle = NULL)
+  aggregated_metrics <- list(stars = NULL, gstars = NULL, oracle_f1 = NULL, oracle_hamming = NULL)
   
   lambda_values <- list(stars = numeric(), gstars = numeric(), oracle = numeric())
   sparsity_values <- list(stars = numeric(), gstars = numeric(), oracle = numeric())
@@ -53,29 +56,34 @@ for(cfg in configs) {
     # Compute metrics
     stars_metrics <- compute_metrics(stars_graph, true_graph)
     gstars_metrics <- compute_metrics(gstars_graph, true_graph)
-    oracle_metrics <- compute_metrics(oracle_graph, true_graph)
+    oracle_metrics_f1 <- compute_metrics(oracle_graph_f1, true_graph)
+    oracle_metrics_hamming <- compute_metrics(oracle_graph_hamming, true_graph)
 
     # Additional metrics: lambda values and sparsity
     additional_metrics <- list(
       stars_lambda = best_lambda_stars,
       gstars_lambda = best_lambda_gstars,
-      oracle_lambda = best_lambda_oracle,
+      oracle_lambda_f1 = best_lambda_oracle_f1,
+      oracle_lambda_hamming = best_lambda_oracle_hamming,
       true_sparsity = act_sparsity,
       stars_sparsity = act_sparsity_stars,
       gstars_sparsity = act_sparsity_gstars,
-      oracle_sparsity = act_sparsity_oracle,
+      oracle_sparsity_f1 = act_sparsity_oracle_f1,
+      oracle_sparsity_hamming = act_sparsity_oracle_hamming,
       stars_index = stars_index,
       stars_lb = stars_lb,
       stars_ub = stars_ub,
       gstars_index = gstars_index,
-      oracle_index = oracle_index
+      oracle_index_f1 = oracle_index_f1,
+      oracle_index_hamming = oracle_index_hamming
     )
 
     # Store individual results
     individual_results[[paste("Rep", rep)]] <- list(
       Stars = stars_metrics,
       GStars = gstars_metrics,
-      Oracle = oracle_metrics,
+      Oracle_f1 = oracle_metrics_f1,
+      Oracle_hamming = oracle_metrics_hamming,
       Additional = additional_metrics
     )
 
@@ -83,15 +91,18 @@ for(cfg in configs) {
     # Convert to numeric and convert to a matrix format
     aggregated_metrics$stars <- rbind(aggregated_metrics$stars, as.numeric(unlist(stars_metrics)))
     aggregated_metrics$gstars <- rbind(aggregated_metrics$gstars, as.numeric(unlist(gstars_metrics)))
-    aggregated_metrics$oracle <- rbind(aggregated_metrics$oracle, as.numeric(unlist(oracle_metrics)))
+    aggregated_metrics$oracle_f1 <- rbind(aggregated_metrics$oracle_f1, as.numeric(unlist(oracle_metrics_f1)))
+    aggregated_metrics$oracle_hamming <- rbind(aggregated_metrics$oracle_hamming, as.numeric(unlist(oracle_metrics_hamming)))
     
      # Accumulate lambda and sparsity values
     lambda_values$stars <- c(lambda_values$stars, additional_metrics$stars_lambda)
     sparsity_values$stars <- c(sparsity_values$stars, additional_metrics$stars_sparsity)
     lambda_values$gstars <- c(lambda_values$gstars, additional_metrics$gstars_lambda)
     sparsity_values$gstars <- c(sparsity_values$gstars, additional_metrics$gstars_sparsity)
-    lambda_values$oracle <- c(lambda_values$oracle, additional_metrics$oracle_lambda)
-    sparsity_values$oracle <- c(sparsity_values$oracle, additional_metrics$oracle_sparsity)
+    lambda_values$oracle_f1 <- c(lambda_values$oracle_f1, additional_metrics$oracle_lambda_f1)
+    sparsity_values$oracle_f1 <- c(sparsity_values$oracle_f1, additional_metrics$oracle_sparsity_f1)
+    lambda_values$oracle_hamming <- c(lambda_values$oracle_hamming, additional_metrics$oracle_lambda_hamming)
+    sparsity_values$oracle_hamming <- c(sparsity_values$oracle_hamming, additional_metrics$oracle_sparsity_hamming)
   }
 
   # Calculate means and confidence intervals
@@ -106,7 +117,10 @@ for(cfg in configs) {
   # Include mean lambda and sparsity in aggregated metrics
   aggregated_metrics$stars <- calc_mean_ci(aggregated_metrics$stars, lambda_values$stars, sparsity_values$stars)
   aggregated_metrics$gstars <- calc_mean_ci(aggregated_metrics$gstars, lambda_values$gstars, sparsity_values$gstars)
-  aggregated_metrics$oracle <- calc_mean_ci(aggregated_metrics$oracle, lambda_values$oracle, sparsity_values$oracle)
+  aggregated_metrics$oracle_f1 <- calc_mean_ci(aggregated_metrics$oracle_f1, 
+                                               lambda_values$oracle_f1, sparsity_values$oracle_f1)
+  aggregated_metrics$oracle_hamming <- calc_mean_ci(aggregated_metrics$oracle_hamming, 
+                                               lambda_values$oracle_hamming, sparsity_values$oracle_hamming)
 
   # Store results for the current configuration
   config_results[[cfg_key]] <- list(

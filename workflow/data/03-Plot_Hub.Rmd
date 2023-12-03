@@ -131,7 +131,8 @@ F1_Hub <- ggplot(mean_f1_df_filtered, aes(x = Config, y = Mean_F1, color = Metho
         legend.title = element_blank(),
         axis.text.x = element_text(angle = 30, hjust = 1)) +
   scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_f1" = "black")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
+  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1)) +
+  scale_y_continuous(limits = c(0, 1)) # Set y-axis limits to [0, 1]
 
 Hamming_Hub <- ggplot(mean_hamming_df_filtered, aes(x = Config, y = Mean_Hamming, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
@@ -253,6 +254,100 @@ table_plot <- tableGrob(combined_df)
 
 library(ggplot2)
 ggsave("hub_graph_rho.pdf", table_plot, width = 20, height = 15, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Hub/")
+
+
+```
+
+## Edge/Graphlet stability plots
+```{r}
+plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE, ...) {
+    .plot.pulsar(x, scale, invlam, loglam, legends)
+}
+
+#' @importFrom graphics plot points legend
+#' @keywords internal
+.plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE) {
+    fin  <- getArgs(getCall(x), getEnvir(x))
+    lams <- fin$fargs$lambda
+    xlab <- "lambda"
+    if (invlam) {lams <- 1/lams ; xlab <- paste("1/", xlab, sep="")}
+    if (loglam) {lams <- log(lams) ; xlab <- paste("log[ ", xlab, " ]", sep="")}
+
+    nlam  <- length(lams)
+    crits <- fin$criterion
+    n     <- length(crits)
+    if (scale) {
+        ylab <- "summary (scaled)"
+        if ("stars" %in% crits)
+            ymax <- max(x$stars$summary)
+        else ymax <- 1
+    } else {
+      ylab <- "summary"
+        ymax <- max(unlist(lapply(crits, function(c) x[[ c ]]$summary)))
+    }
+
+    yrange <- c(0, ymax)
+    plot(lams, seq(yrange[1], yrange[2], length.out=nlam),
+         xlab=xlab, ylab=ylab, type='n')
+    if (!is.null(x$stars$lb.index)) {
+        ilams <- 1:length(lams)
+        range1 <- ilams < x$stars$ub.index
+        range2 <- ilams > x$stars$lb.index
+        range  <- !(range1 | range2)
+        ccol   <- vector('numeric', n+1)
+        ltys   <- vector('numeric', n+1)
+        legs   <- vector('numeric', n+1)
+    } else {
+        range1 <- rep(FALSE, nlam) ; range2 <- range1
+        range  <- !range1
+        ccol   <- vector('numeric', n)
+        ltys   <- vector('numeric', n)
+        legs   <- vector('numeric', n)
+    }
+
+    i <- 1 ; lcol <- 1
+    optcrits <- c() ; optcols <- c()
+    for (cr in crits) {
+        summs <- x[[ cr ]]$summary
+        optind <- opt.index(x, cr)
+        if (scale && cr != "stars") summs <- ymax*summs/max(summs)
+        if (length(summs) == nlam) {
+            points(lams[range],  summs[range],  type='b', col=lcol)
+            points(lams[range1], summs[range1], type='b', col=lcol, lty=2)
+            points(lams[range2], summs[range2], type='b', col=lcol, lty=2)
+            optind2 <- optind
+            if (any(range1 | range2)) {
+                ccol[i:(i+1)] <- c(lcol,lcol)
+                ltys[i:(i+1)] <- c(2,1)
+                legs[i:(i+1)] <- c(paste("b-", cr, sep=""), cr)
+                i <- i+1
+            } else {
+                ccol[i] <- lcol
+                ltys[i] <- 1
+                legs[i] <- cr
+            }
+        } else {
+            points(lams[range], summs, type='b', col=lcol)
+            optind2 <- optind-which(range)[1]+1
+            ccol[i] <- lcol
+            ltys[i] <- 1
+            legs[i] <- cr
+        }
+
+        if (!is.null(optind)) {
+            points(lams[optind], summs[optind2], type='p', cex=1.5, pch=16, col=lcol)
+            optcrits <- c(optcrits, cr)
+            optcols  <- c(optcols , lcol)
+        }
+        lcol <- lcol + 1 ; i <- i + 1
+    }
+
+    if (legends) {
+        legend('bottomleft', legs, col=ccol, pch=1, lty=ltys, cex=1.4)
+        if (length(optcrits) > 0)
+          legend('topright', optcrits, pch=16, col=optcols, cex=1.5, title="opt lambda")
+    }
+}
 
 
 ```
