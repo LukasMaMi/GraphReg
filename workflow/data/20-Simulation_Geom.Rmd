@@ -8,84 +8,128 @@ params:
 
 ```{r}
 
+library(MASS) # For generating multivariate normal distribution
+
+# Parameters
+p <- 400 # Number of points (change as needed)
+rho <- 0.245 # Given probability parameter
+
+# Function to calculate the probability based on distance
+prob_geometric <- function(xx1, xx2) {
+  distance <- sqrt(sum((xx1 - xx2)^2))
+  return((1 / sqrt(2 * pi)) * exp(-4 * distance^2))
+}
+
+# Step 1: Uniformly sample y_1, ..., y_p from a unit square
+x1 <- runif(p)
+x2 <- runif(p)
+
+# Step 2: Initialize omega and populate it
+omega <- diag(1, p)
+for (i in 1:(p-1)) {
+  for (j in (i+1):p) {
+    xx1 <- c(x1[i], x2[i])
+    xx2 <- c(x1[j], x2[j])
+    if (runif(1) < prob_geometric(xx1, xx2) && sum(omega[i, -i] != 0) < floor(1/rho) && sum(omega[-j, j] != 0) < floor(1/rho)) {
+      omega[i, j] <- omega[j, i] <- rho
+    }
+  }
+}
+
+# Step 3: Generate data from the sparse Gaussian graph
+Sigma <- solve(omega) # Covariance matrix is the inverse of omega
+data <- mvrnorm(n = p, mu = rep(0, p), Sigma = Sigma)
+
+# Return or process data as needed
+
+```
+
+
+```{r}
+
 library(MASS)
 library(Matrix)
 library(igraph)
 library(huge)
 
-generator_geom <- function (n, p, rho, vis, verbose) 
-{
-    gcinfo(FALSE)
-    if (verbose) 
-        cat("Generating data from the multivariate normal distribution with the neighboorhod graph structure....")
+generator_geom <- function (n, p, rho, vis, verbose) {
   
-    prob_function <- function(distance) exp(-4 * distance^2) / sqrt(2 * pi)
+  gcinfo(FALSE)
+  if (verbose) 
+      cat("Generating data from the multivariate normal distribution with the neighboorhod graph structure....")
+  
 
-    # Step 1: Sample points from a unit square
-    y <- matrix(runif(p * 2), ncol = 2)
-
-    # Step 2: Initialize omega with diagonal elements set to 1
-    omega <- diag(1, p)
-
-    # Step 3: Populate off-diagonal elements of omega
-    for (i in 1:(p-1)) {
-      for (j in (i+1):p) {
-        
-        # Checks current row have fewer non-zero off-diagonal elements than the allowed
-        if (sum(omega[i, -i] != 0) < floor(1/rho) && sum(omega[-j, j] != 0) < floor(1/rho)) { 
-          
-          # Euclidean distance between points in the unit square.
-          distance <- sqrt(sum((y[i, ] - y[j, ])^2)) 
-          
-          # Randomly determines place an edge (non-zero value) between nodes 
-          if (runif(1) < prob_function(distance)) {
-            omega[i, j] <- omega[j, i] <- rho
-          }
-        }
+  # Function to calculate the probability based on distance
+  prob_geometric <- function(xx1, xx2) {
+    distance <- sqrt(sum((xx1 - xx2)^2))
+    return((1 / sqrt(2 * pi)) * exp(-4 * distance^2))
+  }
+  
+  # Step 1: Uniformly sample y_1, ..., y_p from a unit square
+  x1 <- runif(p)
+  x2 <- runif(p)
+  
+  # Step 2: Initialize omega and populate it
+  omega <- diag(1, p)
+  for (i in 1:(p-1)) {
+    for (j in (i+1):p) {
+      xx1 <- c(x1[i], x2[i])
+      xx2 <- c(x1[j], x2[j])
+      if (runif(1) < prob_geometric(xx1, xx2) && sum(omega[i, -i] != 0) < floor(1/rho) && sum(omega[-j, j] != 0) < floor(1/rho)) {
+        omega[i, j] <- omega[j, i] <- rho
       }
     }
+  }
+  
+  # Step 3: Generate data from the sparse Gaussian graph
+  sigma <- solve(omega) # Covariance matrix is the inverse of omega
+  x <- mvrnorm(n = p, mu = rep(0, p), Sigma = sigma)
+  sigmahat = cov(x)
     
-    # Step 4: Generate multivariate normal data
-    sigma <- solve(omega)  
-    theta <- matrix(0, p, p)
-    
-    # Populate theta by checking non-zero off-diagonal elements of omega
-    for (i in 1:p) {
-      for (j in 1:p) {
-        if (i != j && omega[i, j] != 0) {
-          theta[i, j] <- 1
-        }
+  # Populate theta by checking non-zero off-diagonal elements of omega
+  theta <- matrix(0, p, p)
+  for (i in 1:p) {
+    for (j in 1:p) {
+      if (i != j && omega[i, j] != 0) {
+        theta[i, j] <- 1
       }
     }
+  }
 
-    x = mvrnorm(n, mu = rep(0, p), Sigma = sigma)
-    sigmahat = cov(x)
-    
-    if (vis == TRUE) {
-        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
-            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
-        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
-        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
-        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
-        layout.grid = layout.fruchterman.reingold(g)
-        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
-            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
-            main = "Graph Pattern")
-        fullfig[4] = image(sigmahat, col = gray.colors(256), 
-            main = "Empirical Matrix")
-        rm(fullfig, g, layout.grid)
-        gc()
-    }
-    if (verbose) 
-        cat("done.\n")
-    rm(vis, verbose)
-    gc()
-    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-        omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
-        act_sparsity = sum(theta)/(p * (p - 1)), graph.type = graph)
-    class(sim) = "sim"
-    return(sim)
+  ## Adding Null Graph
+  theta_null <- matrix(0, p, p) # A p x p matrix of zeros
+  # Generate data for the null graph
+  data_null <- MASS::mvrnorm(n, mu = rep(0, p), Sigma = diag(p))
+  
+  if (vis == TRUE) {
+      fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+          0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+      fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+      fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+      g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+      layout.grid = layout.fruchterman.reingold(g)
+      fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+          vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+          main = "Graph Pattern")
+      fullfig[4] = image(sigmahat, col = gray.colors(256), 
+          main = "Empirical Matrix")
+      rm(fullfig, g, layout.grid)
+      gc()
+  }
+  if (verbose) 
+      cat("done.\n")
+  rm(vis, verbose)
+  gc()
+  
+  sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+      data_null = data_null, theta_null = as(as(as(theta_null, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
+      omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
+  act_sparsity = sum(theta[lower.tri(theta)]) / (p * (p - 1) / 2)) #-1 because every node can connect to p-1 nodes (discarding diag)
+  class(sim) = "sim"
+  return(sim)
+  
 }
+
 ```
 
 
@@ -96,23 +140,20 @@ generator_geom <- function (n, p, rho, vis, verbose)
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Geom"
 
 # Manually set the number of repetitions
-num_repetitions <- 5
+num_repetitions <- 1
 
 # Specify configurations
 configs <- list(
   list(n=800, p=40),
   list(n=400, p=100),
-  list(n=200, p=200)
-  #list(n=100, p=400)
+  list(n=200, p=200),
+  list(n=100, p=400)
 )
 
 #Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
 Geom_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
 Geom_settings_file <- file.path(Geom_setting_path, "Geom_settings.RData")
 save(num_repetitions, configs, dir_path, file = Geom_settings_file)
-
-
-# Value of off-diagonal elements
 
 
 # Set up outer loop for repetitions
@@ -123,31 +164,30 @@ for(rep in 1:num_repetitions) {
     
   n <- cfg$n # Samples
   p <- cfg$p # Dimensions
-  s <- 20    # Size Hub Group
-  J <- floor(p/s) # Number of Hubs
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
   N = 20 # Number of Repetitions
-  #rho <- 0.2 # 1)  # Value of off-diagonal elements
-  rho <- 0.245 # 2)
-  #rho <- 0.235 # 3) 
+  rho <- 0.245 # 3) 
 
   Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
   Geom_data <- Geom$data
   true_graph <- Geom$theta
   act_sparsity <- Geom$act_sparsity
+  null_graph <- Geom$theta_null
+  null_data <- Geom$null_data
   
-  maxCov <- getMaxCov(Geom_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
+  maxCov <- getMaxCov(Geom_data, diag = FALSE)
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
-  print('Condition number: ')
-  print(kappa(Geom$omega))
+  cat("Condition number:", kappa(Geom$omega), "\n")
+
+  huge.plot(true_graph)
   
   # Define the name of the file to save, including the directory path
   file_name <- paste0(dir_path, "/Geom_rep_", rep, "_n_", n, "_p_", p, ".RData")
   
   # Save the Geom data to the file
-  save(Geom_data, true_graph, lambda, lambda_path, act_sparsity, b, N, file = file_name)
+  save(Geom_data, true_graph, lambda, lambda_path, act_sparsity, b, N, null_data, null_graph, file = file_name)
 
 
   }

@@ -38,7 +38,7 @@ for (cfg_key in names(config_results)) {
   cfg <- config_results[[cfg_key]]
 
   # Loop over methods (Stars, GStars, Oracle)
-  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming")) {
+  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming", "Null")) {
     # Aggregated metrics
     aggregated_metrics <- cfg[["Aggregated"]][[tolower(method)]]
 
@@ -66,6 +66,7 @@ for (cfg_key in names(config_results)) {
     mean_sparsity_df <- rbind(mean_sparsity_df, data.frame(Config = cfg_key, Method = method, Mean_Sparsity = mean_sparsity))
     
     mean_lambda_df <- rbind(mean_lambda_df, data.frame(Config = cfg_key, Method = method, Mean_Lambda = mean_lambda))
+    
   }
 }
 
@@ -110,7 +111,7 @@ config_labels_with_sparsity_hamming <- sapply(names(config_labels), function(cfg
 
 
 # Filter Data Frames
-mean_f1_df_filtered <- mean_f1_df %>% filter(Method != "Oracle_hamming")
+mean_f1_df_filtered <- mean_f1_df %>% filter(Method != "Oracle_hamming" & Method != "Null")
 mean_hamming_df_filtered <- mean_hamming_df %>% filter(Method != "Oracle_f1")
 
 # Update the Config column in mean_f1_df and mean_hamming_df for the F1 plot
@@ -131,7 +132,8 @@ F1_Geom <- ggplot(mean_f1_df_filtered, aes(x = Config, y = Mean_F1, color = Meth
         legend.title = element_blank(),
         axis.text.x = element_text(angle = 30, hjust = 1)) +
   scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_f1" = "black")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
+  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1)) +
+  scale_y_continuous(limits = c(0, 1)) # Set y-axis limits to [0, 1]
 
 Hamming_Geom <- ggplot(mean_hamming_df_filtered, aes(x = Config, y = Mean_Hamming, color = Method)) +
   geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
@@ -143,7 +145,7 @@ Hamming_Geom <- ggplot(mean_hamming_df_filtered, aes(x = Config, y = Mean_Hammin
         axis.title.x = element_blank(),
         legend.title = element_blank(),
         axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_hamming" = "black")) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_hamming" = "black", "Null" = "gray")) +
   theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
 
 # Save the plots
@@ -176,32 +178,32 @@ rm(configs)
 
 
 ## Rho 0.15
-rho_0_15_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/rho_0_15"
+rho_0_235_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/rho_0_235"
 
-rho_0_15_Geom_settings_file <- file.path(rho_0_15_path, "Geom_settings.RData")
-load(rho_0_15_Geom_settings_file)
+# rho_0_15_Geom_settings_file <- file.path(rho_0_15_path, "Geom_settings.RData")
+# load(rho_0_15_Geom_settings_file)
 
-rho_0_15_performance_filename <- file.path(rho_0_15_path, "all_performance_results.RData")
-load(rho_0_15_performance_filename)
+rho_0_235_performance_filename <- file.path(rho_0_235_path, "all_performance_results.RData")
+load(rho_0_235_performance_filename)
 
 #
-rho_0_15 <- config_results
+rho_0_235 <- config_results
 rm(config_results)
 rm(configs)
 #
 
 
 ## Rho 0.2
-rho_0_2_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/rho_0_2"
+rho_0_17_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/rho_0_17"
 
-rho_0_2_Geom_settings_file <- file.path(rho_0_2_path, "Geom_settings.RData")
-load(rho_0_2_Geom_settings_file)
+# rho_0_2_Geom_settings_file <- file.path(rho_0_2_path, "Geom_settings.RData")
+# load(rho_0_2_Geom_settings_file)
 
-rho_0_2_performance_filename <- file.path(rho_0_2_path, "all_performance_results.RData")
-load(rho_0_2_performance_filename)
+rho_0_17_performance_filename <- file.path(rho_0_17_path, "all_performance_results.RData")
+load(rho_0_17_performance_filename)
 
 #
-rho_0_2 <- config_results
+rho_0_17 <- config_results
 rm(config_results)
 rm(configs)
 #
@@ -226,7 +228,7 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
   }
 
   configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
-  methods <- c("oracle", "stars", "gstars")
+  methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null")  # Updated methods
 
   for (config in configs) {
     for (method in methods) {
@@ -237,13 +239,14 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
   return(results_df)
 }
 
+
 # Generate data frames for each rho value
 df_rho_0_1 <- generate_df_for_rho(rho_0_1, "rho = 0.1")
-df_rho_0_15 <- generate_df_for_rho(rho_0_15, "rho = 0.15")
-df_rho_0_2 <- generate_df_for_rho(rho_0_2, "rho = 0.2")
+df_rho_0_17 <- generate_df_for_rho(rho_0_17, "rho = 0.17")
+df_rho_0_235 <- generate_df_for_rho(rho_0_235, "rho = 0.235")
 
 # Combine the data frames
-combined_df <- rbind(df_rho_0_1, df_rho_0_15, df_rho_0_2)
+combined_df <- rbind(df_rho_0_1, df_rho_0_17, df_rho_0_235)
 
 # Display the combined results
 print(combined_df)
@@ -252,7 +255,7 @@ library(gridExtra)
 table_plot <- tableGrob(combined_df)
 
 library(ggplot2)
-ggsave("Geom_graph_rho.pdf", table_plot, width = 20, height = 15, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/")
+ggsave("Geom_graph_rho.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/")
 
 
 ```

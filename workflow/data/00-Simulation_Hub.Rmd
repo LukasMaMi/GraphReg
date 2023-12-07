@@ -49,6 +49,11 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
     x = mvrnorm(n, rep(0, p), sigma) #Dieses Sigma wird schlussendlich verwendet, um die Daten zu simulieren!!!
     sigmahat = cov(x) #Empirical covariance matrix
     
+    ## Adding Null Graph
+    theta_null <- matrix(0, p, p) # A p x p matrix of zeros
+    # Generate data for the null graph
+    data_null <- MASS::mvrnorm(n, mu = rep(0, p), Sigma = diag(p))
+    
     if (vis == TRUE) {
         fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
             0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
@@ -68,11 +73,14 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
         cat("done.\n")
     rm(vis, verbose)
     gc()
+    
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+        data_null = data_null, theta_null = as(as(as(theta_null, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
         omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
-        act_sparsity = sum(theta)/(p * (p - 1))) #-1 because every node can connect to p-1 nodes (discarding diag)
+    act_sparsity = sum(theta[lower.tri(theta)]) / (p * (p - 1) / 2)) #-1 because every node can connect to p-1 nodes (discarding diag)
     class(sim) = "sim"
     return(sim)
+    
 }
 
 ```
@@ -118,6 +126,8 @@ for(rep in 1:num_repetitions) {
   Hub_data <- Hub$data
   true_graph <- Hub$theta
   act_sparsity <- Hub$act_sparsity
+  null_graph <- Hub$theta_null
+  null_data <- Hub$null_data
 
   maxCov <- getMaxCov(Hub_data)
   lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
@@ -130,7 +140,7 @@ for(rep in 1:num_repetitions) {
   file_name <- paste0(dir_path, "/Hub_rep_", rep, "_n_", n, "_p_", p, ".RData")
   
   # Save the Hub data to the file
-  save(Hub_data, true_graph, lambda, lambda_path, b, N, act_sparsity, file = file_name)
+  save(Hub_data, true_graph, lambda, lambda_path, b, N, act_sparsity, null_data, null_graph, file = file_name)
 
 
   }
@@ -148,73 +158,5 @@ sessionInfo()
 ```
 
 
-```{r}
 
-num_repetitions <- 1
-
-# Specify configurations
-configs <- list(
-  #list(n=800, p=40),
-  #list(n=400, p=100),
-  #list(n=200, p=200),
-  list(n=100, p=400)
-)
-
-for(cfg in configs) {
-  
-n <- cfg$n # Samples
-  p <- cfg$p # Dimensions
-  s <- 20    # Size Hub Group
-  J <- floor(p/s) # Number of Hubs
-  b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-  N = 35 # Number of Repetitions
-  rho <- 0.2 # Off-Diagonal Effect Strength
-
-  Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
-  Hub_data <- Hub$data
-  true_graph <- Hub$theta
-  act_sparsity <- Hub$act_sparsity
-
-  maxCov <- getMaxCov(Hub_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 35) #,log = TRUE
-  lambda <- list(lambda=lambda_path)
-  
-  #print('Condition number: ')
-  #print(kappa(Hub$omega))
- # Count the number of non-zero entries in the lower triangle of Hub$theta
-  non_zero_in_lower_triangle = sum(Hub$theta[lower.tri(Hub$theta, diag = TRUE)])
-  print(non_zero_in_lower_triangle)
-  print(J)
-  print(J*(s-1))
-  print(act_sparsity/2)
-  print(non_zero_in_lower_triangle/(p*(p-1)))
-  
-}  
-
-    # Using QUIC
-    library(BigQuic)
-    quicr <- function(data, lambda) {
-        p <- ncol(data)
-        est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-        est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-        path <-  lapply(seq(length(lambda)), function(i) {
-                    tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                    diag(tmp) <- 0
-                    as(tmp!=0, "lMatrix")
-        })
-        est$path <- path
-        est
-    }
-    
-  # Hamming distance as criterium for Oracle
-  hamming_distance <- function(actual, predicted) {
-    sum(predicted != actual)
-  }
-
-
- oracle_results <- quicr(Hub_data, lambda_path)
- estimated_graph <- oracle_results$path[[ maxCov]]
-  p <- hamming_distance(true_graph, estimated_graph)
-  p/2
-```
 

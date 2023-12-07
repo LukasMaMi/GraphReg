@@ -38,7 +38,7 @@ for (cfg_key in names(config_results)) {
   cfg <- config_results[[cfg_key]]
 
   # Loop over methods (Stars, GStars, Oracle)
-  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming")) {
+  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming", "Null")) {
     # Aggregated metrics
     aggregated_metrics <- cfg[["Aggregated"]][[tolower(method)]]
 
@@ -66,6 +66,7 @@ for (cfg_key in names(config_results)) {
     mean_sparsity_df <- rbind(mean_sparsity_df, data.frame(Config = cfg_key, Method = method, Mean_Sparsity = mean_sparsity))
     
     mean_lambda_df <- rbind(mean_lambda_df, data.frame(Config = cfg_key, Method = method, Mean_Lambda = mean_lambda))
+    
   }
 }
 
@@ -110,7 +111,7 @@ config_labels_with_sparsity_hamming <- sapply(names(config_labels), function(cfg
 
 
 # Filter Data Frames
-mean_f1_df_filtered <- mean_f1_df %>% filter(Method != "Oracle_hamming")
+mean_f1_df_filtered <- mean_f1_df %>% filter(Method != "Oracle_hamming" & Method != "Null")
 mean_hamming_df_filtered <- mean_hamming_df %>% filter(Method != "Oracle_f1")
 
 # Update the Config column in mean_f1_df and mean_hamming_df for the F1 plot
@@ -144,7 +145,7 @@ Hamming_Hub <- ggplot(mean_hamming_df_filtered, aes(x = Config, y = Mean_Hamming
         axis.title.x = element_blank(),
         legend.title = element_blank(),
         axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_hamming" = "black")) +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_hamming" = "black", "Null" = "gray")) +
   theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
 
 # Save the plots

@@ -23,16 +23,15 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
 
   
     # Step 1: Generate random graph (Adjacency Matrix Theta)
-    num_edges <- p * (p - 1) / 2 * sparsity # Exact number of edges for sparsity 3/p
+    num_edges <- round(p * (p - 1) / 2 * sparsity) # Exact number of edges for sparsity 3/p
     theta <- matrix(0, p, p)
     edges <- which(lower.tri(matrix(1, p, p)), arr.ind = TRUE)
     edges <- edges[sample(nrow(edges), num_edges),] # Randomly pick edges
     theta[edges] <- 1
     theta <- theta + t(theta)
-
     
     # Check and adjust sparsity
-    actual_sparsity <- sum(theta) / (p * (p - 1))
+    actual_sparsity <- sum(theta[lower.tri(theta)]) / (p * (p - 1) / 2)
     while (actual_sparsity != sparsity) {
       if (actual_sparsity < sparsity) {
         # Add edges
@@ -53,18 +52,46 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
       }
       actual_sparsity <- sum(theta) / (p * (p - 1))
     }
+    
+    ## For one continous range e.g.  rho <- list(lower = -1, upper = 1)
+    # omega <- matrix(0, p, p)
+    # for (i in 1:p) {
+    #     for (j in 1:p) {
+    #         if (i != j && theta[i, j] == 1) {
+    #             random_value <- runif(1, min = rho$lower, max = rho$upper)
+    #             omega[i, j] <- random_value
+    #             omega[j, i] <- random_value # Ensure symmetry
+    #         }
+    #     }
+    # }
+    
+    ## For two distinct ranges e.g. rho_lower_range <- c(-1, -0.1) and rho_upper_range <- c(0.1, 1)
+    omega <- matrix(0, p, p)
+    for (i in 1:p) {
+        for (j in 1:p) {
+            if (i != j && theta[i, j] == 1) {
+                if (runif(1) < 0.5) {
+                    # Sample from lower range
+                    random_value <- runif(1, min = rho_lower_range[1], max = rho_lower_range[2])
+                } else {
+                    # Sample from upper range
+                    random_value <- runif(1, min = rho_upper_range[1], max = rho_upper_range[2])
+                }
+                omega[i, j] <- random_value
+                omega[j, i] <- random_value # Ensure symmetry
+            }
+        }
+    }
+    
 
-    # Create a symmetric matrix with random values in the range rho = [lower, upper] for off-diagonals
-    random_matrix <- matrix(runif(p^2, min = rho$lower, max = rho$upper), p, p)
-    # Initialize Omega with larger diagonal elements
-    omega = theta * (random_matrix + t(random_matrix)) / 2
-    diag(omega) <- abs(min(eigen(omega)$values)) + 0.1
+    # Ensure Omega is positive semi-definite
+    # Set diagonal elements to a large value to dominate row/column sums
+    diag(omega) <- rowSums(abs(omega)) + 0.1
 
     # Adjust the diagonal elements based on condition number
     desired_condition_number = cn
     while (kappa(omega) > desired_condition_number) {
-      # Allow some flexibility in the adjustment
-      diag(omega) <- diag(omega) * 1.01  # Incrementally increase diagonal elements
+        diag(omega) <- diag(omega) * 1.1  # Incrementally increase diagonal elements
     }
     
     # Inverse of omega to get sigma (covariance matrix)
@@ -73,6 +100,13 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
     x = MASS::mvrnorm(n, mu = rep(0, p), Sigma = sigma)
     # Estimate the covariance matrix from the generated samples
     sigmahat = cov(x)
+
+    
+    ## Adding Null Graph
+    theta_null <- matrix(0, p, p) # A p x p matrix of zeros
+    # Generate data for the null graph
+    data_null <- MASS::mvrnorm(n, mu = rep(0, p), Sigma = diag(p))
+    
 
   if (vis == TRUE) {
           fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
@@ -96,11 +130,12 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
     gc()
     
     sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-    omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
-    act_sparsity = sum(theta)/(p * (p - 1))) 
+               data_null = data_null, theta_null = as(as(as(theta_null, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
+               omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"), act_sparsity = actual_sparsity) 
     class(sim) = "sim"
     return(sim)
 }
+
 
 ```
 
@@ -112,14 +147,14 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
 
 # Manually set the number of repetitions
-num_repetitions <- 10 
+num_repetitions <- 1
 
 # Specify configurations
 configs <- list(
-  list(n=800, p=40),
-  list(n=400, p=100),
-  list(n=200, p=200),
-  list(n=100, p=400)
+  list(n=800, p=40)
+  #list(n=400, p=100),
+  #list(n=200, p=200),
+  #list(n=100, p=400)
 )
 
 #ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
@@ -138,19 +173,25 @@ for(rep in 1:num_repetitions) {
   p <- cfg$p # Dimensions
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
   N = 20 # Number of Repetitions
-  rho <- list(lower = 0.05, upper = 0.50) # Off-Diagonal Value Range #0.55
-  #sparsity <- 3/p # Sparsity level
-  sparsity <- 2/p
-  cn <- 10  # Condition number
+  #rho <- list(lower = -1, upper = 1) # Off-Diagonal Value Range #0.3
+  rho_lower_range <- c(-1, -0.1)
+  rho_upper_range <- c(0.1, 1)
+
+  sparsity <- 3/p # Sparsity level
+  cn <- 100  # Condition number
 
   ER <- generator_rand(n = n, p = p, sparsity = sparsity, rho = rho, cn = cn, vis = F)
 
   ER_data <- ER$data
   true_graph <- ER$theta
   act_sparsity <- ER$act_sparsity
+  null_graph <- ER$theta_null
+  null_data <- ER$null_data
 
-  maxCov <- getMaxCov(ER_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
+  maxCov <- getMaxCov(ER_data, cov = FALSE, abs = TRUE, diag = FALSE) 
+  # Based on the idea that lambda should be large enough to regularize the strongest relationships in the data.
+  maxCov
+  lambda_path  <- getLamPath(max = 0.4, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   print('Condition number: ')
@@ -160,11 +201,14 @@ for(rep in 1:num_repetitions) {
   print('Actual sparsity: ')
   print(act_sparsity)
   
+  huge.plot(true_graph)
+  
+
   # Define the name of the file to save, including the directory path
   file_name <- paste0(dir_path, "/ER_rep_", rep, "_n_", n, "_p_", p, ".RData")
   
   # Save the hub data to the file
-  save(ER_data, true_graph, lambda, lambda_path, b, N, act_sparsity, file = file_name) 
+  save(ER_data, true_graph, lambda, lambda_path, b, N, act_sparsity, null_data, null_graph, file = file_name) 
 
   }
 }
@@ -178,6 +222,7 @@ print("ER generated and saved!")
 ```{r}
 sessionInfo()
 ```
+
 
 
 

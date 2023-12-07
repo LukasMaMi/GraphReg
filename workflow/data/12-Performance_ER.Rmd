@@ -21,17 +21,16 @@ get_filename <- function(config, rep, prefix = "ER") {
 
 
 # Function to calculate F1-score and Hamming distance
-library(Matrix)
-compute_metrics <- function(true_graph, est_graph) {
+compute_metrics <- function(estimated, actual) {
 
-  TP <- sum(est_graph & true_graph)
-  FP <- sum(est_graph & !true_graph)
-  FN <- sum(!est_graph & true_graph)
+  TP <- sum(estimated & actual)
+  FP <- sum(estimated & !actual)
+  FN <- sum(!estimated & actual)
   Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
   Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
   F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
   # Calculate Hamming distance for the lower triangle only
-  hamming_distance <- sum(tril(est_graph) != tril(true_graph))
+  hamming_distance <- sum(tril(estimated) != tril(actual))
 
   
   list(F1 = F1, Hamming = hamming_distance)
@@ -44,10 +43,10 @@ config_results <- list()
 for(cfg in configs) {
   cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
   individual_results <- list()
-  aggregated_metrics <- list(stars = NULL, gstars = NULL, oracle_f1 = NULL, oracle_hamming = NULL)
+  aggregated_metrics <- list(stars = NULL, gstars = NULL, oracle_f1 = NULL, oracle_hamming = NULL, null = NULL)
   
-  lambda_values <- list(stars = numeric(), gstars = numeric(), oracle = numeric())
-  sparsity_values <- list(stars = numeric(), gstars = numeric(), oracle = numeric())
+  lambda_values <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
+  sparsity_values <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
 
   # Loop over repetitions for the current configuration
   for(rep in 1:num_repetitions) {
@@ -58,6 +57,7 @@ for(cfg in configs) {
     gstars_metrics <- compute_metrics(gstars_graph, true_graph)
     oracle_metrics_f1 <- compute_metrics(oracle_graph_f1, true_graph)
     oracle_metrics_hamming <- compute_metrics(oracle_graph_hamming, true_graph)
+    null_metrics <- compute_metrics(null_graph, true_graph)
 
     # Additional metrics: lambda values and sparsity
     additional_metrics <- list(
@@ -93,8 +93,9 @@ for(cfg in configs) {
     aggregated_metrics$gstars <- rbind(aggregated_metrics$gstars, as.numeric(unlist(gstars_metrics)))
     aggregated_metrics$oracle_f1 <- rbind(aggregated_metrics$oracle_f1, as.numeric(unlist(oracle_metrics_f1)))
     aggregated_metrics$oracle_hamming <- rbind(aggregated_metrics$oracle_hamming, as.numeric(unlist(oracle_metrics_hamming)))
+    aggregated_metrics$null <- rbind(aggregated_metrics$null, as.numeric(unlist(null_metrics)))
     
-     # Accumulate lambda and sparsity values
+    # Accumulate lambda and sparsity values
     lambda_values$stars <- c(lambda_values$stars, additional_metrics$stars_lambda)
     sparsity_values$stars <- c(sparsity_values$stars, additional_metrics$stars_sparsity)
     lambda_values$gstars <- c(lambda_values$gstars, additional_metrics$gstars_lambda)
@@ -105,14 +106,16 @@ for(cfg in configs) {
     sparsity_values$oracle_hamming <- c(sparsity_values$oracle_hamming, additional_metrics$oracle_sparsity_hamming)
   }
 
-  # Calculate means and confidence intervals
-  calc_mean_ci <- function(data, lambda, sparsity) {
+  calc_mean_ci <- function(data, lambda = NULL, sparsity = NULL) {
     mean_data <- colMeans(data, na.rm = TRUE)
     ci_data <- apply(data, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
-    mean_lambda <- mean(lambda, na.rm = TRUE)
-    mean_sparsity <- mean(sparsity, na.rm = TRUE)
+    
+    mean_lambda <- if (!is.null(lambda)) mean(lambda, na.rm = TRUE) else NA
+    mean_sparsity <- if (!is.null(sparsity)) mean(sparsity, na.rm = TRUE) else NA
+    
     list(Mean = mean_data, CI = ci_data, Lambda = mean_lambda, Sparsity = mean_sparsity)
   }
+
   
   # Include mean lambda and sparsity in aggregated metrics
   aggregated_metrics$stars <- calc_mean_ci(aggregated_metrics$stars, lambda_values$stars, sparsity_values$stars)
@@ -121,6 +124,7 @@ for(cfg in configs) {
                                                lambda_values$oracle_f1, sparsity_values$oracle_f1)
   aggregated_metrics$oracle_hamming <- calc_mean_ci(aggregated_metrics$oracle_hamming, 
                                                lambda_values$oracle_hamming, sparsity_values$oracle_hamming)
+  aggregated_metrics$null <- calc_mean_ci(aggregated_metrics$null, NULL, NULL)
 
   # Store results for the current configuration
   config_results[[cfg_key]] <- list(
