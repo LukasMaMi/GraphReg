@@ -147,14 +147,14 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
 
 # Manually set the number of repetitions
-num_repetitions <- 1
+num_repetitions <- 8
 
 # Specify configurations
 configs <- list(
-  list(n=800, p=40)
-  #list(n=400, p=100),
-  #list(n=200, p=200),
-  #list(n=100, p=400)
+  list(n=800, p=40),
+  list(n=400, p=100),
+  list(n=200, p=200),
+  list(n=100, p=400)
 )
 
 #ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"

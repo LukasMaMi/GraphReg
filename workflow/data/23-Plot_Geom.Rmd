@@ -260,6 +260,79 @@ ggsave("Geom_graph_rho.pdf", table_plot, width = 10, height = 20, path = "/Users
 
 ```
 
+```{r}
+## Rho 0.245
+rho_0_245_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/"
+
+rho_0_245_performance_filename <- file.path(rho_0_245_path, "all_performance_results_geom.RData")
+load(rho_0_245_performance_filename)
+
+#
+rho_0_245 <- config_results
+rm(config_results)
+
+
+
+## Rho 0.17
+rho_min1_min0_03_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/"
+
+rho_min1_min0_03_performance_filename <- file.path(rho_min1_min0_03_path, "all_performance_results_ER.RData")
+load(rho_min1_min0_03_performance_filename)
+
+#
+rho_min1_min0_03 <- config_results
+rm(config_results)
+
+
+
+generate_df_for_rho <- function(data_list, rho_descriptor) {
+  results_df <- data.frame(Configuration = paste("Results for", rho_descriptor),
+                           Method = NA,
+                           MeanF1Score = NA,
+                           MeanHammingDistance = NA,
+                           Sparsity = NA,
+                           stringsAsFactors = FALSE)
+
+  add_row <- function(results_df, config, method, data_list) {
+    return(rbind(results_df, data.frame(
+      Configuration = config,
+      Method = method,
+      MeanF1Score = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[1]],
+      MeanHammingDistance = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[2]],
+      Sparsity = data_list[[config]][["Aggregated"]][[method]][["Sparsity"]]
+    )))
+  }
+
+  configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
+  methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null")  # Updated methods
+
+  for (config in configs) {
+    for (method in methods) {
+      results_df <- add_row(results_df, config, method, data_list)
+    }
+  }
+
+  return(results_df)
+}
+
+
+# Generate data frames for each rho value
+df_rho_0_245 <- generate_df_for_rho(rho_0_245, "Geom rho = 0.245")
+df_rho_min1_min0_03 <- generate_df_for_rho(rho_min1_min0_03, "ER rho = [-1, -0.1], [0.1, 1]")
+
+# Combine the data frames
+combined_df <- rbind(df_rho_0_245, df_rho_min1_min0_03)
+
+# Display the combined results
+print(combined_df)
+
+library(gridExtra)
+table_plot <- tableGrob(combined_df)
+
+library(ggplot2)
+ggsave("graph_rho.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/")
+
+```
 
 
 
