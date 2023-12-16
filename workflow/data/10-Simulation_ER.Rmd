@@ -6,29 +6,28 @@ params:
   name: "01-Simulation_Rand" # change if you rename file
 ---
 
+
+##Generation Function
 ```{r}
 
-library(MASS)
-library(pulsar)
-library(Matrix)
-library(igraph)
-library(huge)
-
-generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE) 
+generator_rand <- function (n, p, tun, rho_lower_range, rho_upper_range, prob, vis = FALSE, verbose = TRUE) 
 {
     gcinfo(FALSE)
     if (verbose) 
-        cat("Generating data from the multivariate normal 
-            distribution with the random graph structure....")
+        cat("Generating data from the multivariate normal distribution with the Erdös-Renyi random graph structure....")
 
-  
-    # Step 1: Generate random graph (Adjacency Matrix Theta)
-    num_edges <- round(p * (p - 1) / 2 * sparsity) # Exact number of edges for sparsity 3/p
-    theta <- matrix(0, p, p)
-    edges <- which(lower.tri(matrix(1, p, p)), arr.ind = TRUE)
-    edges <- edges[sample(nrow(edges), num_edges),] # Randomly pick edges
-    theta[edges] <- 1
-    theta <- theta + t(theta)
+    prob = sqrt(prob/2) * (prob < 0.5) + (1 - sqrt(0.5 - 
+        0.5 * prob)) * (prob >= 0.5)
+
+    theta = matrix(0, p, p)
+
+    tmp = matrix(runif(p^2, 0, 0.5), p, p)
+    tmp = tmp + t(tmp)
+    theta[tmp < prob] = 1
+    rm(tmp)
+    gc()
+
+    diag(theta) = 0
     
     # Check and adjust sparsity
     actual_sparsity <- sum(theta[lower.tri(theta)]) / (p * (p - 1) / 2)
@@ -53,19 +52,6 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
       actual_sparsity <- sum(theta) / (p * (p - 1))
     }
     
-    ## For one continous range e.g.  rho <- list(lower = -1, upper = 1)
-    # omega <- matrix(0, p, p)
-    # for (i in 1:p) {
-    #     for (j in 1:p) {
-    #         if (i != j && theta[i, j] == 1) {
-    #             random_value <- runif(1, min = rho$lower, max = rho$upper)
-    #             omega[i, j] <- random_value
-    #             omega[j, i] <- random_value # Ensure symmetry
-    #         }
-    #     }
-    # }
-    
-    ## For two distinct ranges e.g. rho_lower_range <- c(-1, -0.1) and rho_upper_range <- c(0.1, 1)
     omega <- matrix(0, p, p)
     for (i in 1:p) {
         for (j in 1:p) {
@@ -83,23 +69,10 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
         }
     }
     
-
-    # Ensure Omega is positive semi-definite
-    # Set diagonal elements to a large value to dominate row/column sums
-    diag(omega) <- rowSums(abs(omega)) + 0.1
-
-    # Adjust the diagonal elements based on condition number
-    desired_condition_number = cn
-    while (kappa(omega) > desired_condition_number) {
-        diag(omega) <- diag(omega) * 1.1  # Incrementally increase diagonal elements
-    }
-    
-    # Inverse of omega to get sigma (covariance matrix)
-    sigma = solve(omega) 
-    # Generate multivariate normal samples
-    x = MASS::mvrnorm(n, mu = rep(0, p), Sigma = sigma)
-    # Estimate the covariance matrix from the generated samples
-    sigmahat = cov(x)
+    diag(omega) = abs(min(eigen(omega)$values)) + tun
+    sigma = cov2cor(solve(omega))
+    x = MASS::mvrnorm(n, rep(0, p), sigma)
+    sigmahat = cor(x)
 
     
     ## Adding Null Graph
@@ -107,23 +80,21 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
     # Generate data for the null graph
     data_null <- MASS::mvrnorm(n, mu = rep(0, p), Sigma = diag(p))
     
-
-  if (vis == TRUE) {
-          fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
-              0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
-          fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
-          fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
-          g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
-          layout.grid = layout.fruchterman.reingold(g)
-          fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
-              vertex.color = "red", vertex.size = 3, vertex.label = NA, 
-              main = "Graph Pattern")
-          fullfig[4] = image(sigmahat, col = gray.colors(256), 
-              main = "Empirical Matrix")
-          rm(fullfig, g, layout.grid)
-          gc()
+    if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
     }
-    
     if (verbose) 
         cat("done.\n")
     rm(vis, verbose)
@@ -133,13 +104,13 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
                data_null = data_null, theta_null = as(as(as(theta_null, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
                omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"), act_sparsity = actual_sparsity) 
     class(sim) = "sim"
+    
     return(sim)
 }
-
-
 ```
 
 
+## Simulate ER Data
 ```{r}
 
 # Define directory path
@@ -147,14 +118,14 @@ generator_rand <- function (n, p, sparsity, rho, cn, vis = FALSE, verbose = TRUE
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
 
 # Manually set the number of repetitions
-num_repetitions <- 8
+num_repetitions <- 10
 
 # Specify configurations
 configs <- list(
-  list(n=800, p=40),
-  list(n=400, p=100),
-  list(n=200, p=200),
-  list(n=100, p=400)
+  list(n=800, p=40, tun = 1.3),
+  list(n=400, p=100, tun = 0.9),
+  list(n=200, p=200, tun = 0.33),
+  list(n=100, p=400, tun = 0.18)
 )
 
 #ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
@@ -171,16 +142,16 @@ for(rep in 1:num_repetitions) {
     
   n <- cfg$n # Samples
   p <- cfg$p # Dimensions
+  tun <- cfg$tun # tuning parameter for diagonal
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
   N = 20 # Number of Repetitions
   #rho <- list(lower = -1, upper = 1) # Off-Diagonal Value Range #0.3
-  rho_lower_range <- c(-1, -0.1)
-  rho_upper_range <- c(0.1, 1)
+  rho_lower_range <- c(-1, -0.8)
+  rho_upper_range <- c(0.8, 1)
 
   sparsity <- 3/p # Sparsity level
-  cn <- 100  # Condition number
-
-  ER <- generator_rand(n = n, p = p, sparsity = sparsity, rho = rho, cn = cn, vis = F)
+  
+  ER <- generator_rand(n = n, p = p, tun = tun, prob = sparsity, rho_lower_range, rho_upper_range, vis = F)
 
   ER_data <- ER$data
   true_graph <- ER$theta
@@ -191,7 +162,7 @@ for(rep in 1:num_repetitions) {
   maxCov <- getMaxCov(ER_data, cov = FALSE, abs = TRUE, diag = FALSE) 
   # Based on the idea that lambda should be large enough to regularize the strongest relationships in the data.
   maxCov
-  lambda_path  <- getLamPath(max = 0.4, min = 0.01, len = 30) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   print('Condition number: ')
@@ -200,7 +171,7 @@ for(rep in 1:num_repetitions) {
   print(sparsity)
   print('Actual sparsity: ')
   print(act_sparsity)
-  
+
   huge.plot(true_graph)
   
 
@@ -222,6 +193,210 @@ print("ER generated and saved!")
 ```{r}
 sessionInfo()
 ```
+
+
+
+
+## Testing
+```{r}
+
+#0.4, 1 mit 0.85 for n = 800, p = 40
+#0.4, 1 mit 0.5 for n = 400, p = 100
+#0.4, 1 mit 0.2 for n = 200, p = 200
+#0.4, 1 mit 0.05 for n = 100, p = 400
+
+#0.5, 1 mit 1 for n = 800, p = 40
+#0.5, 1 mit 0.55 for n = 400, p = 100
+#0.5, 1 mit 0.25 for n = 200, p = 200
+#0.5, 1 mit 0.06 for n = 100, p = 400
+
+#-1, 0.8 mit 1.3 for n = 800, p = 40
+#-1, 0.8 mit 0.9 for n = 400, p = 100
+#-1, 0.8 mit 0.33 for n = 200, p = 200
+#-1, 0.8 mit 0.18 for n = 100, p = 400
+
+  n = 100
+  p = 400
+  N = 20 # Number of Repetitions
+  rho_lower_range <- c(0.7, 1)
+  rho_upper_range <- c(0.7, 1)
+
+  sparsity <- 3/p # Sparsity level
+  
+# F1: 0.9830508 
+# >   cat("Hamming:", compute_metrics(oracle_graph_hamming, true_graph)[[2]], "\n")
+# Hamming: 2 
+# >   cat("Hamming Null:", compute_metrics(null_graph, true_graph)[[2]], "\n")
+# Hamming Null: 59 
+  
+  tun <- 0.6
+  
+  set.seed(123)
+  #ER <- generator_rand(n = n, p = p, prob = sparsity, tun = tun, rho_lower_range, rho_upper_range, vis = F)
+  ER <- huge.generator(n = n, d = p, graph = "random", v = NULL, u = NULL, 
+    g = NULL, prob = sparsity, vis = FALSE, verbose = TRUE) 
+
+  ER_data <- ER$data
+  true_graph <- ER$theta
+  true_graph <- as(as(as(true_graph, "lMatrix"), "generalMatrix"), "CsparseMatrix")
+  act_sparsity <- ER$act_sparsity
+  null_graph <- ER$theta_null
+  null_data <- ER$null_data
+
+  maxCov <- getMaxCov(ER_data, cov = FALSE, abs = TRUE, diag = FALSE) 
+  # Based on the idea that lambda should be large enough to regularize the strongest relationships in the data.
+  maxCov
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
+  lambda <- list(lambda=lambda_path)
+  
+
+  # ER$theta
+  # sparsity
+  # ER$act_sparsity
+  # ER$omega
+  # ER$sigma
+  
+  compute_metrics <- function(estimated, actual) {
+
+  TP <- sum(tril(estimated) & tril(actual))
+  FP <- sum(tril(estimated) & !tril(actual))
+  FN <- sum(!tril(estimated) & tril(actual))
+  Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
+  Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
+  F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
+  # Calculate Hamming distance for the lower triangle only
+  hamming_distance <- sum(tril(estimated) != tril(actual))
+  
+  list(F1 = F1, Hamming = hamming_distance)
+}
+
+    # Using QUIC
+    library(BigQuic)
+    quicr <- function(data, lambda) {
+        p <- ncol(data)
+        est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+        est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+        path <-  lapply(seq(length(lambda)), function(i) {
+                    tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                    diag(tmp) <- 0
+                    as(tmp!=0, "lMatrix")
+        })
+        est$path <- path
+        est
+    }
+    
+    #library(QUIC)
+
+# quicr <- function(data, lambda, ...) {
+#   S <- cov(data)
+#   est <- QUIC(S, rho = 1, path = lambda, msg = 0, tol = 1e-2, ...)
+#   est$path <- lapply(seq(length(lambda)), function(i) {
+#   ## convert precision array to adj list
+#   tmp <- est$X[,,i]; diag(tmp) <- 0
+#   as(as(as(tmp!=0, "lMatrix"), "generalMatrix"), "CsparseMatrix")
+#   })
+#   est
+# }
+    
+    # # Using Huge GLASSO
+    # library(huge)
+    # huger <- function(data, lambda) {
+    # est  <- huge::huge(data, lambda = lambda, method = "glasso")
+    # path <- lapply(seq(length(lambda)), function(i) {
+    # # convert precision array to adj list
+    # tmp <- est$path[[i]]
+    # tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
+    # return(tmp)
+    # })
+    # est$path <- path
+    # est
+    # }
+
+
+## Oracle procedure
+  oracle_results <- quicr(ER_data, lambda_path)
+  #oracle_results2 <- huger(ER_data, lambda_path)
+  
+  #F1-Score as criterium for Oracle
+  f1_score <- function(actual, predicted) {
+  if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
+    stop("Matrices should be of class lgCMatrix")
+  }
+
+  # Calculating TP, FP, and FN using sparse matrix operations
+  TP <- sum(predicted & actual)
+  FP <- sum(predicted & !actual)
+  FN <- sum(!predicted & actual)
+
+  # Calculate Precision and Recall
+  Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
+  Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
+
+  # Calculate F1 Score
+  f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
+
+  return(f1)
+  }
+  
+  # Hamming distance as criterium for Oracle
+  hamming_distance <- function(actual, predicted) {
+    sum(tril(predicted) != tril(actual))
+  }
+  
+  # F1 score - best lambda Oracle
+  oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
+    estimated_graph <- oracle_results$path[[j]]
+    f1_score(true_graph, estimated_graph)
+  }))
+  
+  # Hamming distance - best lambda Oracle
+    oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
+    estimated_graph <- oracle_results$path[[j]]
+    hamming_distance(true_graph, estimated_graph)
+  }))
+    
+  #   # F1 score - best lambda Oracle
+  # oracle_index_f12 <- which.max(sapply(1:length(lambda_path), function(j) {
+  #   estimated_graph <- oracle_results2$path[[j]]
+  #   f1_score(true_graph, estimated_graph)
+  # }))
+  # 
+  # # Hamming distance - best lambda Oracle
+  #   oracle_index_hamming2 <- which.min(sapply(1:length(lambda_path), function(j) {
+  #   estimated_graph <- oracle_results2$path[[j]]
+  #   hamming_distance(true_graph, estimated_graph)
+  # }))  
+  
+  best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
+  best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
+  
+  oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
+  oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
+  
+  # best_lambda_oracle_f12 <- round(lambda_path[oracle_index_f12], 3)
+  # best_lambda_oracle_hamming2 <- round(lambda_path[oracle_index_hamming], 3)
+  # 
+  # oracle_graph_f12 <- oracle_results$path[[oracle_index_f12]]
+  # oracle_graph_hamming2 <- oracle_results$path[[oracle_index_hamming]]
+  
+  # print('metrics glasso: ')
+  # compute_metrics(oracle_graph_f12, true_graph)
+  # print('metrics null: ')
+  
+  kappa(ER$omega)
+  ER$act_sparsity
+  ER$omega
+  cat("F1:", compute_metrics(oracle_graph_f1, true_graph)[[1]], "\n")
+  cat("Hamming:", compute_metrics(oracle_graph_hamming, true_graph)[[2]], "\n")
+  #cat("Hamming Null:", compute_metrics(null_graph, true_graph)[[2]], "\n")
+  (p*(p-1)/2)*3/p
+
+```
+
+
+
+
+
 
 
 

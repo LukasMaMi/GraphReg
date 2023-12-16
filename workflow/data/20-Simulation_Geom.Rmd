@@ -50,9 +50,12 @@ generator_geom <- function (n, p, rho, vis, verbose) {
     }
   }
   
-  sigma <- solve(omega) 
+  #sigma <- solve(omega) 
+  sigma = cov2cor(solve(omega)) 
   x <- mvrnorm(n = n, mu = rep(0, p), Sigma = sigma)
-  sigmahat = cov(x)
+  #sigmahat = cov(x)
+  sigmahat = cor(x)
+  
   theta <- matrix(0, p, p)
     
   # Populate theta by checking non-zero off-diagonal elements of omega

@@ -157,56 +157,198 @@ F1_Geom
 Hamming_Geom
 ```
 
-
-## Tables for different rhos
+## Mean Lambda Value Plots
 ```{r}
 
-## Rho 0.1
-rho_0_1_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/rho_0_1"
+library(ggplot2)
+library(ggtext)
+library(dplyr)
 
-rho_0_1_Geom_settings_file <- file.path(rho_0_1_path, "Geom_settings.RData")
-load(rho_0_1_Geom_settings_file)
+# Initialize a new data frame for lambda values with confidence intervals
+mean_lambda_ci_df <- data.frame(Config = character(), Method = character(), 
+                                Mean_Lambda = numeric(), CI_Lower = numeric(), 
+                                CI_Upper = numeric(), stringsAsFactors = FALSE)
 
-rho_0_1_performance_filename <- file.path(rho_0_1_path, "all_performance_results.RData")
-load(rho_0_1_performance_filename)
+# Loop over configurations
+for (cfg_key in names(config_results)) {
+  cfg <- config_results[[cfg_key]]
+
+  # Loop over methods
+  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming")) {
+    aggregated_metrics <- cfg[["Aggregated"]][[tolower(method)]]
+
+    # Extract mean lambda and confidence intervals
+    mean_lambda <- aggregated_metrics[["Lambda"]]
+    ci_lambda_lower <- aggregated_metrics[["Lambda_CI"]][1]
+    ci_lambda_upper <- aggregated_metrics[["Lambda_CI"]][2]
+
+    # Append to the data frame
+    mean_lambda_ci_df <- rbind(mean_lambda_ci_df, data.frame(Config = cfg_key, 
+                                                             Method = method, 
+                                                             Mean_Lambda = mean_lambda, 
+                                                             CI_Lower = ci_lambda_lower, 
+                                                             CI_Upper = ci_lambda_upper))
+  }
+}
+
+# Create custom labels for configurations
+config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
+config_order <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
+
+# Update the Config column in mean_lambda_ci_df
+mean_lambda_ci_df$Config <- factor(mean_lambda_ci_df$Config, levels = config_order, labels = config_labels)
+
+# Create the Lambda Plot with Dodging
+dodge_width <- 0.2  # Adjust this value as needed for best appearance
+
+lambda_plot <- ggplot(mean_lambda_ci_df, aes(x = Config, y = Mean_Lambda, color = Method)) +
+  geom_point(position = position_dodge(width = dodge_width)) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
+                width = 0.1, position = position_dodge(width = dodge_width)) +
+  labs(title = "Mean Optim. Lambda Values", 
+       y = "Mean Lambda", x = "") +
+  theme_minimal() +
+  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", 
+                                "Oracle_f1" = "black", "Oracle_hamming" = "gray")) +
+  theme(axis.text.x = ggtext::element_markdown()) +
+  guides(color = guide_legend(title = "Method"))
+
+# Save and display the plot
+ggsave(filename = "Lambda_Plot.pdf", plot = lambda_plot, path = dir_path4, 
+       width = 10, height = 6, dpi = 300)
+
+lambda_plot
+
+```
+
+
+
+## Gap Plots across different graph topologies
+```{r}
+
+#dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub"
+dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
+
+## Load performance files
+load_performance_data <- function(dir_path) {
+  performance_filename <- file.path(dir_path, "all_performance_results.RData")
+  load(performance_filename)
+  return(config_results)
+}
+
+# Paths for different graph types
+dir_path_hub <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
+dir_path_erdos_renyi <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_ER"
+dir_path_geometric <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Geom"
+
+# Loading data
+performance_data_hub <- load_performance_data(dir_path_hub)
+performance_data_erdos_renyi <- load_performance_data(dir_path_erdos_renyi)
+performance_data_geometric <- load_performance_data(dir_path_geometric)
+
+
+## Prepare Data for Plotting
+prepare_gap_data <- function(performance_data, graph_type) {
+  gap_data <- data.frame(Config = character(), Graph_Type = character(),
+                         Gap_B = numeric(), Gap_Beta = numeric(), stringsAsFactors = FALSE)
+
+  for (cfg_key in names(performance_data)) {
+    gap_values <- performance_data[[cfg_key]][["Gap_Values"]]
+    gap_data <- rbind(gap_data, data.frame(Config = cfg_key, Graph_Type = graph_type, 
+                                           Gap_B = gap_values$gap_b_mean, 
+                                           Gap_Beta = gap_values$gap_beta_mean))
+  }
+  return(gap_data)
+}
+
+gap_data_hub <- prepare_gap_data(performance_data_hub, "Hub")
+gap_data_erdos_renyi <- prepare_gap_data(performance_data_erdos_renyi, "Erdős-Rényi")
+gap_data_geometric <- prepare_gap_data(performance_data_geometric, "Geometric")
+
+# Merging data for each gap type
+gap_data_all <- rbind(gap_data_hub, gap_data_erdos_renyi, gap_data_geometric)
+
+# Create custom labels for configurations
+config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
+config_order <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
+
+# Update the Config column in gap_data_all
+gap_data_all$Config <- factor(gap_data_all$Config, levels = config_order, labels = config_labels)
+
+
+# Gap B Plot
+gap_b_plot <- ggplot(gap_data_all, aes(x = Config, y = Gap_B, color = Graph_Type, group = Graph_Type)) +
+  geom_point() +
+  geom_line(aes(linetype = Graph_Type)) +
+  labs(title = "Gap B Values Across Different Graph Types", y = "Gap B", x = "") +
+  theme_minimal() +
+  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "yellow")) +
+  scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Geometric" = "dashed")) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))
+
+# Gap Beta Plot
+gap_beta_plot <- ggplot(gap_data_all, aes(x = Config, y = Gap_Beta, color = Graph_Type, group = Graph_Type)) +
+  geom_point() +
+  geom_line(aes(linetype = Graph_Type)) +
+  labs(title = "Gap Beta Values Across Different Graph Types", y = "Gap Beta", x = "") +
+  theme_minimal() +
+  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "yellow")) +
+  scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Geometric" = "dashed")) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))
+
+# Save and display the plots
+ggsave(filename = "Gap_B_Plot.pdf", plot = gap_b_plot, path = dir_path4, width = 8, height = 6, dpi = 300)
+ggsave(filename = "Gap_Beta_Plot.pdf", plot = gap_beta_plot, path = dir_path4, width = 8, height = 6, dpi = 300)
+
+gap_b_plot
+gap_beta_plot
+
+
+
+```
+
+
+
+## Tables for different parameter settings
+```{r}
+
+## Rho -1, -0.8
+rho_1_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_8_tun4"
+
+rho_1_performance_filename <- file.path(rho_1_file, "all_performance_results.RData")
+load(rho_1_performance_filename)
 
 #
-rho_0_1 <- config_results
+rho_1 <- config_results
 rm(config_results)
-rm(configs)
 #
 
 
-## Rho 0.15
-rho_0_235_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/rho_0_235"
+## Rho 0.1, 1
+rho_2_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_4_tun2"
 
-# rho_0_15_Geom_settings_file <- file.path(rho_0_15_path, "Geom_settings.RData")
-# load(rho_0_15_Geom_settings_file)
 
-rho_0_235_performance_filename <- file.path(rho_0_235_path, "all_performance_results.RData")
-load(rho_0_235_performance_filename)
+rho_2_performance_filename <- file.path(rho_2_file, "all_performance_results.RData")
+load(rho_2_performance_filename)
 
 #
-rho_0_235 <- config_results
+rho_2 <- config_results
 rm(config_results)
-rm(configs)
 #
 
 
-## Rho 0.2
-rho_0_17_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/rho_0_17"
+## Rho -1, 1
+rho_3_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_5_tun3"
 
-# rho_0_2_Geom_settings_file <- file.path(rho_0_2_path, "Geom_settings.RData")
-# load(rho_0_2_Geom_settings_file)
 
-rho_0_17_performance_filename <- file.path(rho_0_17_path, "all_performance_results.RData")
-load(rho_0_17_performance_filename)
+rho_3_performance_filename <- file.path(rho_3_file, "all_performance_results.RData")
+load(rho_3_performance_filename)
 
 #
-rho_0_17 <- config_results
+rho_3<- config_results
 rm(config_results)
-rm(configs)
 #
+
 
 
 generate_df_for_rho <- function(data_list, rho_descriptor) {
@@ -241,12 +383,12 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
 
 
 # Generate data frames for each rho value
-df_rho_0_1 <- generate_df_for_rho(rho_0_1, "rho = 0.1")
-df_rho_0_17 <- generate_df_for_rho(rho_0_17, "rho = 0.17")
-df_rho_0_235 <- generate_df_for_rho(rho_0_235, "rho = 0.235")
+df_rho_1 <- generate_df_for_rho(rho_1, "rho = [-1, -0.8], [0.8, 1]")
+#df_rho_2 <- generate_df_for_rho(rho_2, "rho = [-1, -0.4], [0.4, 1]")
+#df_rho_3 <- generate_df_for_rho(rho_3, "rho = [-1, -0.5], [0.5, 1]")
 
 # Combine the data frames
-combined_df <- rbind(df_rho_0_1, df_rho_0_17, df_rho_0_235)
+combined_df <- rbind(df_rho_1)
 
 # Display the combined results
 print(combined_df)
@@ -255,84 +397,12 @@ library(gridExtra)
 table_plot <- tableGrob(combined_df)
 
 library(ggplot2)
-ggsave("Geom_graph_rho.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/Geom/")
+ggsave("ER_graph_rho.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/")
+
 
 
 ```
 
-```{r}
-## Rho 0.245
-rho_0_245_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/"
-
-rho_0_245_performance_filename <- file.path(rho_0_245_path, "all_performance_results_geom.RData")
-load(rho_0_245_performance_filename)
-
-#
-rho_0_245 <- config_results
-rm(config_results)
-
-
-
-## Rho 0.17
-rho_min1_min0_03_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/"
-
-rho_min1_min0_03_performance_filename <- file.path(rho_min1_min0_03_path, "all_performance_results_ER.RData")
-load(rho_min1_min0_03_performance_filename)
-
-#
-rho_min1_min0_03 <- config_results
-rm(config_results)
-
-
-
-generate_df_for_rho <- function(data_list, rho_descriptor) {
-  results_df <- data.frame(Configuration = paste("Results for", rho_descriptor),
-                           Method = NA,
-                           MeanF1Score = NA,
-                           MeanHammingDistance = NA,
-                           Sparsity = NA,
-                           stringsAsFactors = FALSE)
-
-  add_row <- function(results_df, config, method, data_list) {
-    return(rbind(results_df, data.frame(
-      Configuration = config,
-      Method = method,
-      MeanF1Score = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[1]],
-      MeanHammingDistance = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[2]],
-      Sparsity = data_list[[config]][["Aggregated"]][[method]][["Sparsity"]]
-    )))
-  }
-
-  configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
-  methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null")  # Updated methods
-
-  for (config in configs) {
-    for (method in methods) {
-      results_df <- add_row(results_df, config, method, data_list)
-    }
-  }
-
-  return(results_df)
-}
-
-
-# Generate data frames for each rho value
-df_rho_0_245 <- generate_df_for_rho(rho_0_245, "Geom rho = 0.245")
-df_rho_min1_min0_03 <- generate_df_for_rho(rho_min1_min0_03, "ER rho = [-1, -0.1], [0.1, 1]")
-
-# Combine the data frames
-combined_df <- rbind(df_rho_0_245, df_rho_min1_min0_03)
-
-# Display the combined results
-print(combined_df)
-
-library(gridExtra)
-table_plot <- tableGrob(combined_df)
-
-library(ggplot2)
-ggsave("graph_rho.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/")
-
-```
 
 
 

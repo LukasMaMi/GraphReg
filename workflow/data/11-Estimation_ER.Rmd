@@ -10,7 +10,7 @@ output: github_document
 #install.packages("htmltools")
 #install.packages("devtools")
 #install.packages("batchtools)
-#install_github("zdk123/pulsar")
+#install_gitER("zdk123/pulsar")
 #install.packages("BigQuic")
 
 
@@ -76,7 +76,7 @@ get_filename <- function(config, rep, prefix = "ER") {
     fun = quicr, 
     fargs = quicargs, 
     rep.num = N,
-    thresh = 0.1,
+    thresh = 0.05,
     subsample.ratio = b,
     criterion=c('stars', 'gcd'), 
     lb.stars = TRUE, 
@@ -91,8 +91,10 @@ get_filename <- function(config, rep, prefix = "ER") {
   best_lambda_stars <- round(lambda_path[stars_index], 3)
   # Lower Bound
   stars_lb <- out.p[["stars"]][["lb.index"]]
+  lambda_lb <- round(lambda_path[stars_lb], 3)
   # Upper Bound
   stars_ub <- out.p[["stars"]][["ub.index"]]
+  lambda_ub <- round(lambda_path[stars_ub], 3)
   
   # Optimal Index Gstars
   opt.index(out.p, criterion = "gcd") <- get.opt.index(out.p, criterion = "gcd")
@@ -171,10 +173,14 @@ get_filename <- function(config, rep, prefix = "ER") {
   act_sparsity_oracle_hamming = sum(oracle_graph_hamming) / (configs[[i]]$p * (configs[[i]]$p - 1))
   act_sparsity_null = sum(null_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
   
+  ## Calculation of Gap statistics
+  gap_b <- abs(lambda_ub - lambda_lb)
+  gap_beta <- abs(best_lambda_stars - lambda_lb)
+  
 
 save(num_repetitions, configs, dir_path, dir_path2, file = ER_settings_file)
 result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(true_graph, stars_graph, gstars_graph, oracle_graph_f1, oracle_graph_hamming, null_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle_f1, act_sparsity_oracle_hamming, best_lambda_oracle_f1, best_lambda_oracle_hamming, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index_f1, oracle_index_hamming, stars_lb, stars_ub, out.p, file=paste0(dir_path2, "/", ... = result_filename))
+save(true_graph, stars_graph, gstars_graph, oracle_graph_f1, oracle_graph_hamming, null_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle_f1, act_sparsity_oracle_hamming, best_lambda_oracle_f1, best_lambda_oracle_hamming, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index_f1, oracle_index_hamming, stars_lb, stars_ub, gap_b, gap_beta, out.p, file=paste0(dir_path2, "/", ... = result_filename))
 
   }
 }

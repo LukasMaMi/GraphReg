@@ -3,6 +3,7 @@ title: "12-Performance_ER"
 output: github_document
 ---
 
+## Step 3: Performance
 ```{r}
 
 # Load session settings
@@ -47,6 +48,7 @@ for(cfg in configs) {
   
   lambda_values <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
   sparsity_values <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
+  gap_values <- list(gap_b = numeric(), gap_beta = numeric())
 
   # Loop over repetitions for the current configuration
   for(rep in 1:num_repetitions) {
@@ -58,6 +60,10 @@ for(cfg in configs) {
     oracle_metrics_f1 <- compute_metrics(oracle_graph_f1, true_graph)
     oracle_metrics_hamming <- compute_metrics(oracle_graph_hamming, true_graph)
     null_metrics <- compute_metrics(null_graph, true_graph)
+    
+    # Gap values
+    gap_values$gap_b <- c(gap_values$gap_b, gap_b)
+    gap_values$gap_beta <- c(gap_values$gap_beta, gap_beta)
 
     # Additional metrics: lambda values and sparsity
     additional_metrics <- list(
@@ -104,19 +110,45 @@ for(cfg in configs) {
     sparsity_values$oracle_f1 <- c(sparsity_values$oracle_f1, additional_metrics$oracle_sparsity_f1)
     lambda_values$oracle_hamming <- c(lambda_values$oracle_hamming, additional_metrics$oracle_lambda_hamming)
     sparsity_values$oracle_hamming <- c(sparsity_values$oracle_hamming, additional_metrics$oracle_sparsity_hamming)
+    sparsity_values$null <- c(sparsity_values$null, additional_metrics$null)
   }
-
+    
   calc_mean_ci <- function(data, lambda = NULL, sparsity = NULL) {
+    
     mean_data <- colMeans(data, na.rm = TRUE)
     ci_data <- apply(data, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
     
     mean_lambda <- if (!is.null(lambda)) mean(lambda, na.rm = TRUE) else NA
+    ci_lambda <- if (!is.null(lambda)) {
+              if (length(lambda) > 1) {
+                  apply(matrix(lambda, ncol = 1), 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
+              } else {
+                  c(mean_lambda, mean_lambda) # Lower and upper bounds are both the mean
+              }
+           } else NA
+    
     mean_sparsity <- if (!is.null(sparsity)) mean(sparsity, na.rm = TRUE) else NA
     
-    list(Mean = mean_data, CI = ci_data, Lambda = mean_lambda, Sparsity = mean_sparsity)
+    list(Mean = mean_data, CI = ci_data, Lambda = mean_lambda, Lambda_CI = ci_lambda, Sparsity = mean_sparsity)
   }
-
   
+  # Function to calculate mean gaps
+  calc_mean_gaps <- function(gap_values) {
+    mean(gap_values, na.rm = TRUE)
+  }
+  
+  # Function to aggregate metrics
+  aggregate_metrics <- function(metrics_list) {
+  metrics_mat <- do.call(rbind, lapply(metrics_list, as.numeric))
+  list(Mean = colMeans(metrics_mat, na.rm = TRUE),
+       CI = apply(metrics_mat, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE)))
+  }
+  
+  aggregated_gap_values <- list(
+  gap_b_mean = calc_mean_gaps(gap_values$gap_b),
+  gap_beta_mean = calc_mean_gaps(gap_values$gap_beta)
+  )
+
   # Include mean lambda and sparsity in aggregated metrics
   aggregated_metrics$stars <- calc_mean_ci(aggregated_metrics$stars, lambda_values$stars, sparsity_values$stars)
   aggregated_metrics$gstars <- calc_mean_ci(aggregated_metrics$gstars, lambda_values$gstars, sparsity_values$gstars)
@@ -124,12 +156,14 @@ for(cfg in configs) {
                                                lambda_values$oracle_f1, sparsity_values$oracle_f1)
   aggregated_metrics$oracle_hamming <- calc_mean_ci(aggregated_metrics$oracle_hamming, 
                                                lambda_values$oracle_hamming, sparsity_values$oracle_hamming)
-  aggregated_metrics$null <- calc_mean_ci(aggregated_metrics$null, NULL, NULL)
-
+  aggregated_metrics$null <- calc_mean_ci(aggregated_metrics$null, NULL, sparsity_values$null)
+  
+  
   # Store results for the current configuration
   config_results[[cfg_key]] <- list(
     Individual = individual_results,
-    Aggregated = aggregated_metrics
+    Aggregated = aggregated_metrics,
+    Gap_Values = aggregated_gap_values
   )
 }
 
