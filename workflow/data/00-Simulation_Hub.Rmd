@@ -91,14 +91,14 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub/"
 
-num_repetitions <- 5
+num_repetitions <- 10
 
 # Specify configurations
 configs <- list(
   list(n=800, p=40),
   list(n=400, p=100),
-  list(n=200, p=200)
-  #list(n=100, p=400)
+  list(n=200, p=200),
+  list(n=100, p=400)
 )
 
 #Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
@@ -133,8 +133,7 @@ for(rep in 1:num_repetitions) {
   lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
-  print('Condition number: ')
-  print(kappa(Hub$omega))
+  cat("Condition number:", kappa(Hub$omega), "\n")
   
   # Define the name of the file to save, including the directory path
   file_name <- paste0(dir_path, "/Hub_rep_", rep, "_n_", n, "_p_", p, ".RData")

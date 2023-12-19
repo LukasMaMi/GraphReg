@@ -283,7 +283,7 @@ gap_b_plot <- ggplot(gap_data_all, aes(x = Config, y = Gap_B, color = Graph_Type
   geom_line(aes(linetype = Graph_Type)) +
   labs(title = "Gap B Values Across Different Graph Types", y = "Gap B", x = "") +
   theme_minimal() +
-  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "yellow")) +
+  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "yellow3")) +
   scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Geometric" = "dashed")) +
   theme(axis.text.x = element_text(angle = 0, hjust = 1))
 
@@ -293,7 +293,7 @@ gap_beta_plot <- ggplot(gap_data_all, aes(x = Config, y = Gap_Beta, color = Grap
   geom_line(aes(linetype = Graph_Type)) +
   labs(title = "Gap Beta Values Across Different Graph Types", y = "Gap Beta", x = "") +
   theme_minimal() +
-  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "yellow")) +
+  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "yellow3")) +
   scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Geometric" = "dashed")) +
   theme(axis.text.x = element_text(angle = 0, hjust = 1))
 

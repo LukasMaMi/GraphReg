@@ -149,7 +149,7 @@ for(rep in 1:num_repetitions) {
   rho_lower_range <- c(-1, -0.8)
   rho_upper_range <- c(0.8, 1)
 
-  sparsity <- 3/p # Sparsity level
+  sparsity <- 4/p # Sparsity level
   
   ER <- generator_rand(n = n, p = p, tun = tun, prob = sparsity, rho_lower_range, rho_upper_range, vis = F)
 
@@ -215,11 +215,11 @@ sessionInfo()
 #-1, 0.8 mit 0.33 for n = 200, p = 200
 #-1, 0.8 mit 0.18 for n = 100, p = 400
 
-  n = 100
-  p = 400
+  n = 800
+  p = 40
   N = 20 # Number of Repetitions
-  rho_lower_range <- c(0.7, 1)
-  rho_upper_range <- c(0.7, 1)
+  rho_lower_range <- c(-1, -0.8)
+  rho_upper_range <- c(0.8, 1)
 
   sparsity <- 3/p # Sparsity level
   
@@ -229,12 +229,12 @@ sessionInfo()
 # >   cat("Hamming Null:", compute_metrics(null_graph, true_graph)[[2]], "\n")
 # Hamming Null: 59 
   
-  tun <- 0.6
+  tun <- 1.3
   
-  set.seed(123)
-  #ER <- generator_rand(n = n, p = p, prob = sparsity, tun = tun, rho_lower_range, rho_upper_range, vis = F)
-  ER <- huge.generator(n = n, d = p, graph = "random", v = NULL, u = NULL, 
-    g = NULL, prob = sparsity, vis = FALSE, verbose = TRUE) 
+  #set.seed(123)
+  ER <- generator_rand(n = n, p = p, prob = sparsity, tun = tun, rho_lower_range, rho_upper_range, vis = F)
+  #ER <- huge.generator(n = n, d = p, graph = "random", v = NULL, u = NULL, 
+    #g = NULL, prob = sparsity, vis = FALSE, verbose = TRUE) 
 
   ER_data <- ER$data
   true_graph <- ER$theta
@@ -383,8 +383,9 @@ sessionInfo()
   # compute_metrics(oracle_graph_f12, true_graph)
   # print('metrics null: ')
   
-  kappa(ER$omega)
+  
   ER$act_sparsity
+  kappa(ER$omega)
   ER$omega
   cat("F1:", compute_metrics(oracle_graph_f1, true_graph)[[1]], "\n")
   cat("Hamming:", compute_metrics(oracle_graph_hamming, true_graph)[[2]], "\n")

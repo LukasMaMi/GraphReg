@@ -375,7 +375,7 @@ ggplot(data) +
 ```{r}
 
 ## Rho -1, -0.8
-rho_1_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_8_tun4"
+rho_1_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/2p_min1_0_8_tun4"
 
 rho_1_performance_filename <- file.path(rho_1_file, "all_performance_results.RData")
 load(rho_1_performance_filename)
@@ -387,7 +387,7 @@ rm(config_results)
 
 
 ## Rho 0.1, 1
-rho_2_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_4_tun2"
+rho_2_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_8_tun4"
 
 
 rho_2_performance_filename <- file.path(rho_2_file, "all_performance_results.RData")
@@ -400,14 +400,14 @@ rm(config_results)
 
 
 ## Rho -1, 1
-rho_3_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_5_tun3"
+rho_3_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/4p_min1_0_8_tun4"
 
 
 rho_3_performance_filename <- file.path(rho_3_file, "all_performance_results.RData")
 load(rho_3_performance_filename)
 
 #
-rho_3<- config_results
+rho_3 <- config_results
 rm(config_results)
 #
 
@@ -445,12 +445,12 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
 
 
 # Generate data frames for each rho value
-df_rho_1 <- generate_df_for_rho(rho_1, "rho = [-1, -0.8], [0.8, 1]")
-#df_rho_2 <- generate_df_for_rho(rho_2, "rho = [-1, -0.4], [0.4, 1]")
-#df_rho_3 <- generate_df_for_rho(rho_3, "rho = [-1, -0.5], [0.5, 1]")
+df_rho_1 <- generate_df_for_rho(rho_1, "2/p: rho = [-1, -0.8], [0.8, 1]")
+df_rho_2 <- generate_df_for_rho(rho_2, "3/p: rho = [-1, -0.8], [0.8, 1]")
+df_rho_3 <- generate_df_for_rho(rho_3, "4/p: rho = [-1, -0.8], [0.8, 1]")
 
 # Combine the data frames
-combined_df <- rbind(df_rho_1)
+combined_df <- rbind(df_rho_1, df_rho_2, df_rho_3)
 
 # Display the combined results
 print(combined_df)
