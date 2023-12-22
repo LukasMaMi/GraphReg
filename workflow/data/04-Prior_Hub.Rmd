@@ -71,8 +71,8 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 }
 
 
-n <- 200 # Samples
-p <- 200 # Dimensions
+n <- 400 # Samples
+p <- 100 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
@@ -125,7 +125,7 @@ quicargs <- list(lambda = lambda_path)
 library(batchtools)
 library(pulsar)
 out.p <- my.batch.pulsar(
-  Hub_data, 
+  data = Hub_data, 
   fun = quicr, 
   fargs = quicargs, 
   rep.num = N,
@@ -134,10 +134,11 @@ out.p <- my.batch.pulsar(
   criterion=c('stars', 'gcd', 'gcd_prior'), 
   lb.stars = TRUE, 
   ub.stars = TRUE, 
-  seed = 123,
+  seed = FALSE,
   refit = FALSE,
   fullgcd = FALSE,
-  prior_graph = NULL)
+  prior_graph = true_graph
+)
 
 
 # Optimal Index Stars
@@ -151,24 +152,26 @@ stars_ub <- out.p[["stars"]][["ub.index"]]
 
 # Optimal Index Gstars
 my.opt.index(out.p, criterion = "gcd") <- my.get.opt.index(out.p, criterion = "gcd")
-gstars_index <- my.opt.index(out.p, 'gcd')
+gstars_index <- my.opt.index(out.p, 'gcd')[[1]]
+
 # Optimal Lambda
 best_lambda_gstars <- round(lambda_path[gstars_index], 3)
 
 # Optimal Index PG-stars
 my.opt.index(out.p, criterion = "gcd_prior") <- my.get.opt.index(out.p, criterion = "gcd_prior")
-pgstars_index <- my.opt.index(out.p, 'gcd_prior')
+pgstars_index <- my.opt.index(out.p, 'gcd_prior')[[1]]
 # Optimal Lambda
 best_lambda_pgstars <- round(lambda_path[pgstars_index], 3)
 
-
-fit  <- refit(out.p, criterion = c("stars", "gcd"))
+fit  <- refit(out.p, criterion = c("stars", "gcd", "gcd_prior"))
 ## Stars
 stars_graph <- fit[["refit"]][["stars"]]
 ## GStars
 gstars_graph <- fit[["refit"]][["gcd"]]
+## PGStars
+pgstars_graph <- fit[["refit"]][["gcd_prior"]]
 
-#plot(out.p, legends = F, scale = F)
+plot(out.p, legends = F, scale = T)
 
 ## Oracle procedure
 oracle_results <- quicr(Hub_data, lambda_path)
@@ -220,297 +223,158 @@ oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
 
 ```
 
-## Prior pulsar
+
+## Playground
 ```{r}
-pulsar <- function(data, fun=huge::huge, fargs=list(),
-                   criterion=c("stars"),
-                   thresh = 0.1, subsample.ratio = NULL,
-                   rep.num = 20, seed=NULL,
-                   lb.stars=FALSE, ub.stars=FALSE,
-                   ncores = 1, refit=TRUE, known_graph = FALSE, five = FALSE, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1)  {
-  gcinfo(FALSE)
-  n <- nrow(data)
-  p <- ncol(data)
-  # min requirements for function args
-  .lamcheck(fargs$lambda)
-  nlams <- length(fargs$lambda)
-  knowncrits <- c("stars", "diss", "estrada", "gcd", "nc", "sufficiency", "gcd_new") #"vgraphlet", "egraphlet",
-  .critcheck0(criterion, knowncrits)
-  subsample.ratio <- .ratcheck(subsample.ratio, n)
 
-  if (!is.null(seed)) set.seed(seed)
-  ind.sample <- replicate(rep.num,
-                  sample(c(1L:n), floor(n * subsample.ratio),
-                  replace = FALSE), simplify=FALSE)
-  if (refit) {
-    tmp <- 1L:n
-    attr(tmp, 'full') <- TRUE
-    ind.sample <- c(list(tmp), ind.sample)
-  }
-  if (!is.null(seed)) set.seed(NULL)
-  ## wrap estimator
-  estFun <- function(ind.sample, fargs) {
-    tmp <- do.call(fun, c(fargs, list(data[ind.sample,])))
-    if (!('path' %in% names(tmp)))
-      stop('Error: expected data stucture with \'path\' member')
+graph <- true_graph
+graph <- gstars_graph
+method = "spearman"
 
-    if (isTRUE(attr(ind.sample, 'full')))
-      return(tmp)
-    else
-      return(tmp$path)
-  }
 
-  if (lb.stars) {
-    if (!("stars" %in% criterion))
-      stop('Lower/Upper bound method must be used with StARS')
-    minN <- 2L + refit # Hard code for now
-  } else minN <- rep.num + refit
+orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
+five_node = FALSE
 
-  isamp <- ind.sample[1L:minN]
-  ## don't pass on errors if lb.stars = TRUE
-  premerge <- .try_mclapply(isamp, estFun, fargs = fargs, mc.cores = ncores,
-                            mc.preschedule = FALSE, pass.errors = !lb.stars)
-  errors <- attr(premerge, 'errors')
-  # Adjust rep.num for failed jobs
-  rep.num <- rep.num - ifelse(refit, sum(errors[-1]), sum(errors))
+nx2 <- .adj2elist(graph)
+nx2
+n <- length(orbind)
+p <- ncol(graph)
+orb_count <- orca::count4(nx2)
+orb_count
+  
+buffer <- matrix(0, nrow=p-nrow(orb_count), ncol=ncol(orb_count)) # Create empty set up
+buffer
+orb_count <- rbind(orb_count, buffer)
+orb_count
 
-  if (refit) {
-    fullmodel <- premerge[[1]]
-    premerge  <- premerge[-1]
-    minN <- minN - 1
-  } else fullmodel <- NULL
+orb_count_normal = rbind(orb_count[,orbind],1)
+orb_count_normal
 
-  if (lb.stars) {
-    lb.premerge       <- premerge
-    lb.premerge.reord <- lapply(1L:nlams, function(i)
-                         lapply(1L:minN, function(j) lb.premerge[[j]][[i]]))
-
-    lb.est <- stars.stability(lb.premerge.reord, thresh, minN, p)
-    if (lb.est$opt.index == 1)
-      warning("Accurate lower bound could not be determined with the first 2 subsamples")
-    if (ub.stars) {
-      # upper bound is determined by equivilent of MaxEnt of Poisson Binomial
-      pmean      <- sapply(lb.est$merge, function(x) { sum(x)/(p*(p-1)) })
-      ub.summary <- cummax(4*pmean*(1-pmean))
-      tmpub      <- .starsind(ub.summary, thresh, 1)
-      if (any(ub.summary == 0))  ## adjust upper bound to exclude empty graphs
-        ub.index <- max(tmpub, max(which(ub.summary == 0))+1)
-      else
-        ub.index <- max(tmpub, 1)
-    } else ub.index <- 1
-    # reselect lambda between bounds
-    fargs$lambda <- fargs$lambda[ub.index:lb.est$opt.index]
-    nlams <- length(fargs$lambda)
-    lb.premerge  <- lapply(lb.premerge,
-                           function(ppm) ppm[ub.index:lb.est$opt.index])
-    isamp <- ind.sample[-(1L:(minN+refit))]
-#    tmp   <- mclapply(isamp, estFun, fargs=fargs, mc.cores=ncores, mc.preschedule = FALSE)
-    tmp <- .try_mclapply(isamp, estFun, fargs = fargs, mc.cores = ncores,
-                         mc.preschedule = FALSE)
-    # Adjust rep.num for failed jobs
-    rep.num <- rep.num - sum(attr(tmp, 'errors'))
-    premerge <- c(lb.premerge, tmp)
-  }
-
-  premerge.reord <- .tlist(premerge, nlams, rep.num)
-  rm(premerge) ; gc()
-  est <- list()
-
-  for (i in 1L:length(criterion)) {
-    crit <- criterion[i]
-
-    if (crit == "stars")
-      est$stars <- stars.stability(premerge.reord, thresh, rep.num, p)
-
-    else if (crit == "diss")
-      est$diss <-  diss.stability(premerge.reord, thresh, rep.num, p, nlams)
-
-    else if (crit == "estrada") {
-      if (!("stars" %in% criterion))
-        warning('Need StaRS for computing Estrada classes... not run')
-      else
-        est$estrada <- estrada.stability(est$stars$merge,thresh,rep.num,p,nlams)
-    }
-
-    else if (crit == "sufficiency") {
-      if (!("stars" %in% criterion)) warning('Need StaRS for computing sufficiency... not run')
-      else  est$sufficiency <- sufficiency(est$stars$merge, rep.num, p, nlams)
-    }
-
-#      else if (crit == "egraphlet")
-#        est$egraphlet <- egraphlet.stability(premerge.reord, thresh, rep.num, p, nlams)
-
-#      else if (crit == "vgraphlet")
-#        est$vgraphlet <- vgraphlet.stability(premerge.reord, thresh, rep.num, p, nlams)
-
-    else if (crit == "gcd") {
-      est$gcd <- gcd.stability(premerge.reord, thresh, rep.num, p, nlams)
-      est$gcd$opt.index = est$gcd$opt.index + ub.index
-
-    }else if (crit == "gcd_new"){
-      est$gcd_new <- gcd.stability_extended(premerge.reord, thresh, rep.num, p, nlams, known_graph = known_graph, orbind = orbind, five = five)
-      est$gcd_new$opt.index = est$gcd_new$opt.index + ub.index
-
-    }else if (crit == "nc")
-      est$nc <- nc.stability(premerge.reord, thresh, rep.num, p, nlams)
-
-  }
-
-  if (lb.stars) {
-    find <- 1:length(lb.est$summary)
-    pind <- ub.index:lb.est$opt.index
-    pinv <- setdiff(find, pind)
-    tmpsumm <- vector('numeric', length(lb.est$summary))
-    tmpsumm[pinv] <- lb.est$summary[pinv]
-    tmpsumm[pind] <- est$stars$summary
-    est$stars$summary   <- tmpsumm
-
-    tmpmerg <- vector('list', length(lb.est$summary))
-    tmpmerg[pinv]   <- lb.est$merge[pinv]
-    tmpmerg[pind]   <- est$stars$merge
-    est$stars$merge <- tmpmerg
-
-    est$stars$lb.index  <- lb.est$opt.index
-    est$stars$ub.index  <- ub.index
-    est$stars$opt.index <- est$stars$opt.index + ub.index - 1L
-  }
-
-  if ("stars" %in% criterion) {
-      if (est$stars$opt.index == 1) {
-          direction <- if (any(est$stars$summary >= .1)) "larger" else "smaller"
-          warning(paste("Optimal lambda may be", direction, "than the supplied values"))
+## Add noise to orb_count
+modify_orb_count <- function(orb_count, modification_prob = 0.5, delta = 0.1) {
+  # Iterate over each element of the matrix
+  for (i in 1:nrow(orb_count)) {
+    for (j in 1:ncol(orb_count)) {
+      # Decide whether to modify this element
+      if (runif(1) < modification_prob) {
+        # Randomly choose to add or subtract
+        if (runif(1) < 0.5) {
+          orb_count[i, j] <- orb_count[i, j] + delta
+        } else {
+          orb_count[i, j] <- orb_count[i, j] - delta
+        }
       }
+    }
   }
-  est$call  <- match.call()
-  est$envir <- parent.frame()
-  est$est   <- fullmodel
-  return(structure(est, class="pulsar"))
+  return(orb_count)
 }
 
-#' @keywords internal
-.starsind <- function(summary, thresh, offset=1) {
-    max(which.max(summary >= thresh)[1] - offset, 1)
+# Example usage
+# Assuming orb_count is your matrix
+orb_count_noisy <- modify_orb_count(orb_count_normal)
+orb_count_noisy 
+
+
+gcm_norm <- suppressWarnings(cor(orb_count_normal, method = method))
+gcm_norm
+gcm_rand <- suppressWarnings(cor(orb_count_random, method = method))
+gcm_rand
+
+gcv <- gcm[upper.tri(gcm)] 
+gcv
+
+
+my.gcvec <- function(graph, method = "spearman", orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, five_node = FALSE) {
+  
+  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
+  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
+  n <- length(orbind)
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(0, n*(n-1)/2)) # Return empty vector
+  }
+
+  p <- ncol(graph)
+  if (five_node == TRUE) { orb_count <- orca::count5(nx2)
+    } else { orb_count <- orca::count4(nx2) # Orbit count matrix (redundant)
+  } 
+  
+  ## expand missing nodes
+  buffer <- matrix(0, nrow=p-nrow(orb_count), ncol=ncol(orb_count)) # Create empty set up
+  orb_count <- rbind(orb_count, buffer) # Fill empty set up and reduce to
+  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
+  ## or completely empty graph and can be safely suppressed.
+  
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error
+  #Then calculate the graphlet correlation matrix with method
+  gcm <- suppressWarnings(cor(rbind(orb_count[,orbind],1), method = method))
+  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
+  return(gcv)
 }
 
-#' @keywords internal
-stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) {
-    if (is.null(stars.thresh)) stars.thresh <- 0.1
-    est <- list()
+##############
 
+# GCM function
+gcvec_extended_random <- function(G, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, five = FALSE){
+  
+  diag(G) = 0
+  
+  Elist <- .adj2elist(G)
+  n <- length(orbind)
+  if (ncol(Elist) < 1 || nrow(Elist) < 1) {
+      return(rep(0, n*(n-1)/2))
+  }
 
-    # do.call(batchtools::reduceResults,
-    #                  c(list(reg=reg, fun=starsaggfun), reduceargs))
-
-    if (is.null(merge)) {
-      est$merge <- lapply(premerge, function(x) Reduce("+", x))
-      gc() # flush
-    } else est$merge <- merge
-    est$summary <- rep(0, length(est$merge))
-
-    for (i in 1:length(est$merge)) {
-      est$merge[[i]] <- est$merge[[i]]/rep.num
-      est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1))
+  p <- ncol(G)
+  if(five == TRUE){
+    gcount <- orca::count5(Elist)
+  }else{
+    gcount <- orca::count4(Elist)
     }
-    ## monotonize variability
-    est$summary   <- cummax(est$summary)
-    est$opt.index <- .starsind(est$summary, stars.thresh)
-    est$criterion <- "stars.stability"
-    est$thresh    <- stars.thresh
-    return(est)
-}
-
-#' @keywords internal
-sufficiency <- function(merge, rep.num, p, nlams) {
-## Merge solution from StARS
-  est <- list()
-  est$merge <- sapply(merge, function(x) apply(x*(1-x), 2, max))
-  est$summary <- colMeans(est$merge)
-  est$criterion <- 'sufficiency'
-  return(est)
-}
-
-#' @keywords internal
-.sumsq <- function(x2,y) x2 + y^2
-
-#' @keywords internal
-diss.stability <- function(premerge, diss.thresh, rep.num, p, nlams) {
-    est <- list()
-    disslist  <- lapply(premerge, function(pm) lapply(pm, graph.diss))
-    est$merge <- lapply(disslist, function(dissmat) Reduce("+", dissmat)/rep.num)
-    mergesq   <- lapply(disslist, function(dissmat)
-                        Reduce(.sumsq, dissmat[-1], init=dissmat[[1]]^2)/rep.num)
-
-    gc() # flush
-    est$summary <- rep(0, length(est$merge))
-    for (i in 1:length(est$merge)) {
-        tmp <- mergesq[[i]] - est$merge[[i]]^2
-        est$summary[i] <- sum(triu(tmp))  / (p * (p - 1))
-    }
-    est$mergesq <- mergesq
-    est$criterion <- "diss.stability"
-    return(est)
-}
-
-
-#estrada.stability <- function(premerge, thresh, rep.num, p, nlams) {
-#    est <- list()
-#    estrlist  <- lapply(premerge, function(pm) lapply(pm, estrada.class))
-#    est$merge <- lapply(estrlist, function(x) table(unlist(x)))
-
-##    gc() # flush
-#    est$summary <- rep(0, length(est$merge))
-#    for (i in 1:length(est$merge)) {
-#        est$summary[i] <- 1-max(est$merge[[i]])/rep.num
-#    }
-#    ## monotonize variability
-##    est$summary <- cummax(est$summary)
-#    if (!is.null(thresh))
-#      est$opt.index    <- max(which.max(est$summary >= thresh)[1] - 1, 1)
-#    else
-#      est$opt.index <- 0
-
-#    est$criterion <- "estrada.stability"
-#    return(est)
-#}
-
-#' @keywords internal
-estrada.stability <- function(merge, thresh, rep.num, p, nlams) {
-    est <- list()
-    est$summary <- unlist(lapply(merge, function(x) estrada.class(x >= .05)))
-    if (!is.null(thresh))
-      est$opt.index <- max(which.max(est$summary >= thresh)[1] - 1, 1)
-    else
-      est$opt.index <- 0
-
-    est$criterion <- "estrada.stability"
-    return(est)
-}
-
-#' @keywords internal
-nc.stability <- function(premerge, thresh, rep.num, p, nlams) {
-    est <- list()
-    est$merge <- sapply(premerge, function(x) sapply(x, natural.connectivity))
-    est$summary <- colMeans(est$merge)
-    est$criterion <- "nc.stability"
-    return(est)
-}
-
-#' @importFrom stats dist
-#' @keywords internal
-gcd.stability <- function(premerge, thresh, rep.num, p, nlams, merge=NULL) {
-    est <- list()
-    if (is.null(merge))
-        est$merge <- lapply(premerge, function(pm) dist(t(sapply(pm, gcvec))))
-    else
-        est$merge <- merge
-
-    est$summary <- vector('numeric', nlams)
-    for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]])
-    est$criterion <- "graphlet.stability"
-    est$opt.index <- max(which.min(est$summary)[1] - 1, 1)
-    return(est)
+  ## expand missing nodes
+  buffer <- matrix(0, nrow=p-nrow(gcount), ncol=ncol(gcount))
+  gcount <- rbind(gcount, buffer)
+# deprecate direct call to count4 for CRAN submission
+#  gcount <- .C("count4", Elist, dim(Elist),
+#      orbits = matrix(0, nrow = max(Elist), ncol = 15), PACKAGE="orca")$orbits
+  ##  # warnings here are due to std dev == 0. This almost always occurs for a completely connected
+  ## or completely empty graph and can be safely suppressed.
+  
+  after1 = rbind(gcount[,orbind],1)
+  after2 = rbind(gcount[,orbind],runif(length(orbind),0,1))
+  #after2 = rbind(after2,runif(length(orbind),0,1))
+  
+  gcor1 <- suppressWarnings(cor(after1, method='spearman'))
+  gcor2 = suppressWarnings(cor(after2, method='spearman'))
+  gcor = gcor1[upper.tri(gcor1)]
+  gcor_random = gcor2[upper.tri(gcor2)]
+  
+  return(list("corr_1" = gcor1, "res_1" = gcor, "gcount_1" = gcount, "corr_2" = gcor2, "gcor2" = gcor2, "res2" = gcor_random, "after1" = after1, "after2"=after2))
 }
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

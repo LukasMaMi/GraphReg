@@ -149,7 +149,7 @@ for(rep in 1:num_repetitions) {
   rho_lower_range <- c(-1, -0.8)
   rho_upper_range <- c(0.8, 1)
 
-  sparsity <- 4/p # Sparsity level
+  sparsity <- 2/p # Sparsity level
   
   ER <- generator_rand(n = n, p = p, tun = tun, prob = sparsity, rho_lower_range, rho_upper_range, vis = F)
 

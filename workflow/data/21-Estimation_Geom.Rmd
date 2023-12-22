@@ -97,7 +97,7 @@ get_filename <- function(config, rep, prefix = "Geom") {
   
   # Optimal Index Gstars
   opt.index(out.p, criterion = "gcd") <- get.opt.index(out.p, criterion = "gcd")
-  gstars_index <- opt.index(out.p, 'gcd')
+  gstars_index <- my.opt.index(out.p, 'gcd')[[1]]
   # Optimal Lambda
   best_lambda_gstars <- round(lambda_path[gstars_index], 3)
   
