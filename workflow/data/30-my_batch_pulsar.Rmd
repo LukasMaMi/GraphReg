@@ -10,7 +10,8 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
                     criterion=c("stars"), thresh = 0.1, subsample.ratio = NULL,
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
-                    job.res=list(), cleanup=FALSE, refit=TRUE, fullgcd = FALSE, prior_graph = NULL) {
+                    job.res=list(), cleanup=FALSE, refit=TRUE, fullgcd = FALSE, 
+                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1) {
 
     if (!requireNamespace('batchtools', quietly=TRUE)) {
         stop("'batchtools' package required to run 'batch.pulsar'")
@@ -59,27 +60,27 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
     #############
     
     ## Full GCD
-    if ("gcd" %in% criterion || 'gcd_prior' %in% criterion) {
-      if (fullgcd == TRUE) {
-
-      minN <- rep.num + refit
-      isamp <- ind.sample[1:minN] # selects the first minN subsamples # ind.sample is a list of indices for subsampling the data
-      out <- batchply(data, estFun, fun, fargs, isamp, wkdir, regdir, conffile, job.res)
-      reg <- out$reg # extract the registry object
-      id <- out$id # and job ids from the output of batchply. # manage and track the submitted batch jobs.
-      doneRun <- batchtools::waitForJobs(reg = reg, id) # waits for all submitted jobs to finish.
-      jdone <- batchtools::findDone(reg = reg, id) # Identifies which jobs have completed successfully.
-      pulsar.jobs <- intersect((1 + refit):minN, jdone$job.id) # ids of jobs successfully completed among initially submitted jobs.
-  
-      gcdaggfun_compl <- function(res) lapply(res, gcvec) # Function to calculate gcv
-      gcdpremerge_compl <- c(reduceGCDargs$init,
-                       batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun_compl))
-  
-      gcdmerge_compl <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) gcdpremerge_compl[[j]][[i]]))))
-  
-      est$fullgcd <- gcd.stability(NULL, thresh, rep.num, p, nlams, gcdmerge_compl)
-      }
-    }
+    # if ("gcd" %in% criterion || 'gcd_prior' %in% criterion) {
+    #   if (fullgcd == TRUE) {
+    # 
+    #   minN <- rep.num + refit
+    #   isamp <- ind.sample[1:minN] # selects the first minN subsamples # ind.sample is a list of indices for subsampling the data
+    #   out <- batchply(data, estFun, fun, fargs, isamp, wkdir, regdir, conffile, job.res)
+    #   reg <- out$reg # extract the registry object
+    #   id <- out$id # and job ids from the output of batchply. # manage and track the submitted batch jobs.
+    #   doneRun <- batchtools::waitForJobs(reg = reg, id) # waits for all submitted jobs to finish.
+    #   jdone <- batchtools::findDone(reg = reg, id) # Identifies which jobs have completed successfully.
+    #   pulsar.jobs <- intersect((1 + refit):minN, jdone$job.id) # ids of jobs successfully completed among initially submitted jobs.
+    # 
+    #   gcdaggfun_compl <- function(res) lapply(res, gcvec) # Function to calculate gcv
+    #   gcdpremerge_compl <- c(reduceGCDargs$init,
+    #                    batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun_compl))
+    # 
+    #   gcdmerge_compl <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) gcdpremerge_compl[[j]][[i]]))))
+    # 
+    #   est$fullgcd <- gcd.stability(NULL, thresh, rep.num, p, nlams, gcdmerge_compl)
+    #   }
+    # }
     
     #############
     
@@ -137,16 +138,28 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
         # Aggregates the results of the initial set of jobs (for StARS method) using reduceResults
         lb.est <- stars.stability(NULL, thresh, minN, p, lb.starsmerge) 
         # Calculates the stability of the lower bound estimate using the aggregated results.
+        gc(FALSE)
+        
+        ####################
 
-        # lb.gcdpremerge aggregates pre-reduction results for GCD, useful for later calculations. !!!
-        if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { 
-            aggfun <- function(job, res) lapply(res, my.gcvec) #  wrapper to apply the gcvec function to each result of each job.
-            lb.gcdpremerge <- do.call(batchtools::reduceResultsList, # function that aggregates results from multiple jobs.
-                                      c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs))
-            
-            # The use of c(list(...), reduceGCDargs) combines the standard arguments with the additional ones into a single list, 
-            # which is then passed to do.call.
+        # compute initial gcd if selected
+        if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) {
+            # Initialize a list to store gcdpremerge results for each method
+            lb.gcdpremerge_list <- list()
+        
+            for (meth in method) {
+                # Define aggfun for the current method
+                aggfun <- function(res, ...) {
+                    lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, ...))
+                }
+        
+                # Processing and gathering results
+                lb.gcdpremerge_list[[meth]] <- do.call(batchtools::reduceResultsList,
+                                                       c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs))
+            }
         }
+
+        #####################
 
         if (cleanup) unlink(reg$file.dir, recursive = TRUE) # deletes the temporary files created during the batch job execution.
         if (lb.est$opt.index == 1) {
@@ -178,13 +191,27 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
         # executes additional jobs, and prepares for the final aggregation and analysis of results.
         
 
-        if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { # HIER WIRD REDUZIERT !!!!!
-            reduceGCDargs <- list(init = lapply(lb.gcdpremerge, function(gcdpm) gcdpm[ub.index:lb.est$opt.index])) 
-            
-            # takes the pre-merged results (lb.gcdpremerge) and selects a subset of them based on the indices specified by  
-            # ub.index (upper bound index) and lb.est$opt.index (optimal index from lower bound estimation). 
-            # This subset of results will be used in subsequent calculations.
+        # if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { # HIER WIRD REDUZIERT !!!!!
+        #     reduceGCDargs <- list(init = lapply(lb.gcdpremerge, function(gcdpm) gcdpm[ub.index:lb.est$opt.index])) 
+        # }
+        
+        if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { 
+            # Initialize a list to store reduceGCDargs for each method
+            reduceGCDargs_list <- list()
+        
+            for (meth in method) {
+                # Check if lb.gcdpremerge for the current method exists
+                if (!is.null(lb.gcdpremerge_list[[meth]])) {
+                    # Create reduceGCDargs for the current method
+                    reduceGCDargs_list[[meth]] <- list(init = lapply(lb.gcdpremerge_list[[meth]], 
+                                                                    function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
+                }
+            }
         }
+
+        # takes the pre-merged results (lb.gcdpremerge) and selects a subset of them based on the indices specified by  
+        # ub.index (upper bound index) and lb.est$opt.index (optimal index from lower bound estimation). 
+        # This subset of results will be used in subsequent calculations.
         
         regdir <- gsub(paste("_", init, sep = ""), "", regdir)
         isamp <- ind.sample[-(1:minN)] # First minN subsamples were already processed, and the remaining ones are to be handled now.
@@ -205,6 +232,7 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
 
     for (i in 1:length(criterion)) {
         crit <- criterion[i]
+        
         if (crit == "stars") {
             starsmerge <- do.call(batchtools::reduceResults,
                                   c(list(reg = reg, ids = pulsar.jobs, fun = starsaggfun), reduceargs))
@@ -212,28 +240,60 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
             est$stars <- stars.stability(NULL, thresh, rep.num, p, starsmerge)
         }
 
-        if (crit == "gcd") {
-            gcdaggfun <- function(res) lapply(res, gcvec) # Function to calculate gcv
-            gcdpremerge <- c(reduceGCDargs$init,
-                             batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
-            
-            gcdmerge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) gcdpremerge[[j]][[i]]))))
-            
-            est$gcd <- gcd.stability(NULL, thresh, rep.num, p, nlams, gcdmerge)
-            
-        }  
+        # if (crit == "gcd") {
+        #   
+        #     gcdaggfun <- function(res) lapply(res, my.gcvec) # Function to calculate gcv
+        #     gcdpremerge <- c(reduceGCDargs$init,
+        #                      batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
+        #     
+        #     est$gcd <- my.gcd.stability(premerge = gcdpremerge, thresh, rep.num, p, 
+        #                                 nlams, prior_graph = prior_graph, use_prior = FALSE, method)
+        #  est$gcdpremerge_gcd <- gcdpremerge    
+        # }  
         
-        if (crit == "gcd_prior") {
-          
-        gcdaggfun   <- function(res) lapply(res, my.gcvec)
-        gcdpremerge_prior <- c(reduceGCDargs$init,
-                        batchtools::reduceResultsList(reg=reg, ids=pulsar.jobs, fun = gcdaggfun))
+        # if (crit == "gcd_prior") {
+        #   
+        #   gcdaggfun   <- function(res) lapply(res, my.gcvec)
+        #   gcdpremerge <- c(reduceGCDargs$init,
+        #                   batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
+        #   
+        #   est$gcd_prior <- my.gcd.stability(premerge = gcdpremerge, thresh, rep.num, p, 
+        #                                     nlams, prior_graph = prior_graph, use_prior = TRUE, method)
+        #   est$gcdpremerge_prior <- gcdpremerge 
+        #      
+        # } 
         
-        est$gcd_prior <- my.gcd.stability_extended(premerge = gcdpremerge_prior, thresh, rep.num, p, 
-                                                 nlams, prior_graph = prior_graph)
+        if (crit == "gcd" || crit == "gcd_prior") {
+            for (meth in method) {
+                # Define gcdaggfun for the current method
+                gcdaggfun <- function(res, ...) {
+                    lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, ...))
+                }
+              
+                # Check if reduceGCDargs for the current method exists
+                if (!is.null(reduceGCDargs_list[[meth]])) {
+                    # Processing and gathering results
+                    gcdpremerge <- c(reduceGCDargs_list[[meth]]$init,
+                                     batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
         
-             
-        } else if (crit == "estrada") {
+                    if (crit == "gcd") {
+                        est[[paste("gcd", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
+                                                        thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                        use_prior = FALSE, method = meth, orbind = orbind)
+                        est[[paste("gcdpremerge", meth, sep = "_")]] <- gcdpremerge
+                    }
+                
+                    if (crit == "gcd_prior") {
+                        est[[paste("gcd_prior", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
+                                                        thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                        use_prior = TRUE, method = meth, orbind = orbind)
+                        est[[paste("gcdpremerge_prior", meth, sep = "_")]] <- gcdpremerge
+                    }
+                }
+            }
+        }
+        
+        else if (crit == "estrada") {
             if (!("stars" %in% criterion)) {
                 warning('Need StaRS for computing Estrada classes... not run')
             } else {
@@ -279,9 +339,12 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
 }
 
 #########################################################################################################
-my.gcvec <- function(graph, method = "spearman", orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, five_node = FALSE) {
+my.gcvec <- function(graph, method, orbind, 
+                     five_node = FALSE, noise = FALSE, noise_prob = 0.5, noise_strength = 1) {
+  
   if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
   if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
   nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
   n <- length(orbind)
   if (ncol(nx2) < 1 || nrow(nx2) < 1) {
@@ -289,68 +352,135 @@ my.gcvec <- function(graph, method = "spearman", orbind = c(0, 2, 5, 7, 8, 10, 1
   }
 
   p <- ncol(graph)
-  if (five_node == TRUE) { orb_count <- orca::count5(nx2)
-    } else { orb_count <- orca::count4(nx2) # Orbit count matrix (redundant)
+  if (five_node == TRUE) { gdm <- orca::count5(nx2)
+    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
   } 
   
   ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(orb_count), ncol=ncol(orb_count)) # Create empty set up
-  orb_count <- rbind(orb_count, buffer) # Fill empty set up and reduce to
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
+  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
   ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
   ## or completely empty graph and can be safely suppressed.
   
-  # add one row of 1s to the orbind matrix to overcome std dev == 0 error
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
+  gdm <- rbind(gdm[,orbind],1)
+  
+  if (noise == TRUE) {
+    ## Add noise to orb_count
+    gdm <- modify_orb_count(gdm, noise_prob = noise_prob, noice_strength = noise_strength)
+  }
+  
+  if (method %in% c("kendall", "spearman")){
   #Then calculate the graphlet correlation matrix with method
-  gcm <- suppressWarnings(cor(rbind(orb_count[,orbind],1), method = method))
+  gcm <- suppressWarnings(cor(gdm, method = method))
+  }
+  
+  else if (method == "latentcor") {
+  gcm <- suppressWarnings(latentcor::latentcor(gdm))  
+  }
+  
   gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
   return(gcv)
 }
 
 
-#' @keywords internal
-.adj2elist <- function(G) {
-    if (inherits(G, "sparseMatrix")) {
-        G <- Matrix::triu(G, k=1)
-        index_i_j <- Matrix::mat2triplet(G)[1:2]
-        return(as.data.frame(index_i_j))
-    } else {
-        p <- ncol(G)
-        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
-    }
-}
-
 #################
 
-GCD <- function(gcv1, gcv2){
-  res = dist(rbind(gcv1,gcv2))[1]
-  return(res)
+## Add noise to orb_count
+modify_orb_count <- function(orb_count, noise_prob, noise_strength) {
+  # Iterate over each element of the matrix
+  for (i in 1:nrow(orb_count)) {
+    for (j in 1:ncol(orb_count)) {
+      # Decide whether to modify this element
+      if (runif(1) < noise_prob) {
+        # Randomly choose to add or only subtract if orbit count is greater than 0
+        if (runif(1) < 0.5) {
+          orb_count[i, j] <- orb_count[i, j] + noise_strength
+        } else {
+          if (orb_count[i, j] > 0) {
+            orb_count[i, j] <- max(0, orb_count[i, j] - noise_strength)  # Ensures orbit count does not go negative
+          }
+        }
+      }
+    }
+  }
+  return(orb_count)
 }
 
-################       
-my.gcd.stability_extended <- function(premerge, thresh, rep.num, p, nlams, prior_graph) {  
+################ 
+
+my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, use_prior = FALSE, method, orbind) {  
 est <- list()
 
-  for(j in 1:length(premerge)){
-    res_tot = c()
-    estimated_graph_subsampling = list()
-    for(i in 1:length(premerge[[j]])){
-      r1 = premerge[[j]][[i]]
-      r2 = my.gcvec(prior_graph)
-      res = GCD(r1, r2)
-      res_tot = c(res_tot, res)
-      estimated_graph_subsampling[[i]] = premerge[[j]][[i]]
+  if (use_prior == TRUE) {
+    if (!method %in% c("kendall", "spearman", "latentcor")) {
+      stop("Not supported correlation method is chosen!")
     }
-  est$graph_subsambling[[j]] = estimated_graph_subsampling
-  est$merge[[j]] <- res_tot
-  est$g1[[j]] = r1
-  est$g2 = r2
+    
+    gcv_true = my.gcvec(prior_graph, method = method, orbind = orbind) # gcv for true_graph
+    
+    for(j in 1:length(premerge)) { # j subsamples
+      res_tot = c()
+      for(i in 1:length(premerge[[j]])){ # i lambda values
+        gcv_sub = premerge[[j]][[i]] # gcv of subsample j and lambda i
+        res = dist(rbind(gcv_sub, gcv_true))[[1]] # calculate gcd between (1) gcv of subsample j lambda i and (2) gcv of the true graph
+        gcd = c(res_tot, res) # contains all gcd: Numb of gcd = numb of gcv = numb of lams * numb of subsamples N
+      }
+    
+    est$merge[[j]] <- gcd # gcd for all j different lambda values (mean over all subsample for each lambda value)
+    est$gcv_sub[[j]] = gcv_sub
+    est$gcv_true = gcv_true
+    }
+    
+    est$criterion <- "gcd_prior"
+  } 
+  
+  else {
+    est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]]))))
+    est$criterion <- "gcd"
   }
 
   est$summary <- vector('numeric', nlams) # set up empty vector
-  for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]]) # fill summary i with mean over all subsamples rep.num N
-  est$criterion <- "gcd_prior"
+  for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]]) # fill summary: ith subsamples = mean of ith subsample over all j lambdas
+ 
   return(est)
 } 
+
+
+#######################
+library(batchtools)
+library(pulsar)
+
+#' @keywords internal
+stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # Only 5 arguments!!!
+    if (is.null(stars.thresh)) stars.thresh <- 0.1
+    est <- list()
+
+
+    # do.call(batchtools::reduceResults,
+    #                  c(list(reg=reg, fun=starsaggfun), reduceargs))
+
+    if (is.null(merge)) {
+      est$merge <- lapply(premerge, function(x) Reduce("+", x)) # Like sum(), but can also used for adding matrices etc.
+      # If merge is not provided, the function aggregates the premerge results to get a consolidated view of 
+      #the model's performance across all subsamples.
+      gc() # flush
+    } else est$merge <- merge
+    
+    est$summary <- rep(0, length(est$merge)) # empty array
+
+    for (i in 1:length(est$merge)) { # The function then computes a stability measure for each model (or each level 
+      # of regularization, if applicable). This involves calculating the variability of model selection across subsamples.
+      est$merge[[i]] <- est$merge[[i]]/rep.num
+      est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1)) # binomial probab for edge appearing
+    }
+    ## monotonize variability
+    est$summary   <- cummax(est$summary)
+    est$opt.index <- .starsind(est$summary, stars.thresh) # Based on computed stability measures and provided threshold, function identifies optimal point 
+    est$criterion <- "stars.stability"
+    est$thresh    <- stars.thresh
+    return(est)
+}
 
 
 #######################
@@ -394,96 +524,6 @@ my.opt.index <- function(obj, criterion = 'gcd') {
 
 
 #######################
-
-# GCM function
-gcvec_extended_random <- function(G, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, five = FALSE){
-  
-  diag(G) = 0
-  
-  Elist <- .adj2elist(G)
-  n <- length(orbind)
-  if (ncol(Elist) < 1 || nrow(Elist) < 1) {
-      return(rep(0, n*(n-1)/2))
-  }
-
-  p <- ncol(G)
-  if(five == TRUE){
-    gcount <- orca::count5(Elist)
-  }else{
-    gcount <- orca::count4(Elist)
-    }
-  ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(gcount), ncol=ncol(gcount))
-  gcount <- rbind(gcount, buffer)
-# deprecate direct call to count4 for CRAN submission
-#  gcount <- .C("count4", Elist, dim(Elist),
-#      orbits = matrix(0, nrow = max(Elist), ncol = 15), PACKAGE="orca")$orbits
-  ##  # warnings here are due to std dev == 0. This almost always occurs for a completely connected
-  ## or completely empty graph and can be safely suppressed.
-  
-  after1 = rbind(gcount[,orbind],1)
-  after2 = rbind(gcount[,orbind],runif(length(orbind),0,1))
-  #after2 = rbind(after2,runif(length(orbind),0,1))
-  
-  gcor1 <- suppressWarnings(cor(after1, method='spearman'))
-  gcor2 = suppressWarnings(cor(after2, method='spearman'))
-  gcor = gcor1[upper.tri(gcor1)]
-  gcor_random = gcor2[upper.tri(gcor2)]
-  
-  return(list("corr_1" = gcor1, "res_1" = gcor, "gcount_1" = gcount, "corr_2" = gcor2, "gcor2" = gcor2, "res2" = gcor_random, "after1" = after1, "after2"=after2))
-}
-
-library(batchtools)
-library(pulsar)
-
-#' @keywords internal
-stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # Only 5 arguments!!!
-    if (is.null(stars.thresh)) stars.thresh <- 0.1
-    est <- list()
-
-
-    # do.call(batchtools::reduceResults,
-    #                  c(list(reg=reg, fun=starsaggfun), reduceargs))
-
-    if (is.null(merge)) {
-      est$merge <- lapply(premerge, function(x) Reduce("+", x)) # Like sum(), but can also used for adding matrices etc.
-      # If merge is not provided, the function aggregates the premerge results to get a consolidated view of 
-      #the model's performance across all subsamples.
-      gc() # flush
-    } else est$merge <- merge
-    
-    est$summary <- rep(0, length(est$merge)) # empty array
-
-    for (i in 1:length(est$merge)) { # The function then computes a stability measure for each model (or each level 
-      # of regularization, if applicable). This involves calculating the variability of model selection across subsamples.
-      est$merge[[i]] <- est$merge[[i]]/rep.num
-      est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1)) # binomial probab for edge appearing
-    }
-    ## monotonize variability
-    est$summary   <- cummax(est$summary)
-    est$opt.index <- .starsind(est$summary, stars.thresh) # Based on computed stability measures and provided threshold, function identifies optimal point 
-    est$criterion <- "stars.stability"
-    est$thresh    <- stars.thresh
-    return(est)
-}
-
-
-#' @importFrom stats dist
-#' @keywords internal
-gcd.stability <- function(premerge, thresh, rep.num, p, nlams, merge=NULL) { # 6 argumets including nlams
-    est <- list()
-    
-    if (is.null(merge)) {
-        est$merge <- lapply(premerge, function(pm) dist(t(sapply(pm, gcvec))))
-    } else est$merge <- merge
-    
-
-    est$summary <- vector('numeric', nlams) # set up empty vector
-    for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]]) # fill summary i with mean over all subsamples rep.num N
-    est$criterion <- "graphlet.stability"
-    return(est)
-}
-
 
 findConfFile <- function(name='') {
  ## if x is not a file
@@ -581,28 +621,6 @@ estrada.stability <- function(merge, thresh, rep.num, p, nlams) {
     return(length(summary))
   }
 }
-
-
-gcvec <- function(G, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1) {
-  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
-  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
-  Elist <- .adj2elist(G)
-  n <- length(orbind)
-  if (ncol(Elist) < 1 || nrow(Elist) < 1) {
-      return(rep(0, n*(n-1)/2))
-  }
-
-  p <- ncol(G)
-  gcount <- orca::count4(Elist)
-  ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(gcount), ncol=ncol(gcount))
-  gcount <- rbind(gcount, buffer)
-  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
-  ## or completely empty graph and can be safely suppressed.
-  gcor <- suppressWarnings(cor(rbind(gcount[,orbind],1), method='spearman'))
-  gcor[upper.tri(gcor)]
-}
-
 
 #' @keywords internal
 batchply <- function(data, estFun, fun, fargs, ind.sample, wkdir, regdir,
