@@ -103,24 +103,9 @@ lambda <- list(lambda=lambda_path)
       est$path <- path
       est
   }
-  
-  # Using Huge GLASSO
-  #library(huge)
-  #huger <- function(data, lambda) {
-    #est  <- huge::huge(data, lambda = lambda, method = "glasso")
-    #path <- lapply(seq(length(lambda)), function(i) {
-      ## convert precision array to adj list
-      #tmp <- est$path[[i]]
-      #tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
-      #return(tmp)
-    #})
-    #est$path <- path
-    #est
-  #}
     
 
 quicargs <- list(lambda = lambda_path)
-#hugeargs <- list(lambda = lambda_path, method = "glasso", verbose = FALSE)
   
 library(batchtools)
 library(pulsar)
@@ -136,11 +121,86 @@ out.p <- my.batch.pulsar(
   ub.stars = TRUE, 
   seed = FALSE,
   refit = FALSE,
-  fullgcd = FALSE,
   prior_graph = true_graph,
   method = c("spearman", "kendall", "latentcor")
 )
 
+out.p
+
+stop() 
+
+### Integrate this into pulsar at some point
+set_opt_indices <- function(obj, indices) {
+    for (crit in names(indices)) {
+        if (!is.na(indices[[crit]])) {
+            obj <- "my.opt.index<-"(obj, criterion = crit, value = indices[[crit]])
+        }
+    }
+    return(obj)
+}
+
+# Extract optimal Index
+get_opt_indices <- function(obj, criteria) {
+    indices <- list()
+    for (crit in criteria) {
+        opt_index <- my.get.opt.index(obj, criterion = crit)
+        indices[[crit]] <- opt_index  # Directly assigning the index
+    }
+    return(indices)
+}
+
+
+get_optimal_lambda <- function(opt_indices, lambda_path) {
+    optimal_lambda <- list()
+    for (crit in names(opt_indices)) {
+        index <- opt_indices[[crit]]
+        if (!is.na(index) && index <= length(lambda_path)) {
+            optimal_lambda[[crit]] <- round(lambda_path[index], 3)
+        } else {
+            optimal_lambda[[crit]] <- NA
+        }
+    }
+
+    return(optimal_lambda)
+}
+
+
+criteria <- unlist(out.p$criterion)
+criteria <- criteria[!criteria %in% c("gcd", "gcd_prior")]
+opt_indices <- get_opt_indices(out.p, criteria)
+out.p <- set_opt_indices(out.p, opt_indices)
+optimal_lambda_values <- get_optimal_lambda(opt_indices, lambda_path = lambda$lambda)
+
+  # Lower Bound
+  stars_lb <- out.p[["stars"]][["lb.index"]]
+  lambda_lb <- round(lambda_path[stars_lb], 3)
+  # Upper Bound
+  stars_ub <- out.p[["stars"]][["ub.index"]]
+  lambda_ub <- round(lambda_path[stars_ub], 3)
+
+
+result <- list()
+for (crit in criteria) {
+    result[[crit]] <- list("Optimal Index" = opt_indices[[crit]])
+}
+
+
+
+
+
+
+###########################################################
+
+
+
+```
+
+
+
+
+
+
+```{r}
 
 # Optimal Index Stars
 stars_index <-  my.opt.index(out.p, 'stars')
@@ -151,16 +211,21 @@ stars_lb <- out.p[["stars"]][["lb.index"]]
 # Upper Bound
 stars_ub <- out.p[["stars"]][["ub.index"]]
 
-# Optimal Index Gstars
-my.opt.index(out.p, criterion = "gcd") <- my.get.opt.index(out.p, criterion = "gcd")
-gstars_index <- my.opt.index(out.p, 'gcd')[[1]]
 
+# Optimal Index Stars
+stars_index <-  my.opt.index(out.p, 'stars')
 # Optimal Lambda
-best_lambda_gstars <- round(lambda_path[gstars_index], 3)
+best_lambda_stars <- round(lambda_path[stars_index], 3)
+
+# Optimal Index Gstars_spearman
+my.opt.index(out.p, criterion = "gcd") <- my.get.opt.index(out.p, criterion = "gcd")
+gstars_index_s <- my.opt.index(out.p, 'gcd')[[1]]
+# Optimal Lambda
+best_lambda_gstars_spearman <- round(lambda_path[gstars_index_spearman], 3)
 
 # Optimal Index PG-stars
-my.opt.index(out.p, criterion = "gcd_prior") <- my.get.opt.index(out.p, criterion = "gcd_prior")
-pgstars_index <- my.opt.index(out.p, 'gcd_prior')[[1]]
+my.opt.index(out.p, criterion = "gcd_prior_spearman") <- my.get.opt.index(out.p, criterion = "gcd_prior_spearman")
+pgstars_index <- my.opt.index(out.p, 'gcd_prior_spearman')[[1]]
 # Optimal Lambda
 best_lambda_pgstars <- round(lambda_path[pgstars_index], 3)
 
@@ -248,27 +313,38 @@ plot(out.p, legends = F, scale = F)
 
 graph <- true_graph
 graph <- gstars_graph
-method = "spearman"
-
 
 orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
-five_node = FALSE
-
 nx2 <- .adj2elist(graph)
-nx2
 n <- length(orbind)
 p <- ncol(graph)
 orb_count <- orca::count4(nx2) # redundant graphlet degree matrix (gdm) px15
-orb_count
-  
 buffer <- matrix(0, nrow=p-nrow(orb_count), ncol=ncol(orb_count)) # Create empty set up
-buffer
 orb_count <- rbind(orb_count, buffer)
-orb_count
-
 orb_count_normal = rbind(orb_count[,orbind],1)
-orb_count_normal[1:5,]
+gcm <- suppressWarnings(cor(orb_count_normal, method = "spearman"))
+gcv1 <- gcm[upper.tri(gcm)] 
 
+gcv2 <- gcm[upper.tri(gcm)] 
+
+gcd <- dist(rbind(gcv1,gcv2))[[1]]
+
+gcv1 
+orb_count_normal[1:5,]
+gcm <- latentcor::latentcor(orb_count_normal, method = "original")
+gcm <- gcm$K
+suppressWarnings(cor(orb_count_normal, method = "spearman"))
+
+    latentcor(
+      X,
+      types = NULL,
+      method = c("approx", "original"),
+      use.nearPD = TRUE,
+      nu = 0.001,
+      tol = 1e-08,
+      ratio = 0.9,
+      showplot = FALSE
+)
 
 
 # Example usage
@@ -277,7 +353,7 @@ orb_count_noisy <- modify_orb_count(orb_count_normal)
 orb_count_noisy[1:5,] 
 
 
-gcm <- suppressWarnings(cor(orb_count_normal, method = method))
+
 gcm_norm
 gcm_rand <- suppressWarnings(cor(orb_count_random, method = method))
 gcm_rand
@@ -292,7 +368,7 @@ GCD <- function(gcv1, gcv2){
 
 GCD(gcv1,gcv2)
 
-dist(rbind(gcv1,gcv2))[[1]]
+
 
 ###################################
 ## Add noise to orb_count
