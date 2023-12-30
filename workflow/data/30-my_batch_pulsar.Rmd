@@ -11,7 +11,8 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
                     job.res=list(), cleanup=FALSE, refit=TRUE, 
-                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1) {
+                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1,
+                    use_pseudo_count = FALSE, pseudo_count_prob = 0.5, pseudo_count_strength = 1, five_node = FALSE) {
 
     if (!requireNamespace('batchtools', quietly=TRUE)) {
         stop("'batchtools' package required to run 'batch.pulsar'")
@@ -55,7 +56,9 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
 
     est <- list()
     reduceargs <- list()
+    # Initialize a list to store reduceGCDargs for each method
     reduceGCDargs <- list()
+    reduceGCDargs_pseudo <- list()
     
     
     if (lb.stars) {
@@ -111,16 +114,33 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
         # compute initial gcd if selected
         if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) {
             # Initialize a list to store gcdpremerge results for each method
-            lb.gcdpremerge_list <- list()
+            lb.gcdpremerge <- list()
+            lb.gcdpremerge_pseudo <- list()
         
             for (meth in method) {
-                # Define aggfun for the current method
+              
+              if (use_pseudo_count == TRUE) {
+                
+                # Define aggfun for the current method + Pseudo Count
                 aggfun <- function(res, ...) {
-                    lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, ...))
+                    lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
+                                                     pseudo_count = TRUE, pseudo_count_prob = pseudo_count_prob,
+                                                     pseudo_count_strength = pseudo_count_strength, ...))
                 }
         
                 # Processing and gathering results
-                lb.gcdpremerge_list[[meth]] <- do.call(batchtools::reduceResultsList,
+                lb.gcdpremerge_pseudo[[meth]] <- do.call(batchtools::reduceResultsList,
+                                                       c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs_pseudo))
+                
+              }
+              
+                # Define aggfun for the current method
+                aggfun <- function(res, ...) {
+                    lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node, ...))
+                }
+        
+                # Processing and gathering results
+                lb.gcdpremerge[[meth]] <- do.call(batchtools::reduceResultsList,
                                                        c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs))
             }
         }
@@ -153,22 +173,28 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
   
         
         if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { 
-            # Initialize a list to store reduceGCDargs for each method
-            reduceGCDargs_list <- list()
         
             for (meth in method) {
-                # Check if lb.gcdpremerge for the current method exists
-                if (!is.null(lb.gcdpremerge_list[[meth]])) {
+              
+              if (use_pseudo_count == TRUE) {
+                
+                # Check if lb.gcdpremerge Pseudo Count for the current method exists
+                if (!is.null(lb.gcdpremerge_pseudo[[meth]])) {
                     # Create reduceGCDargs for the current method
-                    reduceGCDargs_list[[meth]] <- list(init = lapply(lb.gcdpremerge_list[[meth]], 
+                    reduceGCDargs_pseudo[[meth]] <- list(init = lapply(lb.gcdpremerge_pseudo[[meth]], 
+                                                                    function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
+                }
+              }
+              
+                # Check if lb.gcdpremerge for the current method exists
+                if (!is.null(lb.gcdpremerge[[meth]])) {
+                    # Create reduceGCDargs for the current method
+                    reduceGCDargs[[meth]] <- list(init = lapply(lb.gcdpremerge[[meth]], 
                                                                     function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
                 }
             }
         }
 
-        # takes the pre-merged results (lb.gcdpremerge) and selects a subset of them based on the indices specified by  
-        # ub.index (upper bound index) and lb.est$opt.index (optimal index from lower bound estimation). 
-        # This subset of results will be used in subsequent calculations.
         
         regdir <- gsub(paste("_", init, sep = ""), "", regdir)
         isamp <- ind.sample[-(1:minN)] # First minN subsamples were already processed, and the remaining ones are to be handled now.
@@ -202,6 +228,51 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
 
         if (crit == "gcd" || crit == "gcd_prior") {
             for (meth in method) {
+              
+              if (use_pseudo_count == TRUE) {
+                
+                # Update criterion to include new methods
+                new_criterion_name <- if (crit == "gcd") {
+                    paste("gcd_pseudo", meth, sep = "_")
+                } else {
+                    paste("gcd_prior_pseudo", meth, sep = "_")
+                }
+                updated_criteria <- c(updated_criteria, new_criterion_name)
+                
+                # Function factory to create gcdaggfun with bound method
+                makeGcdAggFun <- function(meth) {
+                    function(res, ...) {
+                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
+                                                         pseudo_count = TRUE, 
+                                                         pseudo_count_prob = pseudo_count_prob,
+                                                         pseudo_count_strength = pseudo_count_strength, ...))
+                    }
+                }
+        
+                # Create gcdaggfun for the current method
+                gcdaggfun <- makeGcdAggFun(meth)
+                
+                # Check if reduceGCDargs for the current method exists
+                if (!is.null(reduceGCDargs_pseudo[[meth]])) {
+                    # Processing and gathering results
+                    gcdpremerge_pseudo <- c(reduceGCDargs_pseudo[[meth]]$init,
+                                     batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
+            
+                    if (crit == "gcd") {
+                        est[[paste("gcd_pseudo", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge_pseudo, 
+                                                            thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                            use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
+                        #est[[paste("gcdpremerge_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
+                    }
+                
+                    if (crit == "gcd_prior") {
+                        est[[paste("gcd_prior_pseudo", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge_pseudo, 
+                                                            thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                            use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
+                        #est[[paste("gcdpremerge_prior_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
+                    }
+                }
+              }
                 
                 # Update criterion to include new methods
                 new_criterion_name <- if (crit == "gcd") {
@@ -214,7 +285,7 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
                 # Function factory to create gcdaggfun with bound method
                 makeGcdAggFun <- function(meth) {
                     function(res, ...) {
-                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, ...))
+                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node, ...))
                     }
                 }
         
@@ -222,22 +293,22 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
                 gcdaggfun <- makeGcdAggFun(meth)
                 
                 # Check if reduceGCDargs for the current method exists
-                if (!is.null(reduceGCDargs_list[[meth]])) {
+                if (!is.null(reduceGCDargs[[meth]])) {
                     # Processing and gathering results
-                    gcdpremerge <- c(reduceGCDargs_list[[meth]]$init,
+                    gcdpremerge <- c(reduceGCDargs[[meth]]$init,
                                      batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
             
                     if (crit == "gcd") {
                         est[[paste("gcd", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
                                                             thresh, rep.num, p, nlams, prior_graph = prior_graph, 
-                                                            use_prior = FALSE, method = meth, orbind = orbind)
+                                                            use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
                         #est[[paste("gcdpremerge", meth, sep = "_")]] <- gcdpremerge
                     }
                 
                     if (crit == "gcd_prior") {
                         est[[paste("gcd_prior", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
                                                             thresh, rep.num, p, nlams, prior_graph = prior_graph, 
-                                                            use_prior = TRUE, method = meth, orbind = orbind)
+                                                            use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
                         #est[[paste("gcdpremerge_prior", meth, sep = "_")]] <- gcdpremerge
                     }
                 }
@@ -283,20 +354,22 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
     
     # Update criterion vector outside the loop, before returning the output
     criterion <- unique(c(criterion, updated_criteria))
+    criterion <- setdiff(criterion, c("gcd", "gcd_prior"))
     est$criterion <- criterion
     
+    # #Naming all criteria
+    # for (crit in criterion) {
+    #   est[[crit]]$criterion <- criterion$crit
+    #   
+    # }
+
     
     # Compute and set optimal indices directly (excluding StARS)
     for (crit in criterion) {
-        if (crit == "gcd" || crit == "gcd_prior") {
-            for (meth in method) {
-                full_crit_name <- paste(crit, meth, sep = "_")
-                if (full_crit_name %in% names(est)) {
-                    gcdind <- which.min(est[[full_crit_name]]$summary)
-                    gcdind <- gcdind + est$stars$ub.index - 1
-                    est[[full_crit_name]]$opt.index <- gcdind
-                }
-            }
+        if (startsWith(crit, "gcd")) { 
+          gcdind <- which.min(est[[crit]]$summary)
+          gcdind <- gcdind + est$stars$ub.index - 1
+          est[[crit]]$opt.index <- gcdind
         }
     }
     
@@ -311,15 +384,10 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
             est$stars$opt.lambda <- signif(lambda_full[opt_ind], 3)
         } 
       
-        if (crit == "gcd" || crit == "gcd_prior") {
-              for (meth in method) {
-                  full_crit_name <- paste(crit, meth, sep = "_")
-                  if (full_crit_name %in% names(est)) {
-                      opt_ind <- est[[full_crit_name]]$opt.index
-                      est[[full_crit_name]]$opt.lambda <- signif(lambda_full[opt_ind], 3)
-                  }
-              }
-          }
+        else if (startsWith(crit, "gcd")) { 
+           opt_ind <- est[[crit]]$opt.index
+           est[[crit]]$opt.lambda <- signif(lambda_full[opt_ind], 3)
+        }
     }
     
 
@@ -341,84 +409,43 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
 #########################################################################################################
 #############################################
 
-#' @rdname print.pulsar
-#' @export
 print.batch.pulsar <- function(x, ...) {
-    fin <- getArgs(getCall(x), getEnvir(x))
-    cat("Mode: batch")
-    .print.pulsar(x, fin)
+    cat("Mode: batch\n")
+    .print.pulsar(x)
 }
 
-#' @keywords internal
-getArgs <- function(call, envir=parent.frame()) {
-    fin    <- lapply(call, eval, envir=envir)
-    forms  <- formals(fin[[1]])
-    iscall <- sapply(forms, class) == 'call'
-    iscall <- iscall & !(names(forms) %in% c('regdir', 'regid'))
-    forms[iscall] <- lapply(forms[iscall], eval)
-    c(forms[!(names(forms) %in% names(fin))], fin)
+
+
+.print.pulsar <- function(x) {
+    cat("Path length:", length(x$envir$lambda_path), "\n")
+    cat("Subsamples: ", x$envir$N, "\n")
+    cat("Graph dim:  ", x$envir$p, "\n")
+
+    criteria <- x$criterion
+    critext <- ifelse(length(criteria) > 1, "Criteria:", "Criterion:")
+    cat(critext, "\n")
+
+    for (cr in criteria) {
+        cr_obj <- x[[cr]]
+        opt_index <- cr_obj$opt.index
+        opt_lambda <- cr_obj$opt.lambda
+
+        optext <- ifelse(!is.null(opt_index),
+                         paste("... opt: index ", opt_index, ", lambda ", signif(opt_lambda, 3), sep=""),
+                         "")
+        cat("  ", cr, optext, "\n")
+    }
 }
 
-######' @keywords internal
-# .print.pulsar <- function(x, fin) {
-#     if (fin$lb.stars) {
-#         cat("... bound index: lower ", x$stars$lb.index,
-#             ", upper ", x$stars$ub.index, "\n", sep="")
-#     } else cat("\n")
-#     cat("Path length:", length(fin$fargs$lambda), "\n")
-#     cat("Subsamples: ", fin$rep.num, "\n")
-#     cat("Graph dim:  ", ncol(fin$data), "\n")
-#     critext  <- ifelse(length(fin$criterion) > 1, "Criteria:", "Criterion:")
-#     critext2 <- lapply(fin$criterion, function(cr) {
-#         opt.ind <- x[[cr]]$opt.ind
-#         optext  <- ifelse(is.null(opt.ind), "",
-#           paste("... opt: index ", opt.ind, ", lambda ",
-#           signif(fin$fargs$lambda[opt.ind], 3), sep=""))
-#         paste("  ", cr, optext, sep="")
-#         })
-#     cat(critext, "\n", paste(critext2, collapse="\n"), "\n", sep="")
-# }
 
-.print.pulsar <- function(x, fin) {
-    if (fin$lb.stars) {
-        cat("... bound index: lower ", x$stars$lb.index,
-            ", upper ", x$stars$ub.index, "\n", sep="")
-    } else cat("\n")
-    cat("Path length:", length(fin$fargs$lambda), "\n")
-    cat("Subsamples: ", fin$rep.num, "\n")
-    cat("Graph dim:  ", ncol(fin$data), "\n")
-    critext  <- ifelse(length(fin$criterion) > 1, "Criteria:", "Criterion:")
-    critext2 <- lapply(fin$criterion, function(cr) {
-        if (grepl("gcd", cr)) {
-            # Handle different gcd methods
-            method_results <- lapply(fin$method, function(meth) {
-                method_name <- paste(cr, meth, sep = "_")
-                opt.ind <- x[[method_name]]$opt.ind
-                optext  <- ifelse(is.null(opt.ind), "",
-                  paste("... opt: index ", opt.ind, ", lambda ",
-                  signif(fin$fargs$lambda[opt.ind], 3), sep=""))
-                paste("  ", method_name, optext, sep="")
-            })
-            return(paste(method_results, collapse="\n"))
-        } else {
-            # Original code for other criteria
-            opt.ind <- x[[cr]]$opt.ind
-            optext  <- ifelse(is.null(opt.ind), "",
-              paste("... opt: index ", opt.ind, ", lambda ",
-              signif(fin$fargs$lambda[opt.ind], 3), sep=""))
-            paste("  ", cr, optext, sep="")
-        }
-    })
-    cat(critext, "\n", paste(critext2, collapse="\n"), "\n", sep="")
-}
 
 
 ##################################################
 
 
 
-my.gcvec <- function(graph, method, orbind, 
-                     five_node = FALSE, noise = FALSE, noise_prob = 0.5, noise_strength = 1) {
+my.gcvec <- function(graph, method, orbind, five_node, 
+                     pseudo_count = FALSE, pseudo_count_prob, pseudo_count_strength) {
   
   if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
   if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
@@ -443,9 +470,10 @@ my.gcvec <- function(graph, method, orbind,
   # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
   gdm <- rbind(gdm[,orbind],1)
   
-  if (noise == TRUE) {
-    ## Add noise to orb_count
-    gdm <- modify_orb_count(gdm, noise_prob = noise_prob, noice_strength = noise_strength)
+  if (pseudo_count == TRUE) {
+    ## Add pseudo_count to orb_count
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_prob = pseudo_count_prob, 
+                            pseudo_count_strength = pseudo_count_strength)
   }
   
   if (method %in% c("kendall", "spearman")){
@@ -466,18 +494,18 @@ my.gcvec <- function(graph, method, orbind,
 #################
 
 ## Add noise to orb_count
-modify_orb_count <- function(orb_count, noise_prob, noise_strength) {
+modify_orb_count <- function(orb_count, pseudo_count_prob, pseudo_count_strength) {
   # Iterate over each element of the matrix
   for (i in 1:nrow(orb_count)) {
     for (j in 1:ncol(orb_count)) {
       # Decide whether to modify this element
-      if (runif(1) < noise_prob) {
+      if (runif(1) < pseudo_count_prob) {
         # Randomly choose to add or only subtract if orbit count is greater than 0
         if (runif(1) < 0.5) {
-          orb_count[i, j] <- orb_count[i, j] + noise_strength
+          orb_count[i, j] <- orb_count[i, j] + pseudo_count_strength
         } else {
           if (orb_count[i, j] > 0) {
-            orb_count[i, j] <- max(0, orb_count[i, j] - noise_strength)  # Ensures orbit count does not go negative
+            orb_count[i, j] <- max(0, orb_count[i, j] - pseudo_count_strength)  # Ensures orbit count does not go negative
           }
         }
       }
@@ -489,7 +517,7 @@ modify_orb_count <- function(orb_count, noise_prob, noise_strength) {
 ################ 
 
 
-my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, use_prior = FALSE, method, orbind) { 
+my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, use_prior = FALSE, method, orbind, five_node, ...) { 
     est <- list()
 
     if (!method %in% c("kendall", "spearman", "latentcor")) {
@@ -503,7 +531,7 @@ my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, u
     }
 
     if (use_prior) {
-        gcv_true = my.gcvec(prior_graph, method = method, orbind = orbind) # gcv for true_graph
+        gcv_true = my.gcvec(prior_graph, method = method, orbind = orbind, five_node = five_node, ...) # gcv for true_graph
 
         est$merge <- vector("list", nlams)
         for (i in 1:nlams) {
