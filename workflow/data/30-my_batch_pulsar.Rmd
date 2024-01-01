@@ -6,11 +6,11 @@ output: github_document
 ## my.batch.pulsar function
 ```{r}
 
-my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
+my.batch.pulsar <- function(data, funct = "QUIC", fargs=list(),
                     criterion=c("stars"), thresh = 0.1, subsample.ratio = NULL,
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
-                    job.res=list(), cleanup=FALSE, refit=TRUE, 
+                    job.res=list(), cleanup=FALSE, refit = TRUE, 
                     prior_graph = NULL, method = c("spearman"), orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1,
                     use_pseudo_count = FALSE, pseudo_count_prob = 0.5, pseudo_count_strength = 1, five_node = FALSE) {
 
@@ -20,6 +20,41 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
     gcinfo(FALSE)
     if (!is.na(regdir) && file.exists(regdir)) {
         stop('Registry directory already exists')
+    }
+    
+    if (!funct %in% c("QUIC", "glasso")) stop("Please choose either 'QUIC' or 'glasso' as function") # !("stars" %in% criterion)
+
+    if (funct == "QUIC") {
+
+      # Using QUIC
+      fun <- function(data, lambda, ...) {
+          p <- ncol(data)
+          est  <- BigQuic::BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+          est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+          path <-  lapply(seq(length(lambda)), function(i) {
+                      tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                      diag(tmp) <- 0
+                      as(tmp!=0, "lMatrix")
+          })
+          est$path <- path
+          est
+      }
+    }
+
+    if (funct == "glasso") {
+
+      # Using Huge GLASSO
+      fun <- function(data, lambda, ...) {
+        est  <- huge::huge(data, lambda = lambda, method = "glasso")
+        path <- lapply(seq(length(lambda)), function(i) {
+        # convert precision array to adj list
+        tmp <- est$path[[i]]
+        tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
+        return(tmp)
+        })
+        est$path <- path
+        est
+      }
     }
 
     n <- nrow(data)
@@ -86,11 +121,6 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
     } else {
         fullmodel <- NULL #  indicating that no full dataset fit was performed.
     }
-    
-    # In essence, this section of code is central to the functioning of my.batch.pulsar, as it handles the parallel execution of
-    # model estimation over subsamples of data, waits for these jobs to complete, and collects the results for further analysis. 
-    # It also anages the optional refit of the model using the full dataset.
-    
 
     
     starsaggfun <- function(res, aggr) lapply(1:length(aggr), function(i) aggr[[i]] + res[[i]])
@@ -132,6 +162,7 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
                 lb.gcdpremerge_pseudo[[meth]] <- do.call(batchtools::reduceResultsList,
                                                        c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs_pseudo))
                 
+                #est$test$lb.gcdpremerge_pseudo[[meth]] <- lb.gcdpremerge_pseudo[[meth]] ###
               }
               
                 # Define aggfun for the current method
@@ -142,6 +173,8 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
                 # Processing and gathering results
                 lb.gcdpremerge[[meth]] <- do.call(batchtools::reduceResultsList,
                                                        c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs))
+                
+                #est$test$lb.gcdpremerge[[meth]] <- lb.gcdpremerge[[meth]] ###
             }
         }
         
@@ -332,21 +365,36 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
     }
 
     if (lb.stars) {
-        pind <- ub.index:lb.est$opt.index
-        pinv <- setdiff(1:length(lb.est$summary), pind)
-        tmpsumm <- vector('numeric', length(lb.est$summary))
-        tmpsumm[pinv] <- lb.est$summary[pinv]
-        tmpsumm[pind] <- est$stars$summary
-        est$stars$summary <- tmpsumm
+      ## split indices of init and full stars estimate
+      pind <- ub.index:lb.est$opt.index
+      pinv <- setdiff(1:length(lb.est$summary), pind)
+      ## stitch back together init and full stars summaries
+      tmpsumm       <- vector('numeric', length(lb.est$summary))
+      tmpsumm[pinv] <- lb.est$summary[pinv]
+      tmpsumm[pind] <- est$stars$summary
+      est$stars$summary <- tmpsumm
+      ## stitch back together init and full stars merges
+      tmpmerg <- vector('list', length(lb.est$summary))
+      tmpmerg[pinv]   <- lb.est$merge[pinv]
+      tmpmerg[pind]   <- est$stars$merge
+      est$stars$merge <- tmpmerg
+        
+      # Optimal index stars
+      est$stars$opt.index <- est$stars$opt.index + ub.index - 1
 
-        tmpmerg <- vector('list', length(lb.est$summary))
-        tmpmerg[pinv] <- lb.est$merge[pinv]
-        tmpmerg[pind] <- est$stars$merge
-        est$stars$merge <- tmpmerg
-
-        est$stars$lb.index <- lb.est$opt.index
-        est$stars$ub.index <- ub.index
-        est$stars$opt.index <- est$stars$opt.index + ub.index - 1
+      # lambda paths
+      est$additional$lambda_full <- lambda_full
+      est$additional$lambda_bound <- fargs$lambda
+      # lb and ub index
+      est$additional$lb.index <- lb.est$opt.index
+      est$additional$ub.index <- ub.index
+      # # lb and ub lambda value
+      est$additional$lb.lambda <- round(lambda_full[lb.est$opt.index], 3)
+      est$additional$ub.lambda <- round(lambda_full[ub.index], 3)
+      stars_lambda <- round(lambda_full[est$stars$opt.index], 3)
+      # gap b and gab beta
+      est$additional$gap_b <- abs(est$additional$ub.lambda - est$additional$lb.lambda)
+      est$additional$gap_beta <- abs(stars_lambda - est$additional$lb.lambda)
     }
 
     if (cleanup) unlink(reg$file.dir, recursive = TRUE)
@@ -357,25 +405,20 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
     criterion <- setdiff(criterion, c("gcd", "gcd_prior"))
     est$criterion <- criterion
     
-    # #Naming all criteria
-    # for (crit in criterion) {
-    #   est[[crit]]$criterion <- criterion$crit
-    #   
-    # }
+    # Naming new criterion description according to cirterion
+    for (crit in criterion) {
+      est[[crit]]$criterion <- crit
+    }
 
-    
     # Compute and set optimal indices directly (excluding StARS)
     for (crit in criterion) {
         if (startsWith(crit, "gcd")) { 
           gcdind <- which.min(est[[crit]]$summary)
-          gcdind <- gcdind + est$stars$ub.index - 1
+          gcdind <- gcdind + est$additional$ub.index - 1
           est[[crit]]$opt.index <- gcdind
         }
     }
     
-    # Bounded lambda path
-    lambda_bound <- fargs$lambda
-    est$lambda_bound <- lambda_bound
     
     # Iterate over each criterion and store the corresponding optimal lambda value
     for (crit in criterion) {
@@ -390,6 +433,17 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
         }
     }
     
+    # Refit each criterion with optimal index
+    if (refit == TRUE) {
+      for (crit in criterion) {
+        opt_ind <- est[[crit]]$opt.index
+        if (!is.null(opt_ind)) {
+          est[[crit]]$refit <- fullmodel$path[[opt_ind]]
+        } else {
+          est[[crit]]$refit <- NULL
+        }
+      }
+    }
 
     est$id <- id
     est$reg <- reg
@@ -407,13 +461,11 @@ my.batch.pulsar <- function(data, fun=huge::huge, fargs=list(),
 
 
 #########################################################################################################
-#############################################
 
 print.batch.pulsar <- function(x, ...) {
     cat("Mode: batch\n")
     .print.pulsar(x)
 }
-
 
 
 .print.pulsar <- function(x) {
@@ -436,9 +488,6 @@ print.batch.pulsar <- function(x, ...) {
         cat("  ", cr, optext, "\n")
     }
 }
-
-
-
 
 ##################################################
 
@@ -596,74 +645,12 @@ stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # 
 
 #######################
 
-
-
-
-############################
-# my.get.opt.index <- function(obj, criterion = "gcd_spearman", ...) {
-#     optind <- my.opt.index(obj, criterion)
-#     if (!is.null(optind)) optind
-#     if (criterion %in% c("gcd_spearman", "gcd_kendall", "gcd_latentcor", 
-#                          "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")) {
-#         if (is.null(obj$stars$lb.index) || !obj$stars$lb.index)
-#             stop('Lower bound needed for gcd metrics (run with lb.stars=TRUE)')
-#         gcdind <- which.min(getElement(obj, criterion)$summary)
-#         gcdind <- gcdind + obj$stars$ub.index - 1
-#         names(gcdind) <- criterion
-#         return(gcdind)
-#     } else {
-#         stop("Currently, gcd and gcd_prior is the only supported criterion")
-#     }
-# }
-
-# my.opt.index <- function(obj, criterion = 'gcd_spearman') {
-#     .pcheck(obj)
-#     .critcheck(obj, criterion)
-#     getElement(obj, criterion)$opt.index
-# }
-
-
-my.get.opt.index <- function(obj, criterion = "stars") {
-    optind <- my.opt.index(obj, criterion)
-    if (!is.null(optind)) return(optind)
-    
-    if (startsWith(criterion, "gcd") || startsWith(criterion, "gcd_prior")) {
-        if (is.null(obj$stars$lb.index) || !obj$stars$lb.index)
-            stop('Lower bound needed for gcd metrics (run with lb.stars=TRUE)')
-        gcdind <- which.min(getElement(obj, criterion)$summary)
-        gcdind <- gcdind + obj$stars$ub.index - 1
-        names(gcdind) <- criterion
-        return(gcdind)
-    } 
-    stop(paste("Criterion", criterion, "not supported"))
-}
-
-my.opt.index <- function(obj, criterion = 'stars') {
-    #.pcheck(obj)
-    .critcheck(obj, criterion)
-    getElement(obj, criterion)$opt.index
-}
-
-
 .critcheck <- function(obj, criterion=NULL) {
     if (!(criterion %in% names(obj)))
         warning('desired criterion was not used in the pulsar run')
 }
 
 
-"my.opt.index<-" <- function(obj, criterion=names(value), value) {
-    #.pcheck(obj)
-    fin <- getArgs(obj$call, obj$envir)
-    .critcheck(obj, criterion)
-    if (length(criterion) > 1) stop("Select one criterion")
-    if (is.null(criterion)) criterion <- 'gcd_spearman'
-    if (!is.null(value)) {
-      if (!is.numeric(value) || value < 1 || value >= length(fin$fargs$lambda))
-        stop('Index value must be positive int within range length of lambda path')
-    }
-    obj[[ criterion ]]$opt.index <- value
-    obj
-}
 
 .pcheck <- function(obj) {
     if (!inherits(obj, 'pulsar'))
@@ -803,6 +790,112 @@ batchply <- function(data, estFun, fun, fargs, ind.sample, wkdir, regdir,
 
 ## Prior Helper Functions
 ```{r}
+
+# my.get.opt.index <- function(obj, criterion = "gcd_spearman", ...) {
+#     optind <- my.opt.index(obj, criterion)
+#     if (!is.null(optind)) optind
+#     if (criterion %in% c("gcd_spearman", "gcd_kendall", "gcd_latentcor", 
+#                          "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")) {
+#         if (is.null(obj$stars$lb.index) || !obj$stars$lb.index)
+#             stop('Lower bound needed for gcd metrics (run with lb.stars=TRUE)')
+#         gcdind <- which.min(getElement(obj, criterion)$summary)
+#         gcdind <- gcdind + obj$stars$ub.index - 1
+#         names(gcdind) <- criterion
+#         return(gcdind)
+#     } else {
+#         stop("Currently, gcd and gcd_prior is the only supported criterion")
+#     }
+# }
+
+# my.opt.index <- function(obj, criterion = 'gcd_spearman') {
+#     .pcheck(obj)
+#     .critcheck(obj, criterion)
+#     getElement(obj, criterion)$opt.index
+# }
+
+
+my.get.opt.index <- function(obj, criterion = "stars") {
+    optind <- my.opt.index(obj, criterion)
+    if (!is.null(optind)) return(optind)
+    
+    if (startsWith(criterion, "gcd") || startsWith(criterion, "gcd_prior")) {
+        if (is.null(obj$stars$lb.index) || !obj$stars$lb.index)
+            stop('Lower bound needed for gcd metrics (run with lb.stars=TRUE)')
+        gcdind <- which.min(getElement(obj, criterion)$summary)
+        gcdind <- gcdind + obj$stars$ub.index - 1
+        names(gcdind) <- criterion
+        return(gcdind)
+    } 
+    stop(paste("Criterion", criterion, "not supported"))
+}
+
+my.opt.index <- function(obj, criterion = 'stars') {
+    #.pcheck(obj)
+    .critcheck(obj, criterion)
+    getElement(obj, criterion)$opt.index
+}
+
+
+
+"my.opt.index<-" <- function(obj, criterion=names(value), value) {
+    #.pcheck(obj)
+    fin <- getArgs(obj$call, obj$envir)
+    .critcheck(obj, criterion)
+    if (length(criterion) > 1) stop("Select one criterion")
+    if (is.null(criterion)) criterion <- 'gcd_spearman'
+    if (!is.null(value)) {
+      if (!is.numeric(value) || value < 1 || value >= length(fin$fargs$lambda))
+        stop('Index value must be positive int within range length of lambda path')
+    }
+    obj[[ criterion ]]$opt.index <- value
+    obj
+}
+
+
+refit <- function(obj, criterion) {
+    UseMethod("refit")
+}
+
+#' @export
+refit.pulsar <- function(obj, criterion) {
+    .refit.pulsar(obj, criterion)
+}
+
+#' @keywords internal
+.refit.pulsar <- function(obj, criterion) {
+    est <- vector('list', 2)
+    names(est) <- c('est', 'refit')
+    fin <- getArgs(getCall(obj), getEnvir(obj))
+    ## call est function on original dataset
+    if (length(obj$est)) {
+      est$est <- obj$est
+    } else {
+      est$est <- do.call(eval(fin$fun), c(fin$fargs, list(fin$data)))
+    }
+
+    if (missing(criterion)) criterion <- eval(fin$criterion)
+    est$refit <- vector('list', length(criterion))
+    names(est$refit) <- criterion
+    for (crit in criterion) {
+      optind <- obj[[crit]]$opt.index
+      if (!is.null(optind)) {
+        est$refit[[crit]] <- est$est$path[[optind]]
+      } else {
+        est$refit[[crit]] <- NULL
+        if (crit %in% names(obj)) {
+          message(paste('No optimal index selected for', crit, 'criterion', sep=" "))
+        } else
+          warning(paste('Unknown criterion', crit, sep=" "), call.=FALSE)
+      }
+    }
+
+    ## TODO: if fun is null, get formal arg of obj
+    est$fun <- obj$call$fun
+    if (is.null(est$fun))
+      est$fun <- formals(class(obj))$fun
+
+    structure(est, class='pulsar.refit')
+}
 
 my.gcvec <- function(graph, method = "spearman", orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, five_node = FALSE) {
   if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
