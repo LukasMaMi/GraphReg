@@ -3,6 +3,7 @@ title: "04-Plot_Hub"
 output: github_document
 ---
 
+
 ## Step 4: Plotting
 ```{r}
 
@@ -19,7 +20,7 @@ load(performance_filename)
 ```
 
 
-## Load Performance Results + Prior
+## Preparing data frames for plotting + additional criteria
 ```{r}
 
 #dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub"
@@ -29,34 +30,35 @@ dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Mast
 library(ggplot2)
 library(dplyr)
 
+
 # Initialize data frames for various metrics
 mean_f1_df <- data.frame(Config = character(), Method = character(), Mean_F1 = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
 mean_hamming_df <- data.frame(Config = character(), Method = character(), Mean_Hamming = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
 mean_sparsity_df <- data.frame(Config = character(), Method = character(), Mean_Sparsity = numeric(), stringsAsFactors = FALSE)
 mean_lambda_df <- data.frame(Config = character(), Method = character(), Mean_Lambda = numeric(), stringsAsFactors = FALSE)
+mean_gap_b_df <- data.frame(Config = character(), Method = character(), Mean_Gap_B = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
+mean_gap_beta_df <- data.frame(Config = character(), Method = character(), Mean_Gap_Beta = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
 
 # Loop over configurations
 for (cfg_key in names(config_results)) {
   cfg <- config_results[[cfg_key]]
 
-  # Loop over methods (Stars, GStars, Oracle_f1, Oracle_hamming, Null)
-  for (method in c("Stars", "GStars", "PGStars", "Oracle_f1", "Oracle_hamming", "Null")) {
+  # Loop over methods
+  for (method in names(cfg$Aggregated)) {
     # Aggregated metrics
-    aggregated_metrics <- cfg$Aggregated[[tolower(method)]]
+    aggregated_metrics <- cfg$Aggregated[[method]]
 
-    # Mean F1 and Hamming
+    # Extract mean values and confidence intervals for each metric
     mean_f1 <- aggregated_metrics$F1["Mean"]
     mean_hamming <- aggregated_metrics$Hamming["Mean"]
+    mean_sparsity <- aggregated_metrics$Sparsity["Mean"]
+    mean_lambda <- aggregated_metrics$Lambda["Mean"]
 
-    # Confidence intervals
+    # Extract confidence intervals
     ci_f1_lower <- aggregated_metrics$F1["CI1"]
     ci_f1_upper <- aggregated_metrics$F1["CI2"]
     ci_hamming_lower <- aggregated_metrics$Hamming["CI1"]
     ci_hamming_upper <- aggregated_metrics$Hamming["CI2"]
-
-    # Mean sparsity and lambda values
-    mean_sparsity <- aggregated_metrics$Sparsity["Mean"]
-    mean_lambda <- aggregated_metrics$Lambda["Mean"]
 
     # Append to data frames
     mean_f1_df <- rbind(mean_f1_df, data.frame(Config = cfg_key, Method = method, Mean_F1 = mean_f1, CI_Lower = ci_f1_lower, CI_Upper = ci_f1_upper))
@@ -64,180 +66,207 @@ for (cfg_key in names(config_results)) {
     mean_sparsity_df <- rbind(mean_sparsity_df, data.frame(Config = cfg_key, Method = method, Mean_Sparsity = mean_sparsity))
     mean_lambda_df <- rbind(mean_lambda_df, data.frame(Config = cfg_key, Method = method, Mean_Lambda = mean_lambda))
   }
+
+  # Extract mean gap values
+  gap_b_metrics <- cfg$Gap_Values$Gap_B
+  gap_beta_metrics <- cfg$Gap_Values$Gap_Beta
+  mean_gap_b_df <- rbind(mean_gap_b_df, data.frame(Config = cfg_key, Method = "Gap_B", Mean_Gap_B = gap_b_metrics["Mean"], CI_Lower = gap_b_metrics["CI1"], CI_Upper = gap_b_metrics["CI2"]))
+  mean_gap_beta_df <- rbind(mean_gap_beta_df, data.frame(Config = cfg_key, Method = "Gap_Beta", Mean_Gap_Beta = gap_beta_metrics["Mean"], CI_Lower = gap_beta_metrics["CI1"], CI_Upper = gap_beta_metrics["CI2"]))
 }
+
 
 ```
 
 
-
-## F1 Score and Hamming Distance Plots + Prior
+## F1 Score and Hamming Distance Plots for additional criteria
 ```{r}
 
 library(ggtext)
+library(dplyr)
+
+# Custom color mapping for methods
+method_colors <- c(
+  "stars" = "lightblue",
+  "oracle_f1" = "black",
+  "oracle_hamming" = "black",
+  "null_graph" = "darkred",
+  "gcd_spearman" = "darkgreen",
+  "gcd_kendall" = "darkblue",
+  "gcd_latentcor" = "purple",
+  "gcd_pseudo_spearman" = "orange",
+  "gcd_pseudo_kendall" = "pink",
+  "gcd_pseudo_latentcor" = "brown",
+  "gcd_prior_spearman" = "grey",
+  "gcd_prior_kendall" = "yellow",
+  "gcd_prior_latentcor" = "cyan",
+  "gcd_prior_pseudo_spearman" = "magenta",
+  "gcd_prior_pseudo_kendall" = "red",
+  "gcd_prior_pseudo_latentcor" = "blue"
+)
+
+# Function to add sparsity values with color coding to configuration labels
+add_sparsity_to_labels <- function(cfg_key, methods) {
+  sparsity_values <- sapply(methods, function(method) {
+    sparsity <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
+                                       mean_sparsity_df$Method == method, "Mean_Sparsity"], 3)
+    paste("<span style='color:", method_colors[method], ";'>", sparsity, "</span>", sep = "")
+  })
+
+  # Combine every two sparsity values with a line break
+  sparsity_lines <- sapply(seq(1, length(sparsity_values), by = 2), function(i) {
+    paste(sparsity_values[i:min(i+1, length(sparsity_values))], collapse = " ")
+  })
+
+  paste(config_labels[cfg_key], paste(sparsity_lines, collapse = "<br>"), sep = "<br>")
+}
 
 # Create custom labels for configurations
 config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
 names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
 
-# Add sparsity values with color coding
-# For the F1 Plot
-config_labels_with_sparsity_f1 <- sapply(names(config_labels), function(cfg_key) {
-  sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                             mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
-  sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                              mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
-  sparsity_pgstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                              mean_sparsity_df$Method == "PGStars", "Mean_Sparsity"], 3)
-  sparsity_oracle_f1 <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                                 mean_sparsity_df$Method == "Oracle_f1", "Mean_Sparsity"], 3)
+# Define sets of methods for each plot
+methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
+methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
+methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
+methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph")
 
-  paste(config_labels[cfg_key], 
-        "<span style='color:lightblue;'>", sparsity_stars, "</span>",
-        "<span style='color:darkorange;'>", sparsity_gstars, "</span>",
-        "<span style='color:#009900;'>", sparsity_pgstars, "</span>",
-        "<span style='color:black;'>", sparsity_oracle_f1, "</span>", 
-        sep = "<br>")
-}, simplify = FALSE)
+# Filter Data Frames for Plots
+mean_f1_df_set_1 <- mean_f1_df %>% filter(Method %in% methods_set_1_f1)
+mean_f1_df_set_2 <- mean_f1_df %>% filter(Method %in% methods_set_2_f1)
+mean_hamming_df_set_1 <- mean_hamming_df %>% filter(Method %in% methods_set_1_hamming)
+mean_hamming_df_set_2 <- mean_hamming_df %>% filter(Method %in% methods_set_2_hamming)
 
-# For the Hamming Plot
-config_labels_with_sparsity_hamming <- sapply(names(config_labels), function(cfg_key) {
-  sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                             mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
-  sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                              mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
-  sparsity_pgstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                            mean_sparsity_df$Method == "PGStars", "Mean_Sparsity"], 3)
-  sparsity_oracle_hamming <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & 
-                                            mean_sparsity_df$Method == "Oracle_hamming", "Mean_Sparsity"], 3)
+# Update Config column with sparsity values for Plots
+mean_f1_df_set_1$Config <- factor(mean_f1_df_set_1$Config, levels = names(config_labels), labels = sapply(names(config_labels), function(cfg_key) add_sparsity_to_labels(cfg_key, methods_set_1_f1)))
+mean_f1_df_set_2$Config <- factor(mean_f1_df_set_2$Config, levels = names(config_labels), labels = sapply(names(config_labels), function(cfg_key) add_sparsity_to_labels(cfg_key, methods_set_2_f1)))
+mean_hamming_df_set_1$Config <- factor(mean_hamming_df_set_1$Config, levels = names(config_labels), labels = sapply(names(config_labels), function(cfg_key) add_sparsity_to_labels(cfg_key, methods_set_1_hamming)))
+mean_hamming_df_set_2$Config <- factor(mean_hamming_df_set_2$Config, levels = names(config_labels), labels = sapply(names(config_labels), function(cfg_key) add_sparsity_to_labels(cfg_key, methods_set_2_hamming)))
 
-  paste(config_labels[cfg_key], 
-        "<span style='color:lightblue;'>", sparsity_stars, "</span>",
-        "<span style='color:darkorange;'>", sparsity_gstars, "</span>",
-        "<span style='color:#009900;'>", sparsity_pgstars, "</span>",
-        "<span style='color:black;'>", sparsity_oracle_hamming, "</span>", 
-        sep = "<br>")
-}, simplify = FALSE)
+# Functions
+create_plot <- function(df, title, y_label) {
+  ggplot(df, aes(x = Config, y = df[, 3], color = Method)) +
+    geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
+    geom_point(size = 1.5) +
+    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
+    labs(title = title, y = y_label, x = "") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+          axis.title.x = element_blank(),
+          legend.title = element_blank(),
+          axis.text.x = ggtext::element_markdown(angle = 0, hjust = 1)) +
+    scale_color_manual(values = method_colors) 
+    #scale_y_continuous(limits = c(0, 1))
+}
+
+save_and_display <- function(plot, file_name) {
+  ggsave(filename = paste0(file_name, ".pdf"), plot = plot, path = dir_path4, width = 8, height = 6, dpi = 300)
+  print(plot)
+}
+
+# Create and Display Plots
+F1_Hub_Set_1 <- create_plot(mean_f1_df_set_1, "Hub F1 Scores Set 1", "Mean F1 Score")
+F1_Hub_Set_2 <- create_plot(mean_f1_df_set_2, "Hub F1 Scores Set 2", "Mean F1 Score")
+Hamming_Hub_Set_1 <- create_plot(mean_hamming_df_set_1, "Hub Hamming Distances Set 1", "Mean Hamming Distance")
+Hamming_Hub_Set_2 <- create_plot(mean_hamming_df_set_2, "Hub Hamming Distances Set 2", "Mean Hamming Distance")
+
+# Save Plots
+save_and_display(F1_Hub_Set_1, "F1_Hub_Set_1")
+save_and_display(F1_Hub_Set_2, "F1_Hub_Set_2")
+save_and_display(Hamming_Hub_Set_1, "Hamming_Hub_Set_1")
+save_and_display(Hamming_Hub_Set_2, "Hamming_Hub_Set_2")
 
 
-# Filter Data Frames
-mean_f1_df_filtered <- mean_f1_df %>% filter(Method != "Oracle_hamming" & Method != "Null")
-mean_hamming_df_filtered <- mean_hamming_df %>% filter(Method != "Oracle_f1")
 
-# Update the Config column in mean_f1_df and mean_hamming_df for the F1 plot
-mean_f1_df_filtered$Config <- factor(mean_f1_df_filtered$Config, levels = names(config_labels_with_sparsity_f1), labels = config_labels_with_sparsity_f1)
 
-# Update the Config column in mean_f1_df and mean_hamming_df for the Hamming plot
-mean_hamming_df_filtered$Config <- factor(mean_hamming_df_filtered$Config, levels = names(config_labels_with_sparsity_hamming), labels = config_labels_with_sparsity_hamming)
 
-# The rest of your plotting code remains the same, except for adding ggtext::element_markdown() to the axis.text.x theme
-F1_Hub <- ggplot(mean_f1_df_filtered, aes(x = Config, y = Mean_F1, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub F1 Scores", y = "Mean F1 Score", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", 
-                                "PGStars" = "#009900", "Oracle_f1" = "black")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1)) +
-  scale_y_continuous(limits = c(0, 1)) # Set y-axis limits to [0, 1]
 
-Hamming_Hub <- ggplot(mean_hamming_df_filtered, aes(x = Config, y = Mean_Hamming, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub Hamming Distances", y = "Mean Hamming Distance", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", 
-                                "PGStars" = "#009900", "Oracle_hamming" = "black", "Null" = "gray")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
-
-# Save the plots
-ggsave(filename = "F1_Hub_Plot.pdf", plot = F1_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-ggsave(filename = "Hamming_Hub_Plot.pdf", plot = Hamming_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-
-# Display the plots
-F1_Hub
-Hamming_Hub
 ```
 
 
-
-## Mean Lambda Value Plots + Prior
+## Mean lambda plots for additional criteria
 ```{r}
 
 library(ggplot2)
 library(ggtext)
 library(dplyr)
 
-# Initialize a new data frame for lambda values with confidence intervals
-mean_lambda_ci_df <- data.frame(Config = character(), Method = character(), 
-                                Mean_Lambda = numeric(), CI_Lower = numeric(), 
-                                CI_Upper = numeric(), stringsAsFactors = FALSE)
+# Initialize data frames for lambda values with confidence intervals
+mean_lambda_ci_df_set_1 <- data.frame(Config = character(), Method = character(), Mean_Lambda = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
+mean_lambda_ci_df_set_2 <- data.frame(Config = character(), Method = character(), Mean_Lambda = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
+
+# Define sets of methods for each plot
+methods_set_1_lambda <- c("stars", "oracle_f1", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
+methods_set_2_lambda <- c("stars", "oracle_f1", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
 
 # Loop over configurations
 for (cfg_key in names(config_results)) {
   cfg <- config_results[[cfg_key]]
 
-  # Loop over methods
-  for (method in c("Stars", "GStars", "PGStars", "Oracle_f1", "Oracle_hamming")) {
-    aggregated_metrics <- cfg[["Aggregated"]][[tolower(method)]]
+  # Loop over methods for Set 1
+  for (method in methods_set_1_lambda) {
+    if (exists(method, cfg[["Aggregated"]])) {
+      aggregated_metrics <- cfg[["Aggregated"]][[method]]
 
-    # Extract mean lambda and confidence intervals
-    mean_lambda <- aggregated_metrics[["Lambda"]][["Mean"]]
-    ci_lambda_lower <- aggregated_metrics[["Lambda"]][["CI1"]]
-    ci_lambda_upper <- aggregated_metrics[["Lambda"]][["CI2"]]
+      # Extract mean lambda and confidence intervals
+      mean_lambda <- aggregated_metrics[["Lambda"]][["Mean"]]
+      ci_lambda_lower <- aggregated_metrics[["Lambda"]][["CI1"]]
+      ci_lambda_upper <- aggregated_metrics[["Lambda"]][["CI2"]]
 
-    # Append to the data frame
-    mean_lambda_ci_df <- rbind(mean_lambda_ci_df, data.frame(Config = cfg_key, 
-                                                             Method = method, 
-                                                             Mean_Lambda = mean_lambda, 
-                                                             CI_Lower = ci_lambda_lower, 
-                                                             CI_Upper = ci_lambda_upper))
+      # Append to the data frame for Set 1
+      mean_lambda_ci_df_set_1 <- rbind(mean_lambda_ci_df_set_1, data.frame(Config = cfg_key, Method = method, Mean_Lambda = mean_lambda, CI_Lower = ci_lambda_lower, CI_Upper = ci_lambda_upper))
+    }
+  }
+
+  # Loop over methods for Set 2
+  for (method in methods_set_2_lambda) {
+    if (exists(method, cfg[["Aggregated"]])) {
+      aggregated_metrics <- cfg[["Aggregated"]][[method]]
+
+      # Extract mean lambda and confidence intervals
+      mean_lambda <- aggregated_metrics[["Lambda"]][["Mean"]]
+      ci_lambda_lower <- aggregated_metrics[["Lambda"]][["CI1"]]
+      ci_lambda_upper <- aggregated_metrics[["Lambda"]][["CI2"]]
+
+      # Append to the data frame for Set 2
+      mean_lambda_ci_df_set_2 <- rbind(mean_lambda_ci_df_set_2, data.frame(Config = cfg_key, Method = method, Mean_Lambda = mean_lambda, CI_Lower = ci_lambda_lower, CI_Upper = ci_lambda_upper))
+    }
   }
 }
 
-# Create custom labels for configurations
-config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
-config_order <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
+# Function to create lambda plots
+create_lambda_plot <- function(df, title) {
+  ggplot(df, aes(x = Config, y = Mean_Lambda, color = Method, group = Method)) +
+    geom_line(position = position_dodge(width = 0.2), linetype = "dashed", alpha = 0.7) +
+    geom_point(position = position_dodge(width = 0.2)) +
+    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, position = position_dodge(width = 0.2)) +
+    labs(title = title, y = "Mean Lambda", x = "") +
+    theme_minimal() +
+    scale_color_manual(values = method_colors) +
+    theme(axis.text.x = ggtext::element_markdown()) +
+    guides(color = guide_legend(title = "Method"))
+}
 
-# Update the Config column in mean_lambda_ci_df
-mean_lambda_ci_df$Config <- factor(mean_lambda_ci_df$Config, levels = config_order, labels = config_labels)
+# Update the Config column in mean_lambda_ci_df for both sets
+mean_lambda_ci_df_set_1$Config <- factor(mean_lambda_ci_df_set_1$Config, levels = names(config_labels), labels = config_labels)
+mean_lambda_ci_df_set_2$Config <- factor(mean_lambda_ci_df_set_2$Config, levels = names(config_labels), labels = config_labels)
 
-# Create the Lambda Plot with Dodging and Dashed Lines
-dodge_width <- 0.2  # Adjust 
+# Create and display the Lambda Plots for both sets
+lambda_plot_set_1 <- create_lambda_plot(mean_lambda_ci_df_set_1, "Mean Optim. Lambda Values Set 1")
+lambda_plot_set_2 <- create_lambda_plot(mean_lambda_ci_df_set_2, "Mean Optim. Lambda Values Set 2")
 
-lambda_plot <- ggplot(mean_lambda_ci_df, aes(x = Config, y = Mean_Lambda, color = Method, group = Method)) +
-  geom_line(position = position_dodge(width = dodge_width), linetype = "dashed", alpha = 0.7) +
-  geom_point(position = position_dodge(width = dodge_width)) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
-                width = 0.1, position = position_dodge(width = dodge_width)) +
-  labs(title = "Mean Optim. Lambda Values", 
-       y = "Mean Lambda", x = "") +
-  theme_minimal() +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "PGStars" = "#009900", 
-                                "Oracle_f1" = "black", "Oracle_hamming" = "gray")) +
-  theme(axis.text.x = ggtext::element_markdown()) +
-  guides(color = guide_legend(title = "Method"))
+# Save and display the plots
+ggsave(filename = "Lambda_Plot_Set_1.pdf", plot = lambda_plot_set_1, path = dir_path4, width = 10, height = 6, dpi = 300)
+ggsave(filename = "Lambda_Plot_Set_2.pdf", plot = lambda_plot_set_2, path = dir_path4, width = 10, height = 6, dpi = 300)
 
-# Save and display the plot
-ggsave(filename = "Lambda_Plot.pdf", plot = lambda_plot, path = dir_path4, 
-       width = 10, height = 6, dpi = 300)
+lambda_plot_set_1
+lambda_plot_set_2
 
-lambda_plot
+
 
 ```
 
 
-
-## Gap Plots across different graph topologies
+## Gap plots across different graph topologies additional criteria
 ```{r}
 
 #dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub"
@@ -328,6 +357,8 @@ gap_beta_plot
 
 
 ```
+
+
 
 
 ## Tables for different parameter settings
@@ -424,209 +455,6 @@ ggsave("ER_graph_rho.pdf", table_plot, width = 10, height = 20, path = "/Users/b
 
 ```
 
-
-######################### Ablage
-
-## Load Performance Results
-```{r}
-
-#dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub"
-dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
-
-# Load necessary libraries
-library(ggplot2)
-library(dplyr)
-
-# Initialize data frames for various metrics
-mean_f1_df <- data.frame(Config = character(), Method = character(), Mean_F1 = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
-mean_hamming_df <- data.frame(Config = character(), Method = character(), Mean_Hamming = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
-mean_sparsity_df <- data.frame(Config = character(), Method = character(), Mean_Sparsity = numeric(), stringsAsFactors = FALSE)
-mean_lambda_df <- data.frame(Config = character(), Method = character(), Mean_Lambda = numeric(), stringsAsFactors = FALSE)
-
-# Loop over configurations
-for (cfg_key in names(config_results)) {
-  cfg <- config_results[[cfg_key]]
-
-  # Loop over methods (Stars, GStars, Oracle_f1, Oracle_hamming, Null)
-  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming", "Null")) {
-    # Aggregated metrics
-    aggregated_metrics <- cfg$Aggregated[[tolower(method)]]
-
-    # Mean F1 and Hamming
-    mean_f1 <- aggregated_metrics$F1["Mean"]
-    mean_hamming <- aggregated_metrics$Hamming["Mean"]
-
-    # Confidence intervals
-    ci_f1_lower <- aggregated_metrics$F1["CI1"]
-    ci_f1_upper <- aggregated_metrics$F1["CI2"]
-    ci_hamming_lower <- aggregated_metrics$Hamming["CI1"]
-    ci_hamming_upper <- aggregated_metrics$Hamming["CI2"]
-
-    # Mean sparsity and lambda values
-    mean_sparsity <- aggregated_metrics$Sparsity["Mean"]
-    mean_lambda <- aggregated_metrics$Lambda["Mean"]
-
-    # Append to data frames
-    mean_f1_df <- rbind(mean_f1_df, data.frame(Config = cfg_key, Method = method, Mean_F1 = mean_f1, CI_Lower = ci_f1_lower, CI_Upper = ci_f1_upper))
-    mean_hamming_df <- rbind(mean_hamming_df, data.frame(Config = cfg_key, Method = method, Mean_Hamming = mean_hamming, CI_Lower = ci_hamming_lower, CI_Upper = ci_hamming_upper))
-    mean_sparsity_df <- rbind(mean_sparsity_df, data.frame(Config = cfg_key, Method = method, Mean_Sparsity = mean_sparsity))
-    mean_lambda_df <- rbind(mean_lambda_df, data.frame(Config = cfg_key, Method = method, Mean_Lambda = mean_lambda))
-  }
-}
-
-```
-
-
-## F1 Score and Hamming Distance Plots
-```{r}
-
-library(ggtext)
-
-# Create custom labels for configurations
-config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
-names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
-
-# Add sparsity values with color coding
-# For the F1 Plot
-config_labels_with_sparsity_f1 <- sapply(names(config_labels), function(cfg_key) {
-  sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
-  sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
-  sparsity_oracle_f1 <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Oracle_f1", "Mean_Sparsity"], 3)
-
-  paste(config_labels[cfg_key], 
-        "<span style='color:lightblue;'>", sparsity_stars, "</span>",
-        "<span style='color:darkorange;'>", sparsity_gstars, "</span>",
-        "<span style='color:black;'>", sparsity_oracle_f1, "</span>", 
-        sep = "<br>")
-}, simplify = FALSE)
-
-# For the Hamming Plot
-config_labels_with_sparsity_hamming <- sapply(names(config_labels), function(cfg_key) {
-  sparsity_stars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Stars", "Mean_Sparsity"], 3)
-  sparsity_gstars <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "GStars", "Mean_Sparsity"], 3)
-  sparsity_oracle_hamming <- round(mean_sparsity_df[mean_sparsity_df$Config == cfg_key & mean_sparsity_df$Method == "Oracle_hamming", "Mean_Sparsity"], 3)
-
-  paste(config_labels[cfg_key], 
-        "<span style='color:lightblue;'>", sparsity_stars, "</span>",
-        "<span style='color:darkorange;'>", sparsity_gstars, "</span>",
-        "<span style='color:black;'>", sparsity_oracle_hamming, "</span>", 
-        sep = "<br>")
-}, simplify = FALSE)
-
-
-# Filter Data Frames
-mean_f1_df_filtered <- mean_f1_df %>% filter(Method != "Oracle_hamming" & Method != "Null")
-mean_hamming_df_filtered <- mean_hamming_df %>% filter(Method != "Oracle_f1")
-
-# Update the Config column in mean_f1_df and mean_hamming_df for the F1 plot
-mean_f1_df_filtered$Config <- factor(mean_f1_df_filtered$Config, levels = names(config_labels_with_sparsity_f1), labels = config_labels_with_sparsity_f1)
-
-# Update the Config column in mean_f1_df and mean_hamming_df for the Hamming plot
-mean_hamming_df_filtered$Config <- factor(mean_hamming_df_filtered$Config, levels = names(config_labels_with_sparsity_hamming), labels = config_labels_with_sparsity_hamming)
-
-# The rest of your plotting code remains the same, except for adding ggtext::element_markdown() to the axis.text.x theme
-F1_Hub <- ggplot(mean_f1_df_filtered, aes(x = Config, y = Mean_F1, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub F1 Scores", y = "Mean F1 Score", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_f1" = "black")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1)) +
-  scale_y_continuous(limits = c(0, 1)) # Set y-axis limits to [0, 1]
-
-Hamming_Hub <- ggplot(mean_hamming_df_filtered, aes(x = Config, y = Mean_Hamming, color = Method)) +
-  geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
-  geom_point(size = 1.5) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
-  labs(title = "Hub Hamming Distances", y = "Mean Hamming Distance", x = "") +  
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", "Oracle_hamming" = "black", "Null" = "gray")) +
-  theme(axis.text.x = ggtext::element_markdown(angle = 30, hjust = 1))
-
-# Save the plots
-ggsave(filename = "F1_Hub_Plot.pdf", plot = F1_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-ggsave(filename = "Hamming_Hub_Plot.pdf", plot = Hamming_Hub, path = dir_path4, width = 8, height = 6, dpi = 300)
-
-# Display the plots
-F1_Hub
-Hamming_Hub
-```
-
-
-
-## Mean Lambda Value Plots
-```{r}
-
-library(ggplot2)
-library(ggtext)
-library(dplyr)
-
-# Initialize a new data frame for lambda values with confidence intervals
-mean_lambda_ci_df <- data.frame(Config = character(), Method = character(), 
-                                Mean_Lambda = numeric(), CI_Lower = numeric(), 
-                                CI_Upper = numeric(), stringsAsFactors = FALSE)
-
-# Loop over configurations
-for (cfg_key in names(config_results)) {
-  cfg <- config_results[[cfg_key]]
-
-  # Loop over methods
-  for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming")) {
-    aggregated_metrics <- cfg[["Aggregated"]][[tolower(method)]]
-
-    # Extract mean lambda and confidence intervals
-    mean_lambda <- aggregated_metrics[["Lambda"]][["Mean"]]
-    ci_lambda_lower <- aggregated_metrics[["Lambda"]][["CI1"]]
-    ci_lambda_upper <- aggregated_metrics[["Lambda"]][["CI2"]]
-
-    # Append to the data frame
-    mean_lambda_ci_df <- rbind(mean_lambda_ci_df, data.frame(Config = cfg_key, 
-                                                             Method = method, 
-                                                             Mean_Lambda = mean_lambda, 
-                                                             CI_Lower = ci_lambda_lower, 
-                                                             CI_Upper = ci_lambda_upper))
-  }
-}
-
-# Create custom labels for configurations
-config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
-config_order <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
-
-# Update the Config column in mean_lambda_ci_df
-mean_lambda_ci_df$Config <- factor(mean_lambda_ci_df$Config, levels = config_order, labels = config_labels)
-
-# Create the Lambda Plot with Dodging and Dashed Lines
-dodge_width <- 0.2  # Adjust 
-
-lambda_plot <- ggplot(mean_lambda_ci_df, aes(x = Config, y = Mean_Lambda, color = Method, group = Method)) +
-  geom_line(position = position_dodge(width = dodge_width), linetype = "dashed", alpha = 0.7) +
-  geom_point(position = position_dodge(width = dodge_width)) +
-  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
-                width = 0.1, position = position_dodge(width = dodge_width)) +
-  labs(title = "Mean Optim. Lambda Values", 
-       y = "Mean Lambda", x = "") +
-  theme_minimal() +
-  scale_color_manual(values = c("Stars" = "lightblue", "GStars" = "darkorange", 
-                                "Oracle_f1" = "black", "Oracle_hamming" = "gray")) +
-  theme(axis.text.x = ggtext::element_markdown()) +
-  guides(color = guide_legend(title = "Method"))
-
-# Save and display the plot
-ggsave(filename = "Lambda_Plot.pdf", plot = lambda_plot, path = dir_path4, 
-       width = 10, height = 6, dpi = 300)
-
-lambda_plot
-
-```
 
 
 

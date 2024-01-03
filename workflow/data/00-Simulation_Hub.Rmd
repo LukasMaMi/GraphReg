@@ -91,13 +91,13 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub/"
 
-num_repetitions <- 2
+num_repetitions <- 3
 
 # Specify configurations
 configs <- list(
-  list(n=800, p=40),
-  list(n=400, p=100),
-  list(n=200, p=200)
+  list(n=800, p=40)
+  #list(n=400, p=100)
+  #list(n=200, p=200)
   #list(n=100, p=400)
 )
 

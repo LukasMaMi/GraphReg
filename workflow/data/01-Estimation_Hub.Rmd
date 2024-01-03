@@ -3,7 +3,8 @@ title: "01-Estimation_Hub"
 output: gitHub_document
 ---
 
-## Run StARS, G-StARS, PG-StARS and Oracle
+
+## Run StARS, G-StARS, PG-StARS and Oracle with additional criteria
 ```{r}
 
 #install.packages("htmltools")
@@ -25,21 +26,100 @@ get_filename <- function(config, rep, prefix = "Hub") {
   return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
 }
 
-  # 2. Loop over each file, load dataset, and compute adjacency matrices
-  for(rep in 1:num_repetitions) {
-    for(i in seq_along(configs)) {
-      # Get filename for the current configuration and repetition
-      filename <- get_filename(configs[[i]], rep)
-      
-      # Load the dataset
-      load(paste0(dir_path, "/", filename))
+# 2. Loop over each file, load dataset, and compute adjacency matrices
+for(rep in 1:num_repetitions) {
+  for(i in seq_along(configs)) {
+    # Get filename for the current configuration and repetition
+    filename <- get_filename(configs[[i]], rep)
+    
+    # Load the dataset
+    load(paste0(dir_path, "/", filename))
 
+    
+    library(batchtools)
+    library(pulsar)
+    out.p <- my.batch.pulsar(
+      data = Hub_data, 
+      fun = "QUIC", 
+      fargs = lambda, 
+      rep.num = N,
+      thresh = 0.1,
+      subsample.ratio = b,
+      criterion=c('stars', 'gcd', 'gcd_prior'), 
+      lb.stars = TRUE, 
+      ub.stars = TRUE, 
+      seed = FALSE,
+      refit = TRUE,
+      prior_graph = true_graph,
+      method = c("spearman", "kendall", "latentcor"),
+      five_node = FALSE,
+      use_pseudo_count = TRUE, 
+      pseudo_count_prob = 0.5, 
+      pseudo_count_strength = 1
+    )
+  
+  
+    extract_categorized_optimal_info <- function(output) {
+      # Initialize lists to store the categorized results
+      optimal_indices <- list()
+      optimal_lambdas <- list()
+      selected_graphs <- list()
+    
+      # Extract the criteria from the output object
+      criteria <- output[["criterion"]]
+    
+      # Loop through each criterion
+      for (crit in criteria) {
+        # Extract the criterion name
+        crit_name <- crit[[1]]
+    
+        # Store the optimal index, lambda, and refit graph for the current criterion
+        optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
+        optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
+        selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
+      }
+    
+      # Create a list to store all categorized results
+      categorized_results <- list(
+        "optimal_indices" = optimal_indices,
+        "optimal_lambdas" = optimal_lambdas,
+        "selected_graphs" = selected_graphs,
+        "additional_metrics" = output$additional
+      )
+    
+      return(categorized_results)
+    }
+    
+    categorized_info <- extract_categorized_optimal_info(out.p)
+  
 
+    # Lambda path plots for stars and gcd 
+    get_plot_filename <- function(config, rep, prefix = "Plot_gcd") {
+    sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
+    }
+    plot_filename <- get_plot_filename(configs[[i]], rep)
+    # Save the plot as a PDF
+    pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
+    plot(out.p, legends = TRUE, show = c("stars", "gcd"))
+    dev.off()
+    
+    
+    # Lambda path plots for stars and gcd prior
+    get_plot_filename <- function(config, rep, prefix = "Plot_prior") {
+    sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
+    }
+    plot_filename <- get_plot_filename(configs[[i]], rep)
+    # Save the plot as a PDF
+    pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
+    plot(out.p, legends = TRUE, show = c("stars", "gcd_prior"))
+    dev.off()
+    
+  
+    ## Oracle procedure
     # Using QUIC
-    library(BigQuic)
-    quicr <- function(data, lambda) {
+    quicr <- function(data, lambda, ...) {
         p <- ncol(data)
-        est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+        est  <- BigQuic::BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
         est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
         path <-  lapply(seq(length(lambda)), function(i) {
                     tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
@@ -50,343 +130,94 @@ get_filename <- function(config, rep, prefix = "Hub") {
         est
     }
     
-    # Using Huge GLASSO
-    #library(huge)
-    #huger <- function(data, lambda) {
-      #est  <- huge::huge(data, lambda = lambda, method = "glasso")
-      #path <- lapply(seq(length(lambda)), function(i) {
-        ## convert precision array to adj list
-        #tmp <- est$path[[i]]
-        #tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
-        #return(tmp)
-      #})
-      #est$path <- path
-      #est
-    #}
-      
-  
-  quicargs <- list(lambda = lambda_path)
-  #hugeargs <- list(lambda = lambda_path, method = "glasso", verbose = FALSE)
+    oracle_results <- quicr(Hub_data, lambda_path)
     
-  library(batchtools)
-  library(pulsar)
-  out.p <- my.batch.pulsar(
-    data = Hub_data, 
-    fun = quicr, 
-    fargs = quicargs, 
-    rep.num = N,
-    thresh = 0.05,
-    subsample.ratio = b,
-    criterion=c('stars', 'gcd', 'gcd_prior'), 
-    lb.stars = TRUE, 
-    ub.stars = TRUE, 
-    seed = FALSE,
-    refit = FALSE,
-    fullgcd = FALSE,
-    prior_graph = true_graph
-  )
+    #F1-Score as criterium for Oracle
+    f1_score <- function(actual, predicted) {
+    if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
+      stop("Matrices should be of class lgCMatrix")
+    }
   
+    # Calculating TP, FP, and FN using sparse matrix operations
+    TP <- sum(predicted & actual)
+    FP <- sum(predicted & !actual)
+    FN <- sum(!predicted & actual)
   
-  # Optimal Index Stars
-  stars_index <-  my.opt.index(out.p, 'stars')
-  # Optimal Lambda
-  best_lambda_stars <- round(lambda_path[stars_index], 3)
-  # Lower Bound
-  stars_lb <- out.p[["stars"]][["lb.index"]]
-  lambda_lb <- round(lambda_path[stars_lb], 3)
-  # Upper Bound
-  stars_ub <- out.p[["stars"]][["ub.index"]]
-  lambda_ub <- round(lambda_path[stars_ub], 3)
+    # Calculate Precision and Recall
+    Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
+    Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
   
-  # Optimal Index Gstars
-  my.opt.index(out.p, criterion = "gcd") <- my.get.opt.index(out.p, criterion = "gcd")
-  gstars_index <- my.opt.index(out.p, 'gcd')[[1]]
-  # Optimal Lambda
-  best_lambda_gstars <- round(lambda_path[gstars_index], 3)
+    # Calculate F1 Score
+    f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
   
-  # Optimal Index PGstars
-  my.opt.index(out.p, criterion = "gcd_prior") <- my.get.opt.index(out.p, criterion = "gcd_prior")
-  pgstars_index <- my.opt.index(out.p, 'gcd_prior')[[1]]
-  # Optimal Lambda
-  best_lambda_pgstars <- round(lambda_path[pgstars_index], 3)
-  
-  
-  fit  <- refit(out.p, criterion = c("stars", "gcd", "gcd_prior"))
-  ## Stars
-  stars_graph <- fit[["refit"]][["stars"]]
-  ## GStars
-  gstars_graph <- fit[["refit"]][["gcd"]]
-  ## PGStars
-  pgstars_graph <- fit[["refit"]][["gcd_prior"]]
-  
-  get_plot_filename <- function(config, rep, prefix = "Plot") {
-  sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
-  }
-
-  plot_filename <- get_plot_filename(configs[[i]], rep)
-  # Save the plot as a PDF
-  pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
-  plot(out.p, legends = F)
-  dev.off()
-
-  
-  ## Oracle procedure
-  oracle_results <- quicr(Hub_data, lambda_path)
-  
-  #F1-Score as criterium for Oracle
-  f1_score <- function(actual, predicted) {
-  if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
-    stop("Matrices should be of class lgCMatrix")
-  }
-
-  # Calculating TP, FP, and FN using sparse matrix operations
-  TP <- sum(predicted & actual)
-  FP <- sum(predicted & !actual)
-  FN <- sum(!predicted & actual)
-
-  # Calculate Precision and Recall
-  Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-  Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-
-  # Calculate F1 Score
-  f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-
-  return(f1)
-  }
-  
-  # Hamming distance as criterium for Oracle
-  hamming_distance <- function(actual, predicted) {
-    sum(tril(predicted) != tril(actual))
-  }
-  
-  # F1 score - best lambda Oracle
-  oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
-    estimated_graph <- oracle_results$path[[j]]
-    f1_score(true_graph, estimated_graph)
-  }))
-  
-  # Hamming distance - best lambda Oracle
-    oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
-    estimated_graph <- oracle_results$path[[j]]
-    hamming_distance(true_graph, estimated_graph)
-  }))
-  
-  best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
-  best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
-  
-  oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
-  oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
-  
-  act_sparsity_stars = sum(stars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_gstars = sum(gstars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_pgstars = sum(pgstars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_oracle_f1 = sum(oracle_graph_f1) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_oracle_hamming = sum(oracle_graph_hamming) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_null = sum(null_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  
-  ## Calculation of Gap statistics
-  gap_b <- abs(lambda_ub - lambda_lb)
-  gap_beta <- abs(best_lambda_stars - lambda_lb)
-  
-
-save(num_repetitions, configs, dir_path, dir_path2, file = hub_settings_file)
-result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(true_graph, stars_graph, gstars_graph, pgstars_graph, oracle_graph_f1, oracle_graph_hamming, null_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_pgstars, act_sparsity_oracle_f1, act_sparsity_oracle_hamming, best_lambda_oracle_f1, best_lambda_oracle_hamming, best_lambda_stars, best_lambda_gstars, best_lambda_pgstars, stars_index, gstars_index, pgstars_index, oracle_index_f1, oracle_index_hamming, stars_lb, stars_ub, gap_b, gap_beta, out.p, file=paste0(dir_path2, "/", ... = result_filename))
-
-  }
-}
-
-print("Adjacency matrices for Hub generated and saved!")
-```
-
-
-
-
-
-
-## Run StARS, G-StARS and Oracle
-```{r}
-
-#install.packages("htmltools")
-#install.packages("devtools")
-#install.packages("batchtools)
-#install_github("zdk123/pulsar")
-#install.packages("BigQuic")
-
-
-dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/"
-
-#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
-Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
-load(hub_settings_file)
-
-
-get_filename <- function(config, rep, prefix = "Hub") {
-  return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
-}
-
-  # 2. Loop over each file, load dataset, and compute adjacency matrices
-  for(rep in 1:num_repetitions) {
-    for(i in seq_along(configs)) {
-      # Get filename for the current configuration and repetition
-      filename <- get_filename(configs[[i]], rep)
-      
-      # Load the dataset
-      load(paste0(dir_path, "/", filename))
-
-
-    # Using QUIC
-    library(BigQuic)
-    quicr <- function(data, lambda) {
-        p <- ncol(data)
-        est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-        est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-        path <-  lapply(seq(length(lambda)), function(i) {
-                    tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                    diag(tmp) <- 0
-                    as(tmp!=0, "lMatrix")
-        })
-        est$path <- path
-        est
+    return(f1)
     }
     
-    # Using Huge GLASSO
-    #library(huge)
-    #huger <- function(data, lambda) {
-      #est  <- huge::huge(data, lambda = lambda, method = "glasso")
-      #path <- lapply(seq(length(lambda)), function(i) {
-        ## convert precision array to adj list
-        #tmp <- est$path[[i]]
-        #tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
-        #return(tmp)
-      #})
-      #est$path <- path
-      #est
-    #}
-      
-  
-  quicargs <- list(lambda = lambda_path)
-  #hugeargs <- list(lambda = lambda_path, method = "glasso", verbose = FALSE)
+    # Hamming distance as criterium for Oracle
+    hamming_distance <- function(actual, predicted) {
+      sum(tril(predicted) != tril(actual))
+    }
     
-  library(batchtools)
-  library(pulsar)
-  out.p <- batch.pulsar(
-    Hub_data, 
-    fun = quicr, 
-    fargs = quicargs, 
-    rep.num = N,
-    thresh = 0.05,
-    subsample.ratio = b,
-    criterion=c('stars', 'gcd'), 
-    lb.stars = TRUE, 
-    ub.stars = TRUE, 
-    seed = NULL,
-    refit = FALSE)
-  
-  
-  # Optimal Index Stars
-  stars_index <-  opt.index(out.p, 'stars')
-  # Optimal Lambda
-  best_lambda_stars <- round(lambda_path[stars_index], 3)
-  # Lower Bound
-  stars_lb <- out.p[["stars"]][["lb.index"]]
-  lambda_lb <- round(lambda_path[stars_lb], 3)
-  # Upper Bound
-  stars_ub <- out.p[["stars"]][["ub.index"]]
-  lambda_ub <- round(lambda_path[stars_ub], 3)
-  
-  # Optimal Index Gstars
-  opt.index(out.p, criterion = "gcd") <- get.opt.index(out.p, criterion = "gcd")
-  gstars_index <- my.opt.index(out.p, 'gcd')[[1]]
-  # Optimal Lambda
-  best_lambda_gstars <- round(lambda_path[gstars_index], 3)
-  
-  
-  fit  <- refit(out.p, criterion = c("stars", "gcd"))
-  ## Stars
-  stars_graph <- fit[["refit"]][["stars"]]
-  ## GStars
-  gstars_graph <- fit[["refit"]][["gcd"]]
-  
-  get_plot_filename <- function(config, rep, prefix = "Plot") {
-  sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
-  }
+    # F1 score - best lambda Oracle
+    oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
+      estimated_graph <- oracle_results$path[[j]]
+      f1_score(true_graph, estimated_graph)
+    }))
+    
+    # Hamming distance - best lambda Oracle
+      oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
+      estimated_graph <- oracle_results$path[[j]]
+      hamming_distance(true_graph, estimated_graph)
+    }))
+    
+    best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
+    best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
+    
+    oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
+    oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
+    
+    # Add oracle criteria, true graph and null graph to the existing categorized_info structure
+    categorized_info$optimal_indices[["oracle_f1"]] <- oracle_index_f1
+    categorized_info$optimal_lambdas[["oracle_f1"]] <- best_lambda_oracle_f1
+    categorized_info$selected_graphs[["oracle_f1"]] <- oracle_graph_f1
+    
+    categorized_info$optimal_indices[["oracle_hamming"]] <- oracle_index_hamming
+    categorized_info$optimal_lambdas[["oracle_hamming"]] <- best_lambda_oracle_hamming
+    categorized_info$selected_graphs[["oracle_hamming"]] <- oracle_graph_hamming
+    
 
-  plot_filename <- get_plot_filename(configs[[i]], rep)
-  # Save the plot as a PDF
-  pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
-  plot(out.p, legends = F)
-  dev.off()
-
+    categorized_info$selected_graphs[["null_graph"]] <- null_graph
+    categorized_info$selected_graphs[["true_graph"]] <- true_graph
+    criterion <- unique(c(out.p$criterion, "oracle_f1", "oracle_hamming", "null_graph"))
+    categorized_info$criterion <- criterion
+    
   
-  ## Oracle procedure
-  oracle_results <- quicr(Hub_data, lambda_path)
-  
-  #F1-Score as criterium for Oracle
-  f1_score <- function(actual, predicted) {
-  if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
-    stop("Matrices should be of class lgCMatrix")
-  }
-
-  # Calculating TP, FP, and FN using sparse matrix operations
-  TP <- sum(predicted & actual)
-  FP <- sum(predicted & !actual)
-  FN <- sum(!predicted & actual)
-
-  # Calculate Precision and Recall
-  Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-  Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-
-  # Calculate F1 Score
-  f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-
-  return(f1)
-  }
-  
-  # Hamming distance as criterium for Oracle
-  hamming_distance <- function(actual, predicted) {
-    sum(tril(predicted) != tril(actual))
-  }
-  
-  # F1 score - best lambda Oracle
-  oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
-    estimated_graph <- oracle_results$path[[j]]
-    f1_score(true_graph, estimated_graph)
-  }))
-  
-  # Hamming distance - best lambda Oracle
-    oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
-    estimated_graph <- oracle_results$path[[j]]
-    hamming_distance(true_graph, estimated_graph)
-  }))
-  
-  best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
-  best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
-  
-  oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
-  oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
-  
-  act_sparsity_stars = sum(stars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_gstars = sum(gstars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_oracle_f1 = sum(oracle_graph_f1) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_oracle_hamming = sum(oracle_graph_hamming) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_null = sum(null_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  
-  ## Calculation of Gap statistics
-  gap_b <- abs(lambda_ub - lambda_lb)
-  gap_beta <- abs(best_lambda_stars - lambda_lb)
+    ## Calculate actual sparsity for each criteria
+    calculate_sparsity <- function(graph, p) {
+        # Calculate sparsity of the graph
+        sparsity <- sum(graph) / (p * (p - 1))
+        return(sparsity)
+    }
+    
+    # Loop through each selected graph and calculate its sparsity
+    for (method in names(categorized_info[["selected_graphs"]])) {
+        graph <- categorized_info[["selected_graphs"]][[method]]
+        p <- configs[[i]]$p  # Assuming 'i' is the index of your current configuration
+        act_sparsity <- calculate_sparsity(graph, p)
+        categorized_info[["act_sparsity"]][[method]] <- act_sparsity
+    }
   
 
 save(num_repetitions, configs, dir_path, dir_path2, file = hub_settings_file)
 result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(true_graph, stars_graph, gstars_graph, oracle_graph_f1, oracle_graph_hamming, null_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle_f1, act_sparsity_oracle_hamming, best_lambda_oracle_f1, best_lambda_oracle_hamming, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index_f1, oracle_index_hamming, stars_lb, stars_ub, gap_b, gap_beta, out.p, file=paste0(dir_path2, "/", ... = result_filename))
+save(out.p, categorized_info, file=paste0(dir_path2, "/", ... = result_filename))
 
   }
 }
 
 print("Adjacency matrices for Hub generated and saved!")
 ```
+
 
 
 ## Session info

@@ -5,8 +5,10 @@ output: github_document
 
 ## my.batch.pulsar function
 ```{r}
+## To Do List:
+# if lb.stars and ub.stars == FALSE, gcd are not calculated for some reason. Fix that.
 
-my.batch.pulsar <- function(data, funct = "QUIC", fargs=list(),
+my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
                     criterion=c("stars"), thresh = 0.1, subsample.ratio = NULL,
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
@@ -22,7 +24,7 @@ my.batch.pulsar <- function(data, funct = "QUIC", fargs=list(),
         stop('Registry directory already exists')
     }
     
-    if (!funct %in% c("QUIC", "glasso")) stop("Please choose either 'QUIC' or 'glasso' as function") # !("stars" %in% criterion)
+    if (!funct %in% c("QUIC", "glasso")) stop("Please choose either 'QUIC' or 'glasso' as function") 
 
     if (funct == "QUIC") {
 
@@ -108,7 +110,7 @@ my.batch.pulsar <- function(data, funct = "QUIC", fargs=list(),
     
 
     isamp <- ind.sample[1:minN] # selects the first minN subsamples # ind.sample is a list of indices for subsampling the data
-    out <- batchply(data, estFun, fun, fargs, isamp, wkdir, regdir, conffile, job.res) # function estFun applies the statistical method (fun) with arguments (fargs) to the subsampled data (isamp). 
+    out <- batchply(data, estFun, fun, fargs, isamp, wkdir, regdir, conffile, job.res) 
     reg <- out$reg # extract the registry object
     id <- out$id # and job ids from the output of batchply. # manage and track the submitted batch jobs.
     doneRun <- batchtools::waitForJobs(reg = reg, id) # waits for all submitted jobs to finish.
@@ -342,7 +344,7 @@ my.batch.pulsar <- function(data, funct = "QUIC", fargs=list(),
                         est[[paste("gcd_prior", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
                                                             thresh, rep.num, p, nlams, prior_graph = prior_graph, 
                                                             use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
-                        #est[[paste("gcdpremerge_prior", meth, sep = "_")]] <- gcdpremerge
+                        est[[paste("gcdpremerge_prior", meth, sep = "_")]] <- gcdpremerge
                     }
                 }
             }
@@ -382,8 +384,7 @@ my.batch.pulsar <- function(data, funct = "QUIC", fargs=list(),
       # Optimal index stars
       est$stars$opt.index <- est$stars$opt.index + ub.index - 1
 
-      # lambda paths
-      est$additional$lambda_full <- lambda_full
+      # Bounded lambda path
       est$additional$lambda_bound <- fargs$lambda
       # lb and ub index
       est$additional$lb.index <- lb.est$opt.index
@@ -404,43 +405,48 @@ my.batch.pulsar <- function(data, funct = "QUIC", fargs=list(),
     criterion <- unique(c(criterion, updated_criteria))
     criterion <- setdiff(criterion, c("gcd", "gcd_prior"))
     est$criterion <- criterion
+    # Full lambda path
+    est$additional$lambda_full <- lambda_full
     
     # Naming new criterion description according to cirterion
     for (crit in criterion) {
       est[[crit]]$criterion <- crit
     }
+    
+    if (lb.stars) {
 
-    # Compute and set optimal indices directly (excluding StARS)
-    for (crit in criterion) {
-        if (startsWith(crit, "gcd")) { 
-          gcdind <- which.min(est[[crit]]$summary)
-          gcdind <- gcdind + est$additional$ub.index - 1
-          est[[crit]]$opt.index <- gcdind
-        }
-    }
-    
-    
-    # Iterate over each criterion and store the corresponding optimal lambda value
-    for (crit in criterion) {
-        if (crit == "stars") {
-            opt_ind <- est$stars$opt.index
-            est$stars$opt.lambda <- signif(lambda_full[opt_ind], 3)
-        } 
-      
-        else if (startsWith(crit, "gcd")) { 
-           opt_ind <- est[[crit]]$opt.index
-           est[[crit]]$opt.lambda <- signif(lambda_full[opt_ind], 3)
-        }
-    }
-    
-    # Refit each criterion with optimal index
-    if (refit == TRUE) {
+      # Compute and set optimal indices directly (excluding StARS)
       for (crit in criterion) {
-        opt_ind <- est[[crit]]$opt.index
-        if (!is.null(opt_ind)) {
-          est[[crit]]$refit <- fullmodel$path[[opt_ind]]
-        } else {
-          est[[crit]]$refit <- NULL
+          if (startsWith(crit, "gcd")) { 
+            gcdind <- which.min(est[[crit]]$summary)
+            gcdind <- gcdind + est$additional$ub.index - 1
+            est[[crit]]$opt.index <- gcdind
+          }
+      }
+      
+      
+      # Iterate over each criterion and store the corresponding optimal lambda value
+      for (crit in criterion) {
+          if (crit == "stars") {
+              opt_ind <- est$stars$opt.index
+              est$stars$opt.lambda <- signif(lambda_full[opt_ind], 3)
+          } 
+        
+          else if (startsWith(crit, "gcd")) { 
+             opt_ind <- est[[crit]]$opt.index
+             est[[crit]]$opt.lambda <- signif(lambda_full[opt_ind], 3)
+          }
+      }
+      
+      # Refit each criterion with optimal index
+      if (refit == TRUE) {
+        for (crit in criterion) {
+          opt_ind <- est[[crit]]$opt.index
+          if (!is.null(opt_ind)) {
+            est[[crit]]$refit <- fullmodel$path[[opt_ind]]
+          } else {
+            est[[crit]]$refit <- NULL
+          }
         }
       }
     }
@@ -780,501 +786,116 @@ batchply <- function(data, estFun, fun, fargs, ind.sample, wkdir, regdir,
 }
 
 
+#############################################
+plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE, show = c("stars"), ...) {
+    .plot.pulsar(x, scale, invlam, loglam, legends, show)
+}
 
 
+.plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE, show = c("stars")) {
+    lams <- x$additional$lambda_full
+    xlab <- "lambda"
+    if (invlam) {lams <- 1/lams ; xlab <- paste("1/", xlab, sep="")}
+    if (loglam) {lams <- log(lams) ; xlab <- paste("log[ ", xlab, " ]", sep="")}
 
-
-```
-
-
-
-## Prior Helper Functions
-```{r}
-
-# my.get.opt.index <- function(obj, criterion = "gcd_spearman", ...) {
-#     optind <- my.opt.index(obj, criterion)
-#     if (!is.null(optind)) optind
-#     if (criterion %in% c("gcd_spearman", "gcd_kendall", "gcd_latentcor", 
-#                          "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")) {
-#         if (is.null(obj$stars$lb.index) || !obj$stars$lb.index)
-#             stop('Lower bound needed for gcd metrics (run with lb.stars=TRUE)')
-#         gcdind <- which.min(getElement(obj, criterion)$summary)
-#         gcdind <- gcdind + obj$stars$ub.index - 1
-#         names(gcdind) <- criterion
-#         return(gcdind)
-#     } else {
-#         stop("Currently, gcd and gcd_prior is the only supported criterion")
-#     }
-# }
-
-# my.opt.index <- function(obj, criterion = 'gcd_spearman') {
-#     .pcheck(obj)
-#     .critcheck(obj, criterion)
-#     getElement(obj, criterion)$opt.index
-# }
-
-
-my.get.opt.index <- function(obj, criterion = "stars") {
-    optind <- my.opt.index(obj, criterion)
-    if (!is.null(optind)) return(optind)
+    nlam  <- length(lams)
     
-    if (startsWith(criterion, "gcd") || startsWith(criterion, "gcd_prior")) {
-        if (is.null(obj$stars$lb.index) || !obj$stars$lb.index)
-            stop('Lower bound needed for gcd metrics (run with lb.stars=TRUE)')
-        gcdind <- which.min(getElement(obj, criterion)$summary)
-        gcdind <- gcdind + obj$stars$ub.index - 1
-        names(gcdind) <- criterion
-        return(gcdind)
-    } 
-    stop(paste("Criterion", criterion, "not supported"))
-}
+    crits <- unlist(x$criterion)
 
-my.opt.index <- function(obj, criterion = 'stars') {
-    #.pcheck(obj)
-    .critcheck(obj, criterion)
-    getElement(obj, criterion)$opt.index
-}
-
-
-
-"my.opt.index<-" <- function(obj, criterion=names(value), value) {
-    #.pcheck(obj)
-    fin <- getArgs(obj$call, obj$envir)
-    .critcheck(obj, criterion)
-    if (length(criterion) > 1) stop("Select one criterion")
-    if (is.null(criterion)) criterion <- 'gcd_spearman'
-    if (!is.null(value)) {
-      if (!is.numeric(value) || value < 1 || value >= length(fin$fargs$lambda))
-        stop('Index value must be positive int within range length of lambda path')
+    # Filter criteria based on 'show' parameter
+    pattern <- c()
+    if ("stars" %in% show) {
+        pattern <- c(pattern, "^stars$")
     }
-    obj[[ criterion ]]$opt.index <- value
-    obj
-}
-
-
-refit <- function(obj, criterion) {
-    UseMethod("refit")
-}
-
-#' @export
-refit.pulsar <- function(obj, criterion) {
-    .refit.pulsar(obj, criterion)
-}
-
-#' @keywords internal
-.refit.pulsar <- function(obj, criterion) {
-    est <- vector('list', 2)
-    names(est) <- c('est', 'refit')
-    fin <- getArgs(getCall(obj), getEnvir(obj))
-    ## call est function on original dataset
-    if (length(obj$est)) {
-      est$est <- obj$est
-    } else {
-      est$est <- do.call(eval(fin$fun), c(fin$fargs, list(fin$data)))
+    if ("gcd" %in% show) {
+        pattern <- c(pattern, "^gcd_(?!prior)")
     }
-
-    if (missing(criterion)) criterion <- eval(fin$criterion)
-    est$refit <- vector('list', length(criterion))
-    names(est$refit) <- criterion
-    for (crit in criterion) {
-      optind <- obj[[crit]]$opt.index
-      if (!is.null(optind)) {
-        est$refit[[crit]] <- est$est$path[[optind]]
-      } else {
-        est$refit[[crit]] <- NULL
-        if (crit %in% names(obj)) {
-          message(paste('No optimal index selected for', crit, 'criterion', sep=" "))
-        } else
-          warning(paste('Unknown criterion', crit, sep=" "), call.=FALSE)
-      }
+    if ("gcd_prior" %in% show) {
+        pattern <- c(pattern, "^gcd_prior")
     }
-
-    ## TODO: if fun is null, get formal arg of obj
-    est$fun <- obj$call$fun
-    if (is.null(est$fun))
-      est$fun <- formals(class(obj))$fun
-
-    structure(est, class='pulsar.refit')
-}
-
-my.gcvec <- function(graph, method = "spearman", orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, five_node = FALSE) {
-  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
-  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
-  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
-  n <- length(orbind)
-  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
-      return(rep(0, n*(n-1)/2)) # Return empty vector
-  }
-
-  p <- ncol(graph)
-  if (five_node == TRUE) { orb_count <- orca::count5(nx2)
-    } else { orb_count <- orca::count4(nx2) # Orbit count matrix (redundant)
-  } 
-  
-  ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(orb_count), ncol=ncol(orb_count)) # Create empty set up
-  orb_count <- rbind(orb_count, buffer) # Fill empty set up and reduce to
-  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
-  ## or completely empty graph and can be safely suppressed.
-  
-  # add one row of 1s to the orbind matrix to overcome std dev == 0 error
-  #Then calculate the graphlet correlation matrix with method
-  gcm <- suppressWarnings(cor(rbind(orb_count[,orbind],1), method = method))
-  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
-  return(gcv)
-}
-
-
-#' @keywords internal
-.adj2elist <- function(G) {
-    if (inherits(G, "sparseMatrix")) {
-        G <- Matrix::triu(G, k=1)
-        index_i_j <- Matrix::mat2triplet(G)[1:2]
-        return(as.data.frame(index_i_j))
-    } else {
-        p <- ncol(G)
-        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
-    }
-}
-
-#################
-
-GCD <- function(gcv1, gcv2){
-  res = dist(rbind(gcv1,gcv2))[1]
-  return(res)
-}
-
-################       
-my.gcd.stability_extended <- function(premerge, thresh, rep.num, p, nlams, prior_graph) {  
-est <- list()
-
-  for(j in 1:length(premerge)){
-    res_tot = c()
-    estimated_graph_subsampling = list()
-    for(i in 1:length(premerge[[j]])){
-      r1 = premerge[[j]][[i]]
-      r2 = my.gcvec(prior_graph)
-      res = GCD(r1, r2)
-      res_tot = c(res_tot, res)
-      estimated_graph_subsampling[[i]] = premerge[[j]][[i]]
-    }
-  est$graph_subsambling[[j]] = estimated_graph_subsampling
-  est$merge[[j]] <- res_tot
-  est$g1[[j]] = r1
-  est$g2 = r2
-  }
-
-  est$summary <- vector('numeric', nlams) # set up empty vector
-  for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]]) # fill summary i with mean over all subsamples rep.num N
-  est$criterion <- "gcd_prior"
-  return(est)
-} 
-
-
-#######################
-
-my.get.opt.index <- function(obj, criterion = "gcd", ...) {
-    optind <- my.opt.index(obj, criterion)
-    if (!is.null(optind)) optind
-    if (criterion == 'gcd' || criterion == 'gcd_prior') {
-        if (is.null(obj$stars$lb.index) || !obj$stars$lb.index)
-            stop('Lower bound needed for gcd metric (run with lb.stars=TRUE)')
-        gcdind <- which.min(getElement(obj, criterion)$summary)
-        gcdind <- gcdind + obj$stars$ub.index - 1
-        names(gcdind) <- criterion
-        return(gcdind)
-    } else {
-        stop("Currently, gcd and gcd_prior is the only supported criterion")
-    }
-}
-
-
-my.opt.index <- function(obj, criterion = 'gcd') {
-    .pcheck(obj)
-    .critcheck(obj, criterion)
-    getElement(obj, criterion)$opt.index
-}
-
-
-"my.opt.index<-" <- function(obj, criterion=names(value), value) {
-    .pcheck(obj)
-    fin <- getArgs(obj$call, obj$envir)
-    .critcheck(obj, criterion)
-    if (length(criterion) > 1) stop("Select one criterion")
-    if (is.null(criterion)) criterion <- 'gcd'
-    if (!is.null(value)) {
-      if (!is.numeric(value) || value < 1 || value >= length(fin$fargs$lambda))
-        stop('Index value must be positive int within range length of lambda path')
-    }
-    obj[[ criterion ]]$opt.index <- value
-    obj
-}
-
-
-#######################
-
-# GCM function
-gcvec_extended_random <- function(G, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, five = FALSE){
-  
-  diag(G) = 0
-  
-  Elist <- .adj2elist(G)
-  n <- length(orbind)
-  if (ncol(Elist) < 1 || nrow(Elist) < 1) {
-      return(rep(0, n*(n-1)/2))
-  }
-
-  p <- ncol(G)
-  if(five == TRUE){
-    gcount <- orca::count5(Elist)
-  }else{
-    gcount <- orca::count4(Elist)
-    }
-  ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(gcount), ncol=ncol(gcount))
-  gcount <- rbind(gcount, buffer)
-# deprecate direct call to count4 for CRAN submission
-#  gcount <- .C("count4", Elist, dim(Elist),
-#      orbits = matrix(0, nrow = max(Elist), ncol = 15), PACKAGE="orca")$orbits
-  ##  # warnings here are due to std dev == 0. This almost always occurs for a completely connected
-  ## or completely empty graph and can be safely suppressed.
-  
-  after1 = rbind(gcount[,orbind],1)
-  after2 = rbind(gcount[,orbind],runif(length(orbind),0,1))
-  #after2 = rbind(after2,runif(length(orbind),0,1))
-  
-  gcor1 <- suppressWarnings(cor(after1, method='spearman'))
-  gcor2 = suppressWarnings(cor(after2, method='spearman'))
-  gcor = gcor1[upper.tri(gcor1)]
-  gcor_random = gcor2[upper.tri(gcor2)]
-  
-  return(list("corr_1" = gcor1, "res_1" = gcor, "gcount_1" = gcount, "corr_2" = gcor2, "gcor2" = gcor2, "res2" = gcor_random, "after1" = after1, "after2"=after2))
-}
-
-
-
-```
-
-
-
-## Helper Functions for batch.pulsar
-```{r}
-library(batchtools)
-library(pulsar)
-
-#' @keywords internal
-stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # Only 5 arguments!!!
-    if (is.null(stars.thresh)) stars.thresh <- 0.1
-    est <- list()
-
-
-    # do.call(batchtools::reduceResults,
-    #                  c(list(reg=reg, fun=starsaggfun), reduceargs))
-
-    if (is.null(merge)) {
-      est$merge <- lapply(premerge, function(x) Reduce("+", x)) # Like sum(), but can also used for adding matrices etc.
-      # If merge is not provided, the function aggregates the premerge results to get a consolidated view of 
-      #the model's performance across all subsamples.
-      gc() # flush
-    } else est$merge <- merge
+    regex <- paste(pattern, collapse="|")
+    crits <- crits[grepl(regex, crits, perl=TRUE)]
     
-    est$summary <- rep(0, length(est$merge)) # empty array
-
-    for (i in 1:length(est$merge)) { # The function then computes a stability measure for each model (or each level 
-      # of regularization, if applicable). This involves calculating the variability of model selection across subsamples.
-      est$merge[[i]] <- est$merge[[i]]/rep.num
-      est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1)) # binomial probab for edge appearing
-    }
-    ## monotonize variability
-    est$summary   <- cummax(est$summary)
-    est$opt.index <- .starsind(est$summary, stars.thresh) # Based on computed stability measures and provided threshold, function identifies optimal point 
-    est$criterion <- "stars.stability"
-    est$thresh    <- stars.thresh
-    return(est)
-}
-
-
-#' @importFrom stats dist
-#' @keywords internal
-gcd.stability <- function(premerge, thresh, rep.num, p, nlams, merge=NULL) { # 6 argumets including nlams
-    est <- list()
-    
-    if (is.null(merge)) {
-        est$merge <- lapply(premerge, function(pm) dist(t(sapply(pm, gcvec))))
-    } else est$merge <- merge
-    
-
-    est$summary <- vector('numeric', nlams) # set up empty vector
-    for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]]) # fill summary i with mean over all subsamples rep.num N
-    est$criterion <- "graphlet.stability"
-    return(est)
-}
-
-
-findConfFile <- function(name='') {
- ## if x is not a file
- ## look for config file using batchtools rules,
- ## otherwise, look in the pulsar system package
-
-  conffile <- batchtools::findConfFile()
-  if (!is.na(conffile)) return(conffile)
-
-  if (checkmate::testFileExists(name, access = "r"))
-    return(fs::path_real(name))
-
-  ## append type to file extension for default config files
-  if (nchar(name)==0) name <- '.R'
-  else name <- paste0('.', tools::file_path_sans_ext(name), '.R')
-
-  conffile <- fs::path_real(system.file('config',
-                  sprintf('batchtools.conf%s', name), package='pulsar'))
-  # }
-  if (checkmate::testFileExists(conffile, access = "r")) return(conffile)
-  else return(character(0))
-}
-
-#' @keywords internal
-.lamcheck <- function(lams) {
-    if (is.null(lams)) {
-        stop(paste('Error: missing members in fargs:',
-             paste(c('lambda')[c(is.null(lams))])))
+    n  <- length(crits)
+    if (scale) {
+        ylab <- "summary (scaled)"
+        if ("stars" %in% crits)
+            ymax <- max(x$stars$summary)
+        else ymax <- 1
     } else {
-        if (!all(lams == cummin(lams)))
-            warning("Are you sure you don't want the lambda path to be monotonically decreasing")
-        if (length(lams) < 2)
-            warning("Only 1 value of lambda is given. Are you sure you want to do model selection?")
+        ylab <- "summary"
+        ymax <- max(unlist(lapply(crits, function(c) x[[ c ]]$summary)))
     }
-}
 
-#' @keywords internal
-.ratcheck <- function(subsample.ratio, n) {
-    if (is.null(subsample.ratio)) {
-        if (n > 144)
-            return(10 * sqrt(n)/n)
-        else
-            return(0.8)
-    } else return(subsample.ratio)
-}
-
-#' @keywords internal
-.critcheck0 <- function(criterion, knowncrits) {
-    if (!all(criterion %in% knowncrits)) {
-       stop(paste('Unknown criterion', paste(criterion[!(criterion %in% knowncrits)],
-                   collapse=", "), sep=": "))
+    yrange <- c(0, ymax)
+    plot(lams, seq(yrange[1], yrange[2], length.out=nlam),
+         xlab=xlab, ylab=ylab, type='n')
+    if (!is.null(x$additional$lb.index)) {
+        ilams <- 1:length(lams)
+        range1 <- ilams < x$additional$ub.index
+        range2 <- ilams > x$additional$lb.index
+        range  <- !(range1 | range2)
+        ccol   <- vector('numeric', n+1)
+        ltys   <- vector('numeric', n+1)
+        legs   <- vector('numeric', n+1)
+    } else {
+        range1 <- rep(FALSE, nlam) ; range2 <- range1
+        range  <- !range1
+        ccol   <- vector('numeric', n)
+        ltys   <- vector('numeric', n)
+        legs   <- vector('numeric', n)
     }
-    starsdepend <- c("estrada", "sufficiency")
-    if (any(starsdepend %in% knowncrits)) {
-        if (any(starsdepend %in% criterion) && !("stars" %in% criterion)) {
-             stop(paste('Criterion: ', paste(starsdepend[starsdepend %in% criterion],
-                   collapse=", "), ' cannot be run unless stars is also a selected criterion', sep=""))
+
+    i <- 1 ; lcol <- 1
+    optcrits <- c() ; optcols <- c()
+    for (cr in crits) {
+        summs <- x[[ cr ]]$summary
+        optind <- x[[ cr ]]$opt.index
+        if (scale && cr != "stars") summs <- ymax*summs/max(summs)
+        if (length(summs) == nlam) {
+            points(lams[range],  summs[range],  type='b', col=lcol)
+            points(lams[range1], summs[range1], type='b', col=lcol, lty=2)
+            points(lams[range2], summs[range2], type='b', col=lcol, lty=2)
+            optind2 <- optind
+
+            if (any(range1 | range2)) {
+                ccol[i:(i+1)] <- c(lcol,lcol)
+                ltys[i:(i+1)] <- c(2,1)
+                legs[i:(i+1)] <- c(paste("b-", cr, sep=""), cr)
+                i <- i+1
+            } else {
+                ccol[i] <- lcol
+                ltys[i] <- 1
+                legs[i] <- cr
+            }
+        } else {
+            points(lams[range], summs, type='b', col=lcol)
+            optind2 <- optind-which(range)[1]+1
+            ccol[i] <- lcol
+            ltys[i] <- 1
+            legs[i] <- cr
         }
+
+        if (!is.null(optind)) {
+            points(lams[optind], summs[optind2], type='p', cex=1.5, pch=16, col=lcol)
+            optcrits <- c(optcrits, cr)
+            optcols  <- c(optcols , lcol)
+        }
+        lcol <- lcol + 1 ; i <- i + 1
     }
 
-}
-
-
-#' @keywords internal
-sufficiency <- function(merge, rep.num, p, nlams) {
-## Merge solution from StARS
-  est <- list()
-  est$merge <- sapply(merge, function(x) apply(x*(1-x), 2, max)) # Find maximum value of variance-like measure for each column of x.
-  est$summary <- colMeans(est$merge)
-  est$criterion <- 'sufficiency'
-  return(est)
-}
-
-
-#' @keywords internal
-estrada.stability <- function(merge, thresh, rep.num, p, nlams) {
-    est <- list()
-    est$summary <- unlist(lapply(merge, function(x) estrada.class(x >= .05)))
-    if (!is.null(thresh))
-      est$opt.index <- max(which.max(est$summary >= thresh)[1] - 1, 1)
-    else
-      est$opt.index <- 0
-
-    est$criterion <- "estrada.stability"
-    return(est)
-}
-
-
-#' @keywords internal
-.starsind <- function(summary, thresh, offset=1) {
-  if(any(summary >= thresh)){
-    return(max(which.max(summary >= thresh)[1] - offset, 1))
-  } else {
-    warning("Optimal lambda may be outside the supplied values")
-    return(length(summary))
-  }
-}
-
-
-gcvec <- function(G, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1) {
-  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
-  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
-  Elist <- .adj2elist(G)
-  n <- length(orbind)
-  if (ncol(Elist) < 1 || nrow(Elist) < 1) {
-      return(rep(0, n*(n-1)/2))
-  }
-
-  p <- ncol(G)
-  gcount <- orca::count4(Elist)
-  ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(gcount), ncol=ncol(gcount))
-  gcount <- rbind(gcount, buffer)
-  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
-  ## or completely empty graph and can be safely suppressed.
-  gcor <- suppressWarnings(cor(rbind(gcount[,orbind],1), method='spearman'))
-  gcor[upper.tri(gcor)]
-}
-
-
-#' @keywords internal
-batchply <- function(data, estFun, fun, fargs, ind.sample, wkdir, regdir,
-                     conffile, job.res) {
-  reg <- batchtools::makeRegistry(file.dir=regdir, work.dir=wkdir,
-                                  conf.file=findConfFile(conffile))
-  args <- list(fargs=fargs, data=data, fun=fun)
-  id   <- batchtools::batchMap(estFun, ind.sample, more.args=args, reg=reg)
-  doneSub <- batchtools::submitJobs(reg=reg, resources=job.res)
-  return(list(reg=reg, id=id))
-}
-
-#' @keywords internal
-.adj2elist <- function(G) {
-    if (inherits(G, "sparseMatrix")) {
-        G <- Matrix::triu(G, k=1)
-        index_i_j <- Matrix::mat2triplet(G)[1:2]
-        return(as.data.frame(index_i_j))
-    } else {
-        p <- ncol(G)
-        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
+    if (legends) {
+        legend('bottomleft', legs, col=ccol, pch=1, lty=ltys, cex = 0.6)
+        #if (length(optcrits) > 0)
+          #legend('topright', optcrits, pch=16, col=optcols, cex=1.5, title="opt lambda")
     }
 }
 
 
-.critcheck <- function(obj, criterion=NULL) {
-    if (!(criterion %in% names(obj)))
-        warning('desired criterion was not used in the pulsar run')
-}
 
-
-.pcheck <- function(obj) {
-    if (!inherits(obj, 'pulsar'))
-        stop("obj must be pulsar output")
-}
-
-#' @keywords internal
-getArgs <- function(call, envir=parent.frame()) {
-    fin    <- lapply(call, eval, envir=envir)
-    forms  <- formals(fin[[1]])
-    iscall <- sapply(forms, class) == 'call'
-    iscall <- iscall & !(names(forms) %in% c('regdir', 'regid'))
-    forms[iscall] <- lapply(forms[iscall], eval)
-    c(forms[!(names(forms) %in% names(fin))], fin)
-}
 ```
+
+
 
 
 

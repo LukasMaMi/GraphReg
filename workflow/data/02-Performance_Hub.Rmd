@@ -4,7 +4,7 @@ output: github_document
 ---
 
 
-## Step 3: Performance + Prior
+## Step 3: Performance + Prior + additional criteria
 ```{r}
 
 # Step 3: Performance
@@ -33,6 +33,7 @@ compute_metrics <- function(estimated, actual) {
     list(F1 = F1, Hamming = hamming_distance)
 }
 
+
 # Initialize list to store results for each configuration
 config_results <- list()
 
@@ -41,80 +42,43 @@ for(cfg in configs) {
     cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
     individual_results <- list()
     aggregated_metrics <- list()
-    lambda_values_methods <- list(stars = numeric(), gstars = numeric(), pgstars = numeric(), 
-                                  oracle_f1 = numeric(), oracle_hamming = numeric())
-    sparsity_values_methods <- list(stars = numeric(), gstars = numeric(), pgstars = numeric(), 
-                                    oracle_f1 = numeric(), oracle_hamming = numeric())
-    gap_values <- list()
+    lambda_values_methods <- list()
+    sparsity_values_methods <- list()
+    gap_values_b <- numeric()
+    gap_values_beta <- numeric()
 
-    # Loop over repetitions for each configuration
     for(rep in 1:num_repetitions) {
-        # Load estimation data
+        # Load estimation data for each repetition
         load(paste0(dir_path2, "/", get_filename(cfg, rep, "estimation")))
 
-        # Compute metrics for each method
-        stars_metrics <- compute_metrics(stars_graph, true_graph)
-        gstars_metrics <- compute_metrics(gstars_graph, true_graph)
-        pgstars_metrics <- compute_metrics(pgstars_graph, true_graph)
-        oracle_metrics_f1 <- compute_metrics(oracle_graph_f1, true_graph)
-        oracle_metrics_hamming <- compute_metrics(oracle_graph_hamming, true_graph)
-        null_metrics <- compute_metrics(null_graph, true_graph)
+        # Compute metrics for each method in categorized_info
+        method_metrics <- list()
+        for(method_name in categorized_info[["criterion"]]) {
+            method_graph <- categorized_info[["selected_graphs"]][[method_name]]
+            true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
+            method_metrics[[method_name]] <- compute_metrics(method_graph, true_graph)
 
-        # Accumulate additional metrics
-        additional_metrics <- list(
-            stars_lambda = best_lambda_stars,
-            gstars_lambda = best_lambda_gstars,
-            pgstars_lambda = best_lambda_pgstars,
-            oracle_lambda_f1 = best_lambda_oracle_f1,
-            oracle_lambda_hamming = best_lambda_oracle_hamming,
-            stars_sparsity = act_sparsity_stars,
-            gstars_sparsity = act_sparsity_gstars,
-            pgstars_sparsity = act_sparsity_pgstars,
-            oracle_sparsity_f1 = act_sparsity_oracle_f1,
-            oracle_sparsity_hamming = act_sparsity_oracle_hamming,
-            stars_index = stars_index,
-            stars_lb = stars_lb,
-            stars_ub = stars_ub,
-            gstars_index = gstars_index,
-            pgstars_index = pgstars_index,
-            oracle_index_f1 = oracle_index_f1,
-            oracle_index_hamming = oracle_index_hamming,
-            gap_b = ifelse(!is.null(gap_b), gap_b, NA),
-            gap_beta = ifelse(!is.null(gap_beta), gap_beta, NA)
-        )
+            # Accumulate lambda and sparsity values
+            lambda_values_methods[[method_name]] <- c(lambda_values_methods[[method_name]], 
+                                                      categorized_info[["optimal_lambdas"]][[method_name]])
+            sparsity_values_methods[[method_name]] <- c(sparsity_values_methods[[method_name]], 
+                                                       categorized_info[["act_sparsity"]][[method_name]])
+        }
+
+        # Accumulate gap values
+        gap_values_b <- c(gap_values_b, categorized_info[["additional_metrics"]][["gap_b"]])
+        gap_values_beta <- c(gap_values_beta, categorized_info[["additional_metrics"]][["gap_beta"]])
 
         # Store individual results
-        individual_results[[paste("Rep", rep)]] <- list(
-            Stars = stars_metrics,
-            GStars = gstars_metrics,
-            PGStars = pgstars_metrics,
-            Oracle_f1 = oracle_metrics_f1,
-            Oracle_hamming = oracle_metrics_hamming,
-            Null = null_metrics,
-            Additional = additional_metrics
-        )
-
-        lambda_values_methods$stars <- c(lambda_values_methods$stars, best_lambda_stars)
-        lambda_values_methods$gstars <- c(lambda_values_methods$gstars, best_lambda_gstars)
-        lambda_values_methods$pgstars <- c(lambda_values_methods$pgstars, best_lambda_pgstars)
-        lambda_values_methods$oracle_f1 <- c(lambda_values_methods$oracle_f1, best_lambda_oracle_f1)
-        lambda_values_methods$oracle_hamming <- c(lambda_values_methods$oracle_hamming, best_lambda_oracle_hamming)
-        sparsity_values_methods$stars <- c(sparsity_values_methods$stars, act_sparsity_stars)
-        sparsity_values_methods$gstars <- c(sparsity_values_methods$gstars, act_sparsity_gstars)
-        sparsity_values_methods$pgstars <- c(sparsity_values_methods$pgstars, act_sparsity_pgstars)
-        sparsity_values_methods$oracle_f1 <- c(sparsity_values_methods$oracle_f1, act_sparsity_oracle_f1)
-        sparsity_values_methods$oracle_hamming <- c(sparsity_values_methods$oracle_hamming, act_sparsity_oracle_hamming)
-
-        if (!is.na(additional_metrics$gap_b)) gap_values$gap_b <- c(gap_values$gap_b, gap_b)
-        if (!is.na(additional_metrics$gap_beta)) gap_values$gap_beta <- c(gap_values$gap_beta, gap_beta)
+        individual_results[[paste("Rep", rep)]] <- method_metrics
     }
-
+    
     # Function to calculate mean and CI
     calc_mean_ci <- function(values) {
         numeric_values <- values[!is.na(values) & !is.null(values)]
         if (length(numeric_values) > 0) {
             mean_val <- mean(numeric_values, na.rm = TRUE)
-            sem_val <- sd(numeric_values, na.rm = TRUE) / sqrt(length(numeric_values))
+            sem_val <- sd(numeric_values, na.rm = TRUE) / sqrt(length(numeric_values)) #weighted sd
             z_value <- qnorm(0.975)  # For a 95% CI
             ci_val <- mean_val + c(-z_value, z_value) * sem_val
             return(c(Mean = mean_val, CI = ci_val))
@@ -123,30 +87,21 @@ for(cfg in configs) {
         }
     }
 
-    # Loop over methods to calculate aggregated metrics
-    for (method in c("Stars", "GStars", "PGStars", "Oracle_f1", "Oracle_hamming", "Null")) {
-        # Extract individual metrics for the method
-        method_metrics <- lapply(individual_results, function(x) x[[method]])
-
-        # Calculate mean and CI for F1, Hamming for the method
-        aggregated_f1 <- calc_mean_ci(unlist(lapply(method_metrics, function(x) x$F1)))
-        aggregated_hamming <- calc_mean_ci(unlist(lapply(method_metrics, function(x) x$Hamming)))
-        aggregated_lambda <- calc_mean_ci(lambda_values_methods[[tolower(method)]])
-        aggregated_sparsity <- calc_mean_ci(sparsity_values_methods[[tolower(method)]])
-
-        # Store in aggregated_metrics
-        aggregated_metrics[[tolower(method)]] <- list(
-            F1 = aggregated_f1,
-            Hamming = aggregated_hamming,
-            Lambda = aggregated_lambda,
-            Sparsity = aggregated_sparsity
+    # Aggregated metrics (mean and CI) for each method
+    for (method_name in categorized_info[["criterion"]]) {
+        # Calculate mean and CI for F1, Hamming, Lambda, and Sparsity for each method
+        aggregated_metrics[[method_name]] <- list(
+            F1 = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$F1)),
+            Hamming = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$Hamming)),
+            Lambda = calc_mean_ci(lambda_values_methods[[method_name]]),
+            Sparsity = calc_mean_ci(sparsity_values_methods[[method_name]])
         )
     }
 
     # Calculate mean gap values
     aggregated_gap_values <- list(
-        Gap_B = calc_mean_ci(gap_values$gap_b),
-        Gap_Beta = calc_mean_ci(gap_values$gap_beta)
+        Gap_B = calc_mean_ci(gap_values_b),
+        Gap_Beta = calc_mean_ci(gap_values_beta)
     )
 
     # Store results for the current configuration
@@ -168,157 +123,8 @@ cat("Performance metrics for each configuration and repetition calculated and sa
 
 
 
-## Step 3: Performance
+## Session info
 ```{r}
-
-# Step 3: Performance
-
-# Load session settings
-Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
-load(hub_settings_file)
-
-dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
-
-# Function to generate file names
-get_filename <- function(config, rep, prefix = "Hub") {
-    sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
-}
-
-# Function to calculate F1-score and Hamming distance
-compute_metrics <- function(estimated, actual) {
-    TP <- sum(estimated & actual)
-    FP <- sum(estimated & !actual)
-    FN <- sum(!estimated & actual)
-    Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-    Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-    F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-    hamming_distance <- sum(tril(estimated) != tril(actual))
-    list(F1 = F1, Hamming = hamming_distance)
-}
-
-# Initialize list to store results for each configuration
-config_results <- list()
-
-# Loop over configurations and repetitions
-for(cfg in configs) {
-    cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
-    individual_results <- list()
-    aggregated_metrics <- list()
-    lambda_values_methods <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
-    sparsity_values_methods <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
-    gap_values <- list()
-
-    # Loop over repetitions for each configuration
-    for(rep in 1:num_repetitions) {
-        # Load estimation data
-        load(paste0(dir_path2, "/", get_filename(cfg, rep, "estimation")))
-
-        # Compute metrics for each method
-        stars_metrics <- compute_metrics(stars_graph, true_graph)
-        gstars_metrics <- compute_metrics(gstars_graph, true_graph)
-        oracle_metrics_f1 <- compute_metrics(oracle_graph_f1, true_graph)
-        oracle_metrics_hamming <- compute_metrics(oracle_graph_hamming, true_graph)
-        null_metrics <- compute_metrics(null_graph, true_graph)
-
-        # Accumulate additional metrics
-        additional_metrics <- list(
-            stars_lambda = best_lambda_stars,
-            gstars_lambda = best_lambda_gstars,
-            oracle_lambda_f1 = best_lambda_oracle_f1,
-            oracle_lambda_hamming = best_lambda_oracle_hamming,
-            stars_sparsity = act_sparsity_stars,
-            gstars_sparsity = act_sparsity_gstars,
-            oracle_sparsity_f1 = act_sparsity_oracle_f1,
-            oracle_sparsity_hamming = act_sparsity_oracle_hamming,
-            stars_index = stars_index,
-            stars_lb = stars_lb,
-            stars_ub = stars_ub,
-            gstars_index = gstars_index,
-            oracle_index_f1 = oracle_index_f1,
-            oracle_index_hamming = oracle_index_hamming,
-            gap_b = ifelse(!is.null(gap_b), gap_b, NA),
-            gap_beta = ifelse(!is.null(gap_beta), gap_beta, NA)
-        )
-
-        # Store individual results
-        individual_results[[paste("Rep", rep)]] <- list(
-            Stars = stars_metrics,
-            GStars = gstars_metrics,
-            Oracle_f1 = oracle_metrics_f1,
-            Oracle_hamming = oracle_metrics_hamming,
-            Null = null_metrics,
-            Additional = additional_metrics
-        )
-
-        lambda_values_methods$stars <- c(lambda_values_methods$stars, best_lambda_stars)
-        lambda_values_methods$gstars <- c(lambda_values_methods$gstars, best_lambda_gstars)
-        lambda_values_methods$oracle_f1 <- c(lambda_values_methods$oracle_f1, best_lambda_oracle_f1)
-        lambda_values_methods$oracle_hamming <- c(lambda_values_methods$oracle_hamming, best_lambda_oracle_hamming)
-        sparsity_values_methods$stars <- c(sparsity_values_methods$stars, act_sparsity_stars)
-        sparsity_values_methods$gstars <- c(sparsity_values_methods$gstars, act_sparsity_gstars)
-        sparsity_values_methods$oracle_f1 <- c(sparsity_values_methods$oracle_f1, act_sparsity_oracle_f1)
-        sparsity_values_methods$oracle_hamming <- c(sparsity_values_methods$oracle_hamming, act_sparsity_oracle_hamming)
-
-        if (!is.na(additional_metrics$gap_b)) gap_values$gap_b <- c(gap_values$gap_b, gap_b)
-        if (!is.na(additional_metrics$gap_beta)) gap_values$gap_beta <- c(gap_values$gap_beta, gap_beta)
-    }
-
-    # Function to calculate mean and CI
-    calc_mean_ci <- function(values) {
-        numeric_values <- values[!is.na(values) & !is.null(values)]
-        if (length(numeric_values) > 0) {
-            mean_val <- mean(numeric_values, na.rm = TRUE)
-            sem_val <- sd(numeric_values, na.rm = TRUE) / sqrt(length(numeric_values))
-            z_value <- qnorm(0.975)  # For a 95% CI
-            ci_val <- mean_val + c(-z_value, z_value) * sem_val
-            return(c(Mean = mean_val, CI = ci_val))
-        } else {
-            return(c(Mean = NA, CI = c(NA, NA)))
-        }
-    }
-
-    # Loop over methods to calculate aggregated metrics
-    for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming", "Null")) {
-        # Extract individual metrics for the method
-        method_metrics <- lapply(individual_results, function(x) x[[method]])
-
-        # Calculate mean and CI for F1, Hamming for the method
-        aggregated_f1 <- calc_mean_ci(unlist(lapply(method_metrics, function(x) x$F1)))
-        aggregated_hamming <- calc_mean_ci(unlist(lapply(method_metrics, function(x) x$Hamming)))
-        aggregated_lambda <- calc_mean_ci(lambda_values_methods[[tolower(method)]])
-        aggregated_sparsity <- calc_mean_ci(sparsity_values_methods[[tolower(method)]])
-
-        # Store in aggregated_metrics
-        aggregated_metrics[[tolower(method)]] <- list(
-            F1 = aggregated_f1,
-            Hamming = aggregated_hamming,
-            Lambda = aggregated_lambda,
-            Sparsity = aggregated_sparsity
-        )
-    }
-
-    # Calculate mean gap values
-    aggregated_gap_values <- list(
-        Gap_B = calc_mean_ci(gap_values$gap_b),
-        Gap_Beta = calc_mean_ci(gap_values$gap_beta)
-    )
-
-    # Store results for the current configuration
-    config_results[[cfg_key]] <- list(
-        Individual = individual_results,
-        Aggregated = aggregated_metrics,
-        Gap_Values = aggregated_gap_values
-    )
-}
-
-# Save the results to a file
-performance_filename <- "all_performance_results.RData"
-save(config_results, file = file.path(dir_path3, performance_filename))
-
-cat("Performance metrics for each configuration and repetition calculated and saved!\n")
-
+sessionInfo()
 ```
-
-
 

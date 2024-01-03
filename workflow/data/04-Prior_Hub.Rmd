@@ -71,8 +71,8 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 }
 
 
-n <- 400 # Samples
-p <- 100 # Dimensions
+n <- 800 # Samples
+p <- 40 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
@@ -85,34 +85,16 @@ true_graph <- Hub$theta
 act_sparsity <- Hub$act_sparsity
 
 maxCov <- getMaxCov(Hub_data)
-lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
+lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
 lambda <- list(lambda=lambda_path)
-
-
-# Using QUIC
-  library(BigQuic)
-  quicr <- function(data, lambda) {
-      p <- ncol(data)
-      est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-      est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-      path <-  lapply(seq(length(lambda)), function(i) {
-                  tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                  diag(tmp) <- 0
-                  as(tmp!=0, "lMatrix")
-      })
-      est$path <- path
-      est
-  }
     
-
-quicargs <- list(lambda = lambda_path)
   
 library(batchtools)
 library(pulsar)
 out.p <- my.batch.pulsar(
   data = Hub_data, 
-  fun = quicr, 
-  fargs = quicargs, 
+  fun = "QUIC", 
+  fargs = lambda, 
   rep.num = N,
   thresh = 0.1,
   subsample.ratio = b,
@@ -120,69 +102,59 @@ out.p <- my.batch.pulsar(
   lb.stars = TRUE, 
   ub.stars = TRUE, 
   seed = FALSE,
-  refit = FALSE,
+  refit = TRUE,
   prior_graph = true_graph,
-  method = c("spearman", "kendall", "latentcor")
+  method = c("spearman", "kendall", "latentcor"),
+  five_node = FALSE,
+  use_pseudo_count = TRUE, 
+  pseudo_count_prob = 0.5, 
+  pseudo_count_strength = 1
 )
 
 out.p
 
 stop() 
 
-### Integrate this into pulsar at some point
-set_opt_indices <- function(obj, indices) {
-    for (crit in names(indices)) {
-        if (!is.na(indices[[crit]])) {
-            obj <- "my.opt.index<-"(obj, criterion = crit, value = indices[[crit]])
-        }
-    }
-    return(obj)
+plot(out.p, legends = TRUE, show = c("stars", "gcd"))
+plot(out.p, legends = TRUE, show = c("stars", "gcd_prior"))
+
+stop() 
+
+extract_categorized_optimal_info <- function(output) {
+  # Initialize lists to store the categorized results
+  optimal_indices <- list()
+  optimal_lambdas <- list()
+  selected_graphs <- list()
+
+  # Extract the criteria from the output object
+  criteria <- output[["criterion"]]
+
+  # Loop through each criterion
+  for (crit in criteria) {
+    # Extract the criterion name
+    crit_name <- crit[[1]]
+
+    # Store the optimal index, lambda, and refit graph for the current criterion
+    optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
+    optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
+    selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
+  }
+
+  # Create a list to store all categorized results
+  categorized_results <- list(
+    "optimal_indices" = optimal_indices,
+    "optimal_lambdas" = optimal_lambdas,
+    "selected_graphs" = selected_graphs
+  )
+
+  return(categorized_results)
 }
 
-# Extract optimal Index
-get_opt_indices <- function(obj, criteria) {
-    indices <- list()
-    for (crit in criteria) {
-        opt_index <- my.get.opt.index(obj, criterion = crit)
-        indices[[crit]] <- opt_index  # Directly assigning the index
-    }
-    return(indices)
-}
+# Usage example
+categorized_info <- extract_categorized_optimal_info(out.p)
 
 
-get_optimal_lambda <- function(opt_indices, lambda_path) {
-    optimal_lambda <- list()
-    for (crit in names(opt_indices)) {
-        index <- opt_indices[[crit]]
-        if (!is.na(index) && index <= length(lambda_path)) {
-            optimal_lambda[[crit]] <- round(lambda_path[index], 3)
-        } else {
-            optimal_lambda[[crit]] <- NA
-        }
-    }
 
-    return(optimal_lambda)
-}
-
-
-criteria <- unlist(out.p$criterion)
-criteria <- criteria[!criteria %in% c("gcd", "gcd_prior")]
-opt_indices <- get_opt_indices(out.p, criteria)
-out.p <- set_opt_indices(out.p, opt_indices)
-optimal_lambda_values <- get_optimal_lambda(opt_indices, lambda_path = lambda$lambda)
-
-  # Lower Bound
-  stars_lb <- out.p[["stars"]][["lb.index"]]
-  lambda_lb <- round(lambda_path[stars_lb], 3)
-  # Upper Bound
-  stars_ub <- out.p[["stars"]][["ub.index"]]
-  lambda_ub <- round(lambda_path[stars_ub], 3)
-
-
-result <- list()
-for (crit in criteria) {
-    result[[crit]] <- list("Optimal Index" = opt_indices[[crit]])
-}
 
 
 
@@ -201,6 +173,27 @@ for (crit in criteria) {
 
 
 ```{r}
+
+        # lambda paths
+        est$additional$lambda_full <- lambda_full
+        est$additional$lambda_bound <- fargs$lambda
+        # lb and ub index
+        est$additional$lb.index <- lb.est$opt.index
+        est$additional$ub.index <- ub.index
+        # lb and ub lambda value
+        est$additional$lb.lambda <- round(lambda_full[lb.est$opt.index], 3)
+        est$additional$ub.lambda <- round(lambda_full[ub.index], 3)
+        stars_lambda <- round(lambda_full[est$stars$opt.index], 3)
+        # gap b and gab beta
+        est$additional$gap_b <- abs(est$additional$ub.lambda - est$additional$lb.lambda)
+        est$additional$gap_beta <- abs(stars_lambda - est$additional$lb.lambda)
+        # Optimal index stars
+        est$stars$opt.index <- est$stars$opt.index + ub.index - 1
+        
+        
+                est$stars$lb.index <- lb.est$opt.index
+        est$stars$ub.index <- ub.index
+        est$stars$opt.index <- est$stars$opt.index + ub.index - 1
 
 # Optimal Index Stars
 stars_index <-  my.opt.index(out.p, 'stars')
