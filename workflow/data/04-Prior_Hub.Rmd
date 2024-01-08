@@ -71,8 +71,8 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 }
 
 
-n <- 800 # Samples
-p <- 40 # Dimensions
+n <- 400 # Samples
+p <- 100 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
@@ -107,8 +107,7 @@ out.p <- my.batch.pulsar(
   method = c("spearman", "kendall", "latentcor"),
   five_node = FALSE,
   use_pseudo_count = TRUE, 
-  pseudo_count_prob = 0.5, 
-  pseudo_count_strength = 1
+  pseudo_count_range = c(0, 0.1)
 )
 
 out.p
@@ -154,7 +153,17 @@ extract_categorized_optimal_info <- function(output) {
 categorized_info <- extract_categorized_optimal_info(out.p)
 
 
+stop() 
 
+
+
+        est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]]))))
+    }
+
+    est$summary <- vector('numeric', nlams)
+    for (i in 1:nlams) {
+        est$summary[i] <- mean(est$merge[[i]]) # Fill summary: ith lambda = mean of ith lambda over all j subsamples
+    }
 
 
 
@@ -172,150 +181,68 @@ categorized_info <- extract_categorized_optimal_info(out.p)
 
 
 
-```{r}
 
-        # lambda paths
-        est$additional$lambda_full <- lambda_full
-        est$additional$lambda_bound <- fargs$lambda
-        # lb and ub index
-        est$additional$lb.index <- lb.est$opt.index
-        est$additional$ub.index <- ub.index
-        # lb and ub lambda value
-        est$additional$lb.lambda <- round(lambda_full[lb.est$opt.index], 3)
-        est$additional$ub.lambda <- round(lambda_full[ub.index], 3)
-        stars_lambda <- round(lambda_full[est$stars$opt.index], 3)
-        # gap b and gab beta
-        est$additional$gap_b <- abs(est$additional$ub.lambda - est$additional$lb.lambda)
-        est$additional$gap_beta <- abs(stars_lambda - est$additional$lb.lambda)
-        # Optimal index stars
-        est$stars$opt.index <- est$stars$opt.index + ub.index - 1
-        
-        
-                est$stars$lb.index <- lb.est$opt.index
-        est$stars$ub.index <- ub.index
-        est$stars$opt.index <- est$stars$opt.index + ub.index - 1
-
-# Optimal Index Stars
-stars_index <-  my.opt.index(out.p, 'stars')
-# Optimal Lambda
-best_lambda_stars <- round(lambda_path[stars_index], 3)
-# Lower Bound
-stars_lb <- out.p[["stars"]][["lb.index"]]
-# Upper Bound
-stars_ub <- out.p[["stars"]][["ub.index"]]
-
-
-# Optimal Index Stars
-stars_index <-  my.opt.index(out.p, 'stars')
-# Optimal Lambda
-best_lambda_stars <- round(lambda_path[stars_index], 3)
-
-# Optimal Index Gstars_spearman
-my.opt.index(out.p, criterion = "gcd") <- my.get.opt.index(out.p, criterion = "gcd")
-gstars_index_s <- my.opt.index(out.p, 'gcd')[[1]]
-# Optimal Lambda
-best_lambda_gstars_spearman <- round(lambda_path[gstars_index_spearman], 3)
-
-# Optimal Index PG-stars
-my.opt.index(out.p, criterion = "gcd_prior_spearman") <- my.get.opt.index(out.p, criterion = "gcd_prior_spearman")
-pgstars_index <- my.opt.index(out.p, 'gcd_prior_spearman')[[1]]
-# Optimal Lambda
-best_lambda_pgstars <- round(lambda_path[pgstars_index], 3)
-
-fit  <- refit(out.p, criterion = c("stars", "gcd", "gcd_prior"))
-## Stars
-stars_graph <- fit[["refit"]][["stars"]]
-## GStars
-gstars_graph <- fit[["refit"]][["gcd"]]
-## PGStars
-pgstars_graph <- fit[["refit"]][["gcd_prior"]]
-
-## Oracle procedure
-oracle_results <- quicr(Hub_data, lambda_path)
-
-#F1-Score as criterium for Oracle
-f1_score <- function(actual, predicted) {
-if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
-  stop("Matrices should be of class lgCMatrix")
-}
-
-# Calculating TP, FP, and FN using sparse matrix operations
-TP <- sum(predicted & actual)
-FP <- sum(predicted & !actual)
-FN <- sum(!predicted & actual)
-
-# Calculate Precision and Recall
-Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-
-# Calculate F1 Score
-f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-
-return(f1)
-}
-
-# Hamming distance as criterium for Oracle
-hamming_distance <- function(actual, predicted) {
-  sum(tril(predicted) != tril(actual))
-}
-
-# F1 score - best lambda Oracle
-oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
-  estimated_graph <- oracle_results$path[[j]]
-  f1_score(true_graph, estimated_graph)
-}))
-
-# Hamming distance - best lambda Oracle
-  oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
-  estimated_graph <- oracle_results$path[[j]]
-  hamming_distance(true_graph, estimated_graph)
-}))
-
-best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
-best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
-
-oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
-oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
-
-compute_metrics <- function(estimated, actual) {
-
-TP <- sum(tril(estimated) & tril(actual))
-FP <- sum(tril(estimated) & !tril(actual))
-FN <- sum(!tril(estimated) & tril(actual))
-Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-# Calculate Hamming distance for the lower triangle only
-hamming_distance <- sum(tril(estimated) != tril(actual))
-
-list(F1 = F1, Hamming = hamming_distance)
-}
-
-compute_metrics(stars_graph, true_graph)
-compute_metrics(gstars_graph, true_graph)
-compute_metrics(pgstars_graph, true_graph)
-compute_metrics(oracle_graph_f1, true_graph)
-compute_metrics(oracle_graph_hamming, true_graph)
-
-plot(out.p, legends = F, scale = F)
-```
 
 
 ## Playground
 ```{r}
+
+
+modify_orb_count <- function(orb_count, orbit_count_range = c(0, 0.1)) {
+  # Validate the orbit_count_range input
+  if (length(orbit_count_range) != 2 || orbit_count_range[1] >= orbit_count_range[2]) {
+    stop("orbit_count_range must be a vector of two numbers, where the first is less than the second.")
+  }
+
+  # Generate a random matrix with the same dimensions as orb_count
+  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+                               min = orbit_count_range[1], 
+                               max = orbit_count_range[2]), 
+                          nrow = nrow(orb_count), 
+                          ncol = ncol(orb_count))
+  
+  # Add the random matrix to orb_count
+  orb_count <- orb_count + random_matrix
+
+  return(orb_count)
+}
+
+
 
 graph <- true_graph
 graph <- gstars_graph
 
 orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
 nx2 <- .adj2elist(graph)
+nx2 
 n <- length(orbind)
 p <- ncol(graph)
 orb_count <- orca::count4(nx2) # redundant graphlet degree matrix (gdm) px15
+orb_count
 buffer <- matrix(0, nrow=p-nrow(orb_count), ncol=ncol(orb_count)) # Create empty set up
+buffer
 orb_count <- rbind(orb_count, buffer)
+orb_count 
 orb_count_normal = rbind(orb_count[,orbind],1)
+orb_count_normal
+
+orb_count_noise <- modify_orb_count(orb_count_normal)
+orb_count_noise
+
 gcm <- suppressWarnings(cor(orb_count_normal, method = "spearman"))
+gcm <- suppressMessages(latentcor::latentcor(orb_count_normal, method = "approx", use.nearPD = TRUE))
+gcm 
+
+
+test <- my.gcvec(true_graph, method = "spearman", orbind = orbind, five_node = FALSE,
+                                                         pseudo_count = TRUE, return_gcm = TRUE, 
+                                                         pseudo_count_range = pseudo_count_range)
+
+test
+
+pseudo_count_range <- c(0, 0.1)
+
+
 gcv1 <- gcm[upper.tri(gcm)] 
 
 gcv2 <- gcm[upper.tri(gcm)] 
@@ -339,6 +266,8 @@ suppressWarnings(cor(orb_count_normal, method = "spearman"))
       showplot = FALSE
 )
 
+
+    
 
 # Example usage
 # Assuming orb_count is your matrix

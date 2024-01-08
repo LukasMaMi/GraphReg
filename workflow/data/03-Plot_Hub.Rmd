@@ -236,15 +236,17 @@ for (cfg_key in names(config_results)) {
 # Function to create lambda plots
 create_lambda_plot <- function(df, title) {
   ggplot(df, aes(x = Config, y = Mean_Lambda, color = Method, group = Method)) +
-    geom_line(position = position_dodge(width = 0.2), linetype = "dashed", alpha = 0.7) +
     geom_point(position = position_dodge(width = 0.2)) +
-    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, position = position_dodge(width = 0.2)) +
+    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
+                  width = 0.1, 
+                  position = position_dodge(width = 0.2)) +
     labs(title = title, y = "Mean Lambda", x = "") +
     theme_minimal() +
     scale_color_manual(values = method_colors) +
     theme(axis.text.x = ggtext::element_markdown()) +
     guides(color = guide_legend(title = "Method"))
 }
+
 
 # Update the Config column in mean_lambda_ci_df for both sets
 mean_lambda_ci_df_set_1$Config <- factor(mean_lambda_ci_df_set_1$Config, levels = names(config_labels), labels = config_labels)
@@ -264,7 +266,10 @@ lambda_plot_set_2
 
 
 ```
-
+## Notes: Check lambda path! If there is a greater gap between ub.lambda and lb.lambda i.e. more lambda values to pick from than gcd seems to perform drastically better. By small bounded lambda path gcd seems to perform equally bad! Look at gap values
+## Why does gcd_pseudo_kendall and gcd_pseudo_spearman perform in f1 scores drastically better, but pick a mean optimal lambda which is further apart from oracle lambda??? (same for stars). Should not gcd_pseudo_latentcor have the best performance???
+## Main problem that gcd are non-monoton functions???
+## If stars fit bad, then the bounded lambda path is bad and therefore gcd???
 
 ## Gap plots across different graph topologies additional criteria
 ```{r}
@@ -364,6 +369,87 @@ gap_beta_plot
 ## Tables for different parameter settings
 ```{r}
 
+rho_3_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
+
+rho_3_performance_filename <- file.path(rho_3_file, "all_performance_results.RData")
+load(rho_3_performance_filename)
+
+#
+rho_3 <- config_results
+rm(config_results)
+#
+
+generate_df_for_rho <- function(data_list, rho_descriptor) {
+  results_df <- data.frame(Configuration = character(),
+                           Method = character(),
+                           MeanF1Score = numeric(),
+                           MeanHammingDistance = numeric(),
+                           Lambda = numeric(),
+                           Sparsity = numeric(),
+                           stringsAsFactors = FALSE)
+
+  add_row <- function(results_df, config, method, data_list) {
+    # Check if the method data exists for the given configuration
+    if (!is.null(data_list[[config]]) && !is.null(data_list[[config]][["Aggregated"]][[method]])) {
+      return(rbind(results_df, data.frame(
+        Configuration = config,
+        Method = method,
+        MeanF1Score = data_list[[config]][["Aggregated"]][[method]][["F1"]][["Mean"]],
+        MeanHammingDistance = data_list[[config]][["Aggregated"]][[method]][["Hamming"]][["Mean"]],
+        Lambda = data_list[[config]][["Aggregated"]][[method]][["Lambda"]][["Mean"]],
+        Sparsity = data_list[[config]][["Aggregated"]][[method]][["Sparsity"]][["Mean"]]
+      )))
+    }
+    return(results_df)
+  }
+
+  configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
+  methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null", "gcd_spearman", "gcd_kendall", "gcd_latentcor",
+               "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "gcd_prior_spearman", "gcd_prior_kendall",
+               "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")  # Updated methods
+
+  for (config in configs) {
+    for (method in methods) {
+      results_df <- add_row(results_df, config, method, data_list)
+    }
+  }
+
+  return(results_df)
+}
+
+
+# Generate data frames for each rho value
+df_rho_3 <- generate_df_for_rho(rho_3, "rho = 0.2, thresh = 0.1, lambda path = 35")
+#df_rho_2 <- generate_df_for_rho(rho_2, "rho = [-1, -0.4], [0.4, 1]")
+#df_rho_3 <- generate_df_for_rho(rho_3, "rho = [-1, -0.5], [0.5, 1]")
+
+# Combine the data frames
+combined_df <- rbind(df_rho_3)
+
+# Display the combined results
+print(combined_df)
+
+library(gridExtra)
+table_plot <- tableGrob(combined_df)
+
+library(ggplot2)
+ggsave("Hub_graph.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
 ## Rho -1, -0.8
 rho_1_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_8_tun4"
 
@@ -390,14 +476,13 @@ rm(config_results)
 
 
 ## Rho -1, 1
-rho_3_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Schrott/ER/3p_min1_0_5_tun3"
-
+rho_3_file <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 rho_3_performance_filename <- file.path(rho_3_file, "all_performance_results.RData")
 load(rho_3_performance_filename)
 
 #
-rho_3<- config_results
+rho_3 <- config_results
 rm(config_results)
 #
 
@@ -408,6 +493,7 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
                            Method = NA,
                            MeanF1Score = NA,
                            MeanHammingDistance = NA,
+                           Lambda = NA,
                            Sparsity = NA,
                            stringsAsFactors = FALSE)
 
@@ -415,14 +501,18 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
     return(rbind(results_df, data.frame(
       Configuration = config,
       Method = method,
-      MeanF1Score = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[1]],
-      MeanHammingDistance = data_list[[config]][["Aggregated"]][[method]][["Mean"]][[2]],
-      Sparsity = data_list[[config]][["Aggregated"]][[method]][["Sparsity"]]
+      MeanF1Score = data_list[[config]][["Aggregated"]][[method]][["F1"]][["Mean"]],
+      MeanHammingDistance = data_list[[config]][["Aggregated"]][[method]][["Hamming"]][["Mean"]],
+      Lambda = data_list[[config]][["Aggregated"]][[method]][["Lambda"]][["Mean"]],
+      Sparsity = data_list[[config]][["Aggregated"]][[method]][["Sparsity"]][["Mean"]]
     )))
   }
+  
 
   configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
-  methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null")  # Updated methods
+  methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null", "gcd_spearman", "gcd_kendall", "gcd_latentcor",
+               "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "gcd_prior_spearman", "gcd_prior_kendall",
+               "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")  # Updated methods
 
   for (config in configs) {
     for (method in methods) {
@@ -435,7 +525,7 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
 
 
 # Generate data frames for each rho value
-df_rho_1 <- generate_df_for_rho(rho_1, "rho = [-1, -0.8], [0.8, 1]")
+df_rho_3 <- generate_df_for_rho(rho_3, "rho = 0.2, thresh = 0.1, lambda path = 35")
 #df_rho_2 <- generate_df_for_rho(rho_2, "rho = [-1, -0.4], [0.4, 1]")
 #df_rho_3 <- generate_df_for_rho(rho_3, "rho = [-1, -0.5], [0.5, 1]")
 

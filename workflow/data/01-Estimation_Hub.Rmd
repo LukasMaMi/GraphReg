@@ -12,9 +12,14 @@ output: gitHub_document
 #install.packages("batchtools)
 #install_github("zdk123/pulsar")
 #install.packages("BigQuic")
+#install.packages("corrplot")
 
 
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/"
+
+dir_path_lambda <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/Lambda_path_plots/"
+
+dir_path_gcm <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/gcm_plots/"
 
 #Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
 Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
@@ -37,13 +42,12 @@ for(rep in 1:num_repetitions) {
 
     
     library(batchtools)
-    library(pulsar)
     out.p <- my.batch.pulsar(
       data = Hub_data, 
       fun = "QUIC", 
       fargs = lambda, 
       rep.num = N,
-      thresh = 0.1,
+      thresh = 0.05,
       subsample.ratio = b,
       criterion=c('stars', 'gcd', 'gcd_prior'), 
       lb.stars = TRUE, 
@@ -54,8 +58,7 @@ for(rep in 1:num_repetitions) {
       method = c("spearman", "kendall", "latentcor"),
       five_node = FALSE,
       use_pseudo_count = TRUE, 
-      pseudo_count_prob = 0.5, 
-      pseudo_count_strength = 1
+      pseudo_count_range = c(0, 0.1)
     )
   
   
@@ -91,7 +94,47 @@ for(rep in 1:num_repetitions) {
     }
     
     categorized_info <- extract_categorized_optimal_info(out.p)
-  
+    
+    # Adding gcm for true_graph 
+    for (meth in c("spearman", "kendall", "latentcor")) {
+      gcm_true <- my.gcvec(true_graph, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, method = meth, return_gcm = TRUE)
+      out.p[[paste("true_graph", meth, sep = "_")]]$gcm <- gcm_true
+    }
+    
+    
+    # GCM plots function
+    plot_and_save_gcm <- function(output, criterion, config, rep, dir_path_gcm) {
+      # Check if the criterion is present and has a GCM
+      if ("gcm" %in% names(output[[criterion]])) {
+        gcm <- output[[criterion]][["gcm"]]
+    
+        # Create a filename for the plot
+        plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
+        plot_path <- file.path(dir_path_gcm, plot_filename)
+    
+        # Create the plot and save it as a PDF
+        pdf(plot_path, width = 8, height = 6)
+        corrplot::corrplot(gcm, method = "circle")  # Customize the plot as needed
+        dev.off()
+    
+        return(plot_path)
+      } else {
+        return(NULL)  # Return NULL if GCM not found
+      }
+    }
+
+    # Plot and save GCMs for all criteria including the true graph
+    for (crit_name in names(out.p)) {
+      if (startsWith(crit_name, "gcd_") || startsWith(crit_name, "true_graph")) {
+        plot_path <- plot_and_save_gcm(out.p, crit_name, configs[[i]], rep, dir_path_gcm)
+        if (!is.null(plot_path)) {
+          print(paste("GCM plot saved for", crit_name))
+        } else {
+          print(paste("GCM plot not found or not saved for", crit_name))
+        }
+      }
+    }
+
 
     # Lambda path plots for stars and gcd 
     get_plot_filename <- function(config, rep, prefix = "Plot_gcd") {
@@ -99,18 +142,18 @@ for(rep in 1:num_repetitions) {
     }
     plot_filename <- get_plot_filename(configs[[i]], rep)
     # Save the plot as a PDF
-    pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
+    pdf(file.path(dir_path_lambda, plot_filename), width = 8, height = 6)
     plot(out.p, legends = TRUE, show = c("stars", "gcd"))
     dev.off()
     
     
     # Lambda path plots for stars and gcd prior
-    get_plot_filename <- function(config, rep, prefix = "Plot_prior") {
+    get_plot_filename <- function(config, rep, prefix = "Plot_prior_gcd") {
     sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
     }
     plot_filename <- get_plot_filename(configs[[i]], rep)
     # Save the plot as a PDF
-    pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
+    pdf(file.path(dir_path_lambda, plot_filename), width = 8, height = 6)
     plot(out.p, legends = TRUE, show = c("stars", "gcd_prior"))
     dev.off()
     

@@ -14,7 +14,7 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
                     job.res=list(), cleanup=FALSE, refit = TRUE, 
                     prior_graph = NULL, method = c("spearman"), orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1,
-                    use_pseudo_count = FALSE, pseudo_count_prob = 0.5, pseudo_count_strength = 1, five_node = FALSE) {
+                    use_pseudo_count = FALSE, pseudo_count_range = c(0, 0.1), five_node = FALSE) {
 
     if (!requireNamespace('batchtools', quietly=TRUE)) {
         stop("'batchtools' package required to run 'batch.pulsar'")
@@ -24,6 +24,7 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
         stop('Registry directory already exists')
     }
     
+    ## Code that smoother with else if
     if (!funct %in% c("QUIC", "glasso")) stop("Please choose either 'QUIC' or 'glasso' as function") 
 
     if (funct == "QUIC") {
@@ -61,7 +62,7 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
 
     n <- nrow(data)
     p <- ncol(data)
-    knowncrits <- c("stars", "gcd", "estrada", "sufficiency", "gcd_prior")
+    knowncrits <- c("stars", "gcd", "gcd_prior")
     .lamcheck(fargs$lambda)
     .critcheck0(criterion, knowncrits)
     subsample.ratio <- .ratcheck(subsample.ratio, n)
@@ -93,10 +94,15 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
 
     est <- list()
     reduceargs <- list()
-    # Initialize a list to store reduceGCDargs for each method
     reduceGCDargs <- list()
+    reduceGCDargs_gcm <- list()
     reduceGCDargs_pseudo <- list()
-    
+    reduceGCDargs_pseudo_gcm <- list()
+    lb.gcdpremerge <- list()
+    lb.gcdpremerge_gcm <- list()
+    lb.gcdpremerge_pseudo <- list()
+    lb.gcdpremerge_pseudo_gcm <- list()
+  
     
     if (lb.stars) {
         if (!("stars" %in% criterion)) {
@@ -136,47 +142,62 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
         if (!doneRun) {
             stop('Errors in batch jobs for computing initial stability')
         }
-
+        
+        # collect initial results
         lb.starsmerge <- batchtools::reduceResults(reg = reg, ids = pulsar.jobs, fun = starsaggfun)
         # Aggregates the results of the initial set of jobs (for StARS method) using reduceResults
         lb.est <- stars.stability(NULL, thresh, minN, p, lb.starsmerge) 
         # Calculates the stability of the lower bound estimate using the aggregated results.
         gc(FALSE)
 
-        # compute initial gcd if selected
+        # Collect initial gcd results (We first compute only two subsamples and then the leftover N-2 subsamples later on)
         if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) {
-            # Initialize a list to store gcdpremerge results for each method
-            lb.gcdpremerge <- list()
-            lb.gcdpremerge_pseudo <- list()
-        
+
             for (meth in method) {
               
               if (use_pseudo_count == TRUE) {
                 
-                # Define aggfun for the current method + Pseudo Count
+                # Gather GCV for pseudo
                 aggfun <- function(res, ...) {
                     lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
-                                                     pseudo_count = TRUE, pseudo_count_prob = pseudo_count_prob,
-                                                     pseudo_count_strength = pseudo_count_strength, ...))
+                                                     pseudo_count = TRUE, pseudo_count_range = pseudo_count_range, ...))
                 }
-        
-                # Processing and gathering results
+                
                 lb.gcdpremerge_pseudo[[meth]] <- do.call(batchtools::reduceResultsList,
                                                        c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs_pseudo))
+  
+                # Gather GCM for pseudo
+                aggfun <- function(res, ...) {
+                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
+                                                         pseudo_count = TRUE, return_gcm = TRUE, 
+                                                         pseudo_count_range = pseudo_count_range, ...))
+                }
                 
-                #est$test$lb.gcdpremerge_pseudo[[meth]] <- lb.gcdpremerge_pseudo[[meth]] ###
+                lb.gcdpremerge_pseudo_gcm[[meth]] <- do.call(batchtools::reduceResultsList,
+                                                             c(list(reg = reg, ids = pulsar.jobs, 
+                                                                  fun = aggfun), reduceGCDargs_pseudo_gcm))
+                
               }
               
-                # Define aggfun for the current method
-                aggfun <- function(res, ...) {
-                    lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node, ...))
-                }
-        
-                # Processing and gathering results
-                lb.gcdpremerge[[meth]] <- do.call(batchtools::reduceResultsList,
-                                                       c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs))
-                
-                #est$test$lb.gcdpremerge[[meth]] <- lb.gcdpremerge[[meth]] ###
+              
+              # Gather GCV 
+              aggfun <- function(res, ...) {
+                  lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node, ...))
+              }
+      
+              # Processing and gathering results
+              lb.gcdpremerge[[meth]] <- do.call(batchtools::reduceResultsList,
+                                                     c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs))
+              
+              # Gather GCM 
+              aggfun <- function(res, ...) {
+                      lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
+                                                       return_gcm = TRUE, ...))
+              }
+              
+              lb.gcdpremerge_gcm[[meth]] <- do.call(batchtools::reduceResultsList,
+                                                           c(list(reg = reg, ids = pulsar.jobs, 
+                                                                fun = aggfun), reduceGCDargs_gcm))
             }
         }
         
@@ -207,26 +228,29 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
         # Prepare arguments for reducing results in the subsequent batch jobs.
   
         
+        # If lb.stars was set to TRUE, create now the reduction arguments for gcd
         if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { 
         
             for (meth in method) {
               
               if (use_pseudo_count == TRUE) {
+                # Create Pseudo GCV reduceGCDargs for the current method
+                reduceGCDargs_pseudo[[meth]] <- list(init = lapply(lb.gcdpremerge_pseudo[[meth]], 
+                                                                function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
                 
-                # Check if lb.gcdpremerge Pseudo Count for the current method exists
-                if (!is.null(lb.gcdpremerge_pseudo[[meth]])) {
-                    # Create reduceGCDargs for the current method
-                    reduceGCDargs_pseudo[[meth]] <- list(init = lapply(lb.gcdpremerge_pseudo[[meth]], 
-                                                                    function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
-                }
+                # Create Pseudo GCM reduceGCDargs for the current method
+                reduceGCDargs_pseudo_gcm[[meth]] <- list(init = lapply(lb.gcdpremerge_pseudo_gcm[[meth]], 
+                                                                function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
+                
               }
               
-                # Check if lb.gcdpremerge for the current method exists
-                if (!is.null(lb.gcdpremerge[[meth]])) {
-                    # Create reduceGCDargs for the current method
-                    reduceGCDargs[[meth]] <- list(init = lapply(lb.gcdpremerge[[meth]], 
-                                                                    function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
-                }
+            # Create GCV reduceGCDargs for the current method
+            reduceGCDargs[[meth]] <- list(init = lapply(lb.gcdpremerge[[meth]], 
+                                                            function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
+            # Create GCM reduceGCDargs for the current method
+            reduceGCDargs_gcm[[meth]] <- list(init = lapply(lb.gcdpremerge_gcm[[meth]], 
+                                                            function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
+    
             }
         }
 
@@ -260,8 +284,9 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
             est$stars <- stars.stability(NULL, thresh, rep.num, p, starsmerge)
         }
         
-
+        # Actual calculation of graphlet correlation distance (gcd)
         if (crit == "gcd" || crit == "gcd_prior") {
+          
             for (meth in method) {
               
               if (use_pseudo_count == TRUE) {
@@ -274,94 +299,96 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
                 }
                 updated_criteria <- c(updated_criteria, new_criterion_name)
                 
-                # Function factory to create gcdaggfun with bound method
-                makeGcdAggFun <- function(meth) {
-                    function(res, ...) {
-                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
+                
+                # Gather GCV for Pseudo
+                aggfun <- function(res, ...) {
+                  lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
                                                          pseudo_count = TRUE, 
-                                                         pseudo_count_prob = pseudo_count_prob,
-                                                         pseudo_count_strength = pseudo_count_strength, ...))
-                    }
+                                                         pseudo_count_range = pseudo_count_range, ...))
                 }
+                
+                # Processing and gathering gcv results
+                gcdpremerge_pseudo <- c(reduceGCDargs_pseudo[[meth]]$init,
+                                 batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
+                
+                
+                # Gather GCM for Pseudo
+                aggfun <- function(res, ...) {
+                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
+                                                         pseudo_count = TRUE, return_gcm = TRUE, 
+                                                         pseudo_count_range = pseudo_count_range, ...))
+                }
+
+                # Processing and gathering gcm results
+                gcdpremerge_pseudo_gcm <- c(reduceGCDargs_pseudo_gcm[[meth]]$init, 
+                                  batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
+
+                gcm_mean <- calculateMeanMatrices(gcdpremerge_pseudo_gcm, nlams, rep.num)
+                
         
-                # Create gcdaggfun for the current method
-                gcdaggfun <- makeGcdAggFun(meth)
-                
-                # Check if reduceGCDargs for the current method exists
-                if (!is.null(reduceGCDargs_pseudo[[meth]])) {
-                    # Processing and gathering results
-                    gcdpremerge_pseudo <- c(reduceGCDargs_pseudo[[meth]]$init,
-                                     batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
+                if (crit == "gcd") {
+                    est[[paste("gcd_pseudo", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge_pseudo, 
+                                                        thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                        use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
+                    #est[[paste("gcdpremerge_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
+                    est[[paste("gcd_pseudo", meth, sep = "_")]]$gcm <- gcm_mean 
+                }
             
-                    if (crit == "gcd") {
-                        est[[paste("gcd_pseudo", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge_pseudo, 
-                                                            thresh, rep.num, p, nlams, prior_graph = prior_graph, 
-                                                            use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
-                        #est[[paste("gcdpremerge_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
-                    }
-                
-                    if (crit == "gcd_prior") {
-                        est[[paste("gcd_prior_pseudo", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge_pseudo, 
-                                                            thresh, rep.num, p, nlams, prior_graph = prior_graph, 
-                                                            use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
-                        #est[[paste("gcdpremerge_prior_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
-                    }
+                if (crit == "gcd_prior") {
+                    est[[paste("gcd_prior_pseudo", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge_pseudo, 
+                                                        thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                        use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
+                    #est[[paste("gcdpremerge_prior_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
+                    est[[paste("gcd_prior_pseudo", meth, sep = "_")]]$gcm <- gcm_mean
                 }
               }
                 
-                # Update criterion to include new methods
-                new_criterion_name <- if (crit == "gcd") {
-                    paste("gcd", meth, sep = "_")
-                } else {
-                    paste("gcd_prior", meth, sep = "_")
-                }
-                updated_criteria <- c(updated_criteria, new_criterion_name)
-                
-                # Function factory to create gcdaggfun with bound method
-                makeGcdAggFun <- function(meth) {
-                    function(res, ...) {
-                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node, ...))
-                    }
-                }
-        
-                # Create gcdaggfun for the current method
-                gcdaggfun <- makeGcdAggFun(meth)
-                
-                # Check if reduceGCDargs for the current method exists
-                if (!is.null(reduceGCDargs[[meth]])) {
-                    # Processing and gathering results
-                    gcdpremerge <- c(reduceGCDargs[[meth]]$init,
-                                     batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = gcdaggfun))
-            
-                    if (crit == "gcd") {
-                        est[[paste("gcd", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
-                                                            thresh, rep.num, p, nlams, prior_graph = prior_graph, 
-                                                            use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
-                        #est[[paste("gcdpremerge", meth, sep = "_")]] <- gcdpremerge
-                    }
-                
-                    if (crit == "gcd_prior") {
-                        est[[paste("gcd_prior", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
-                                                            thresh, rep.num, p, nlams, prior_graph = prior_graph, 
-                                                            use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
-                        est[[paste("gcdpremerge_prior", meth, sep = "_")]] <- gcdpremerge
-                    }
-                }
-            }
-        }
+              # Update criterion to include new methods
+              new_criterion_name <- if (crit == "gcd") {
+                  paste("gcd", meth, sep = "_")
+              } else {
+                  paste("gcd_prior", meth, sep = "_")
+              }
+              updated_criteria <- c(updated_criteria, new_criterion_name)
 
-
-        else if (crit == "estrada") {
-            if (!("stars" %in% criterion)) {
-                warning('Need StaRS for computing Estrada classes... not run')
-            } else {
-                est$estrada <- estrada.stability(est$stars$merge, thresh, rep.num, p, nlams)
-            }
-        } else if (crit == "sufficiency") {
-            if (!("stars" %in% criterion)) {
-                warning('Need StaRS for computing sufficiency... not run')
-            } else {
-                est$sufficiency <- sufficiency(est$stars$merge, rep.num, p, nlams)
+              
+              # Gather GCV
+              aggfun <- function(res, ...) {
+                      lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node, ...))
+              }
+              
+              # Processing and gathering results
+              gcdpremerge <- c(reduceGCDargs[[meth]]$init,
+                               batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
+              
+              # Gather GCM
+              aggfun <- function(res, ...) {
+                      lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
+                                                       return_gcm = TRUE, ...))
+              }
+              
+              # Processing and gathering results
+              gcdpremerge_gcm <- c(reduceGCDargs_gcm[[meth]]$init,
+                               batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
+              
+              gcm_mean <- calculateMeanMatrices(gcdpremerge_gcm, nlams, rep.num)
+              
+      
+              if (crit == "gcd") {
+                  est[[paste("gcd", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
+                                                      thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                      use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
+                  #est[[paste("gcdpremerge", meth, sep = "_")]] <- gcdpremerge
+                  est[[paste("gcd", meth, sep = "_")]]$gcm <- gcm_mean
+              }
+          
+              if (crit == "gcd_prior") {
+                  est[[paste("gcd_prior", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
+                                                      thresh, rep.num, p, nlams, prior_graph = prior_graph, 
+                                                      use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
+                  #est[[paste("gcdpremerge_prior", meth, sep = "_")]] <- gcdpremerge
+                  est[[paste("gcd_prior", meth, sep = "_")]]$gcm <- gcm_mean
+              }
             }
         }
     }
@@ -412,6 +439,16 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
     for (crit in criterion) {
       est[[crit]]$criterion <- crit
     }
+    
+    ##################
+    for (crit in criterion) {
+      if (startsWith(crit, "gcd")) {
+        gcdind <- which.min(est[[crit]]$summary)
+        est[[crit]]$gcm <- est[[crit]]$gcm[[gcdind]]
+      }
+    }
+    ##################
+    
     
     if (lb.stars) {
 
@@ -499,8 +536,8 @@ print.batch.pulsar <- function(x, ...) {
 
 
 
-my.gcvec <- function(graph, method, orbind, five_node, 
-                     pseudo_count = FALSE, pseudo_count_prob, pseudo_count_strength) {
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, 
+                     pseudo_count_range = pseudo_count_range, return_gcm = FALSE) {
   
   if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
   if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
@@ -527,8 +564,7 @@ my.gcvec <- function(graph, method, orbind, five_node,
   
   if (pseudo_count == TRUE) {
     ## Add pseudo_count to orb_count
-    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_prob = pseudo_count_prob, 
-                            pseudo_count_strength = pseudo_count_strength)
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = pseudo_count_range)
   }
   
   if (method %in% c("kendall", "spearman")){
@@ -537,37 +573,64 @@ my.gcvec <- function(graph, method, orbind, five_node,
   }
   
   else if (method == "latentcor") {
-  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx"))
-  gcm <- gcm$K
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = TRUE))
+  gcm <- gcm$R
   }
   
   gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
-  return(gcv)
+  
+  if (return_gcm == TRUE) {
+      return(gcm)
+  } else {
+      return(gcv)
+  }
+  
 }
 
 
 #################
 
 ## Add noise to orb_count
-modify_orb_count <- function(orb_count, pseudo_count_prob, pseudo_count_strength) {
-  # Iterate over each element of the matrix
-  for (i in 1:nrow(orb_count)) {
-    for (j in 1:ncol(orb_count)) {
-      # Decide whether to modify this element
-      if (runif(1) < pseudo_count_prob) {
-        # Randomly choose to add or only subtract if orbit count is greater than 0
-        if (runif(1) < 0.5) {
-          orb_count[i, j] <- orb_count[i, j] + pseudo_count_strength
-        } else {
-          if (orb_count[i, j] > 0) {
-            orb_count[i, j] <- max(0, orb_count[i, j] - pseudo_count_strength)  # Ensures orbit count does not go negative
-          }
-        }
-      }
-    }
+modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
+  # Validate the orbit_count_range input
+  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+         \n i.e. pseudo_count_range = c(0, 0.1)")
   }
+
+  # Generate a random matrix with the same dimensions as orb_count
+  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+                               min = pseudo_count_range[1], 
+                               max = pseudo_count_range[2]), 
+                          nrow = nrow(orb_count), 
+                          ncol = ncol(orb_count))
+  
+  # Add the random matrix to orb_count
+  orb_count <- orb_count + random_matrix
+
   return(orb_count)
 }
+
+
+# modify_orb_count <- function(orb_count, pseudo_count_prob, pseudo_count_strength) {
+#   # Iterate over each element of the matrix
+#   for (i in 1:nrow(orb_count)) {
+#     for (j in 1:ncol(orb_count)) {
+#       # Decide whether to modify this element
+#       if (runif(1) < pseudo_count_prob) {
+#         # Randomly choose to add or only subtract if orbit count is greater than 0
+#         if (runif(1) < 0.5) {
+#           orb_count[i, j] <- orb_count[i, j] + pseudo_count_strength
+#         } else {
+#           if (orb_count[i, j] > 0) {
+#             orb_count[i, j] <- max(0, orb_count[i, j] - pseudo_count_strength)  # Ensures orbit count does not go negative
+#           }
+#         }
+#       }
+#     }
+#   }
+#   return(orb_count)
+# }
 
 ################ 
 
@@ -579,11 +642,6 @@ my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, u
         stop("Not supported correlation method chosen!")
     }
 
-    criterion_name <- if (use_prior) {
-        paste("gcd_prior", method, sep = "_")
-    } else {
-        paste("gcd", method, sep = "_")
-    }
 
     if (use_prior) {
         gcv_true = my.gcvec(prior_graph, method = method, orbind = orbind, five_node = five_node, ...) # gcv for true_graph
@@ -606,9 +664,39 @@ my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, u
         est$summary[i] <- mean(est$merge[[i]]) # Fill summary: ith lambda = mean of ith lambda over all j subsamples
     }
 
-    est$criterion <- criterion_name
     return(est)
 }
+
+
+
+calculateMeanMatrices <- function(data, nlams, rep.num) {
+
+    
+    # Initialize a list to store mean matrices for each lambda
+    mean_matrices <- vector("list", nlams)
+
+    # Loop over each lambda
+    for (i in 1:nlams) {
+        # Initialize an empty matrix to accumulate the sum
+        sum_matrix <- matrix(0, nrow = nrow(data[[1]][[i]]), ncol = ncol(data[[1]][[i]]))
+        
+        # Aggregate matrices for the same lambda across all subsamples
+        for (j in 1:rep.num) {
+            sum_matrix <- sum_matrix + data[[j]][[i]]
+        }
+        
+        # Calculate the mean matrix for this lambda
+        mean_matrix <- sum_matrix / rep.num
+        
+        # Store the mean matrix
+        mean_matrices[[i]] <- mean_matrix
+    }
+
+    return(mean_matrices)
+}
+
+# Usage example:
+# mean_matrices <- calculateMeanMatrices(your_data, rep.num)
 
 
 
@@ -637,7 +725,7 @@ stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # 
 
     for (i in 1:length(est$merge)) { # The function then computes a stability measure for each model (or each level 
       # of regularization, if applicable). This involves calculating the variability of model selection across subsamples.
-      est$merge[[i]] <- est$merge[[i]]/rep.num
+      est$merge[[i]] <- est$merge[[i]]/rep.num # Normalization 
       est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1)) # binomial probab for edge appearing
     }
     ## monotonize variability
