@@ -419,7 +419,7 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
 
 
 # Generate data frames for each rho value
-df_rho_3 <- generate_df_for_rho(rho_3, "rho = 0.2, thresh = 0.1, lambda path = 35")
+df_rho_3 <- generate_df_for_rho(rho_3, "rho = 0.2, thresh = 0.05, lambda path = 100")
 #df_rho_2 <- generate_df_for_rho(rho_2, "rho = [-1, -0.4], [0.4, 1]")
 #df_rho_3 <- generate_df_for_rho(rho_3, "rho = [-1, -0.5], [0.5, 1]")
 

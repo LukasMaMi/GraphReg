@@ -49,7 +49,7 @@ for(cfg in configs) {
 
     for(rep in 1:num_repetitions) {
         # Load estimation data for each repetition
-        load(paste0(dir_path2, "/", get_filename(cfg, rep, "estimation")))
+        load(paste0(dir_path_results, "/", get_filename(cfg, rep, "estimation")))
 
         # Compute metrics for each method in categorized_info
         method_metrics <- list()
@@ -113,6 +113,7 @@ for(cfg in configs) {
 }
 
 # Save the results to a file
+save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, dir_path3, config_results, file = hub_settings_file)
 performance_filename <- "all_performance_results.RData"
 save(config_results, file = file.path(dir_path3, performance_filename))
 

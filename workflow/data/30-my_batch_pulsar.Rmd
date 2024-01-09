@@ -13,7 +13,7 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
                     job.res=list(), cleanup=FALSE, refit = TRUE, 
-                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1,
+                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1,
                     use_pseudo_count = FALSE, pseudo_count_range = c(0, 0.1), five_node = FALSE) {
 
     if (!requireNamespace('batchtools', quietly=TRUE)) {
@@ -612,25 +612,7 @@ modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range)
 }
 
 
-# modify_orb_count <- function(orb_count, pseudo_count_prob, pseudo_count_strength) {
-#   # Iterate over each element of the matrix
-#   for (i in 1:nrow(orb_count)) {
-#     for (j in 1:ncol(orb_count)) {
-#       # Decide whether to modify this element
-#       if (runif(1) < pseudo_count_prob) {
-#         # Randomly choose to add or only subtract if orbit count is greater than 0
-#         if (runif(1) < 0.5) {
-#           orb_count[i, j] <- orb_count[i, j] + pseudo_count_strength
-#         } else {
-#           if (orb_count[i, j] > 0) {
-#             orb_count[i, j] <- max(0, orb_count[i, j] - pseudo_count_strength)  # Ensures orbit count does not go negative
-#           }
-#         }
-#       }
-#     }
-#   }
-#   return(orb_count)
-# }
+
 
 ################ 
 

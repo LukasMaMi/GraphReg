@@ -6,41 +6,68 @@ output: gitHub_document
 
 ## Run StARS, G-StARS, PG-StARS and Oracle with additional criteria
 ```{r}
-
+# Required packages
 #install.packages("htmltools")
 #install.packages("devtools")
-#install.packages("batchtools)
-#install_github("zdk123/pulsar")
+#install.packages("batchtools")
+#devtools::install_github("zdk123/pulsar")
 #install.packages("BigQuic")
 #install.packages("corrplot")
 
-
+# Define main directory paths
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/"
+dir_path_results <- file.path(dir_path2, "Results")
 
-dir_path_lambda <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/Lambda_path_plots/"
-
-dir_path_gcm <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/gcm_plots/"
-
-#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+# Load settings
 Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
 hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
 load(hub_settings_file)
 
-
-get_filename <- function(config, rep, prefix = "Hub") {
-  return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
+# Create Results directory if it doesn't exist
+if (!dir.exists(dir_path_results)) {
+  dir.create(dir_path_results)
 }
 
-# 2. Loop over each file, load dataset, and compute adjacency matrices
-for(rep in 1:num_repetitions) {
-  for(i in seq_along(configs)) {
-    # Get filename for the current configuration and repetition
-    filename <- get_filename(configs[[i]], rep)
+# Function to get filename
+get_filename <- function(config, rep, prefix = "Hub") {
+  sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
+}
+
+# GCM plots function
+plot_and_save_gcm <- function(output, criterion, config, rep, dir_path) {
+  if ("gcm" %in% names(output[[criterion]])) {
+    gcm <- output[[criterion]][["gcm"]]
+    plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
+    plot_path <- file.path(dir_path, plot_filename)
+    pdf(plot_path, width = 8, height = 6)
+    corrplot::corrplot(gcm, method = "circle")
+    dev.off()
+  }
+}
+
+# Main loop over each configuration and repetition
+for (rep in 1:num_repetitions) {
+  for (i in seq_along(configs)) {
+    config <- configs[[i]]
     
-    # Load the dataset
+    # Prepare directories for storing results
+    config_dir <- file.path(dir_path2, sprintf("config_n_%d_p_%d", config$n, config$p))
+    rep_dir <- file.path(config_dir, sprintf("rep_%d", rep))
+    gcd_dir <- file.path(rep_dir, "gcd_results")
+    gcd_prior_dir <- file.path(rep_dir, "gcd_prior_results")
+    lambda_dir <- file.path(rep_dir, "lambda_path_plots")
+
+    # Create directories if they don't exist
+    dir.create(config_dir, recursive = TRUE, showWarnings = FALSE)
+    dir.create(gcd_dir, recursive = TRUE, showWarnings = FALSE)
+    dir.create(gcd_prior_dir, recursive = TRUE, showWarnings = FALSE)
+    dir.create(lambda_dir, recursive = TRUE, showWarnings = FALSE)
+
+    # Load the dataset for the current configuration and repetition
+    filename <- get_filename(config, rep)
     load(paste0(dir_path, "/", filename))
 
-    
+    # Run batch pulsar
     library(batchtools)
     out.p <- my.batch.pulsar(
       data = Hub_data, 
@@ -60,7 +87,6 @@ for(rep in 1:num_repetitions) {
       use_pseudo_count = TRUE, 
       pseudo_count_range = c(0, 0.1)
     )
-  
   
     extract_categorized_optimal_info <- function(output) {
       # Initialize lists to store the categorized results
@@ -94,171 +120,51 @@ for(rep in 1:num_repetitions) {
     }
     
     categorized_info <- extract_categorized_optimal_info(out.p)
+
+    # Lambda path plots
+    plot_lambda_path <- function(config, rep, prefix, dir_path) {
+      plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
+      pdf(file.path(dir_path, plot_filename), width = 8, height = 6)
+      plot(out.p, legends = TRUE, show = c("stars", "gcd", "gcd_prior"))
+      dev.off()
+    }
+
+    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir)
+    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir)
+    
     
     # Adding gcm for true_graph 
     for (meth in c("spearman", "kendall", "latentcor")) {
-      gcm_true <- my.gcvec(true_graph, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, method = meth, return_gcm = TRUE)
+      gcm_true <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1, method = meth, return_gcm = TRUE)
+      gcm_true_pseudo <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1, method = meth,
+                                  return_gcm = TRUE, pseudo_count = TRUE, pseudo_count_range = c(0, 0.1))
       out.p[[paste("true_graph", meth, sep = "_")]]$gcm <- gcm_true
-    }
-    
-    
-    # GCM plots function
-    plot_and_save_gcm <- function(output, criterion, config, rep, dir_path_gcm) {
-      # Check if the criterion is present and has a GCM
-      if ("gcm" %in% names(output[[criterion]])) {
-        gcm <- output[[criterion]][["gcm"]]
-    
-        # Create a filename for the plot
-        plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
-        plot_path <- file.path(dir_path_gcm, plot_filename)
-    
-        # Create the plot and save it as a PDF
-        pdf(plot_path, width = 8, height = 6)
-        corrplot::corrplot(gcm, method = "circle")  # Customize the plot as needed
-        dev.off()
-    
-        return(plot_path)
-      } else {
-        return(NULL)  # Return NULL if GCM not found
-      }
+      out.p[[paste("true_graph_pseudo", meth, sep = "_")]]$gcm <- gcm_true_pseudo
     }
 
-    # Plot and save GCMs for all criteria including the true graph
+    # Plot and save GCMs
     for (crit_name in names(out.p)) {
-      if (startsWith(crit_name, "gcd_") || startsWith(crit_name, "true_graph")) {
-        plot_path <- plot_and_save_gcm(out.p, crit_name, configs[[i]], rep, dir_path_gcm)
-        if (!is.null(plot_path)) {
-          print(paste("GCM plot saved for", crit_name))
-        } else {
-          print(paste("GCM plot not found or not saved for", crit_name))
-        }
+      if (startsWith(crit_name, "gcd_") && !grepl("prior", crit_name)) {
+        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_dir)
+      } else if (startsWith(crit_name, "gcd_prior_")) {
+        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_prior_dir)
+      } else if (startsWith(crit_name, "true_graph")) {
+        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_dir)
+        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_prior_dir)
       }
     }
 
-
-    # Lambda path plots for stars and gcd 
-    get_plot_filename <- function(config, rep, prefix = "Plot_gcd") {
-    sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
-    }
-    plot_filename <- get_plot_filename(configs[[i]], rep)
-    # Save the plot as a PDF
-    pdf(file.path(dir_path_lambda, plot_filename), width = 8, height = 6)
-    plot(out.p, legends = TRUE, show = c("stars", "gcd"))
-    dev.off()
-    
-    
-    # Lambda path plots for stars and gcd prior
-    get_plot_filename <- function(config, rep, prefix = "Plot_prior_gcd") {
-    sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
-    }
-    plot_filename <- get_plot_filename(configs[[i]], rep)
-    # Save the plot as a PDF
-    pdf(file.path(dir_path_lambda, plot_filename), width = 8, height = 6)
-    plot(out.p, legends = TRUE, show = c("stars", "gcd_prior"))
-    dev.off()
-    
-  
-    ## Oracle procedure
-    # Using QUIC
-    quicr <- function(data, lambda, ...) {
-        p <- ncol(data)
-        est  <- BigQuic::BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-        est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-        path <-  lapply(seq(length(lambda)), function(i) {
-                    tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                    diag(tmp) <- 0
-                    as(tmp!=0, "lMatrix")
-        })
-        est$path <- path
-        est
-    }
-    
-    oracle_results <- quicr(Hub_data, lambda_path)
-    
-    #F1-Score as criterium for Oracle
-    f1_score <- function(actual, predicted) {
-    if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
-      stop("Matrices should be of class lgCMatrix")
-    }
-  
-    # Calculating TP, FP, and FN using sparse matrix operations
-    TP <- sum(predicted & actual)
-    FP <- sum(predicted & !actual)
-    FN <- sum(!predicted & actual)
-  
-    # Calculate Precision and Recall
-    Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-    Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-  
-    # Calculate F1 Score
-    f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-  
-    return(f1)
-    }
-    
-    # Hamming distance as criterium for Oracle
-    hamming_distance <- function(actual, predicted) {
-      sum(tril(predicted) != tril(actual))
-    }
-    
-    # F1 score - best lambda Oracle
-    oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
-      estimated_graph <- oracle_results$path[[j]]
-      f1_score(true_graph, estimated_graph)
-    }))
-    
-    # Hamming distance - best lambda Oracle
-      oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
-      estimated_graph <- oracle_results$path[[j]]
-      hamming_distance(true_graph, estimated_graph)
-    }))
-    
-    best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
-    best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
-    
-    oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
-    oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
-    
-    # Add oracle criteria, true graph and null graph to the existing categorized_info structure
-    categorized_info$optimal_indices[["oracle_f1"]] <- oracle_index_f1
-    categorized_info$optimal_lambdas[["oracle_f1"]] <- best_lambda_oracle_f1
-    categorized_info$selected_graphs[["oracle_f1"]] <- oracle_graph_f1
-    
-    categorized_info$optimal_indices[["oracle_hamming"]] <- oracle_index_hamming
-    categorized_info$optimal_lambdas[["oracle_hamming"]] <- best_lambda_oracle_hamming
-    categorized_info$selected_graphs[["oracle_hamming"]] <- oracle_graph_hamming
-    
-
-    categorized_info$selected_graphs[["null_graph"]] <- null_graph
-    categorized_info$selected_graphs[["true_graph"]] <- true_graph
-    criterion <- unique(c(out.p$criterion, "oracle_f1", "oracle_hamming", "null_graph"))
-    categorized_info$criterion <- criterion
-    
-  
-    ## Calculate actual sparsity for each criteria
-    calculate_sparsity <- function(graph, p) {
-        # Calculate sparsity of the graph
-        sparsity <- sum(graph) / (p * (p - 1))
-        return(sparsity)
-    }
-    
-    # Loop through each selected graph and calculate its sparsity
-    for (method in names(categorized_info[["selected_graphs"]])) {
-        graph <- categorized_info[["selected_graphs"]][[method]]
-        p <- configs[[i]]$p  # Assuming 'i' is the index of your current configuration
-        act_sparsity <- calculate_sparsity(graph, p)
-        categorized_info[["act_sparsity"]][[method]] <- act_sparsity
-    }
-  
-
-save(num_repetitions, configs, dir_path, dir_path2, file = hub_settings_file)
-result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(out.p, categorized_info, file=paste0(dir_path2, "/", ... = result_filename))
-
+    # Save the results in the Results directory
+    save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, file = hub_settings_file)
+    result_filename <- get_filename(config, rep, "estimation")
+    save(out.p, categorized_info, file = file.path(dir_path_results, result_filename))
   }
 }
 
-print("Adjacency matrices for Hub generated and saved!")
+print("Estimation completed and plots saved!")
+
+
+
 ```
 
 
