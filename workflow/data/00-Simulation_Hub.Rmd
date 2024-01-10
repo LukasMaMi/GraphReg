@@ -130,7 +130,7 @@ for(rep in 1:num_repetitions) {
   null_data <- Hub$null_data
 
   maxCov <- getMaxCov(Hub_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 5) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 8) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   cat("Condition number:", kappa(Hub$omega), "\n")

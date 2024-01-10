@@ -7,9 +7,12 @@ output: github_document
 ```{r}
 ## To Do List:
 # if lb.stars and ub.stars == FALSE, gcd are not calculated for some reason. Fix that.
+# Maybe check if we do not need to calculate gcm separate from gcv
+# Option to make a non-monoton function monoton?
+# Other dependency measures than correlation? Maybe Mutual information?
 
 my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
-                    criterion=c("stars"), thresh = 0.1, subsample.ratio = NULL,
+                    criterion=c("stars"), thresh = 0.05, subsample.ratio = NULL,
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
                     job.res=list(), cleanup=FALSE, refit = TRUE, 
@@ -440,14 +443,13 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
       est[[crit]]$criterion <- crit
     }
     
-    ##################
+    
     for (crit in criterion) {
       if (startsWith(crit, "gcd")) {
         gcdind <- which.min(est[[crit]]$summary)
         est[[crit]]$gcm <- est[[crit]]$gcm[[gcdind]]
       }
     }
-    ##################
     
     
     if (lb.stars) {
@@ -649,38 +651,52 @@ my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, u
     return(est)
 }
 
-
+#########################################################################
 
 calculateMeanMatrices <- function(data, nlams, rep.num) {
-
-    
-    # Initialize a list to store mean matrices for each lambda
     mean_matrices <- vector("list", nlams)
 
-    # Loop over each lambda
     for (i in 1:nlams) {
-        # Initialize an empty matrix to accumulate the sum
-        sum_matrix <- matrix(0, nrow = nrow(data[[1]][[i]]), ncol = ncol(data[[1]][[i]]))
-        
-        # Aggregate matrices for the same lambda across all subsamples
-        for (j in 1:rep.num) {
-            sum_matrix <- sum_matrix + data[[j]][[i]]
+        matrices <- lapply(data, function(sublist) sublist[[i]])
+        valid_matrices <- Filter(function(m) is.matrix(m) && nrow(m) > 0 && ncol(m) > 0, matrices)
+
+        if (length(valid_matrices) > 0) {
+            sum_matrix <- Reduce("+", valid_matrices)
+            mean_matrix <- sum_matrix / length(valid_matrices)
+            mean_matrices[[i]] <- mean_matrix
+        } else {
+            mean_matrices[[i]] <- NULL  # or some other placeholder indicating no valid data
         }
-        
-        # Calculate the mean matrix for this lambda
-        mean_matrix <- sum_matrix / rep.num
-        
-        # Store the mean matrix
-        mean_matrices[[i]] <- mean_matrix
     }
 
     return(mean_matrices)
 }
 
-# Usage example:
-# mean_matrices <- calculateMeanMatrices(your_data, rep.num)
-
-
+# calculateMeanMatrices <- function(data, nlams, rep.num) {
+#     mean_matrices <- vector("list", nlams)
+#     
+#     for (i in 1:nlams) {
+#         matrices <- lapply(data, function(sublist) sublist[[i]])
+#         valid_matrices <- Filter(function(m) is.matrix(m) && nrow(m) > 0 && ncol(m) > 0, matrices)
+# 
+#         # Identify and print invalid matrices
+#         invalid_matrices <- setdiff(matrices, valid_matrices)
+#         if (length(invalid_matrices) > 0) {
+#             cat(sprintf("Invalid matrices for lambda index %d:\n", i))
+#             lapply(invalid_matrices, print)
+#         }
+#         
+#         if (length(valid_matrices) > 0) {
+#             sum_matrix <- Reduce("+", valid_matrices)
+#             mean_matrix <- sum_matrix / length(valid_matrices)
+#             mean_matrices[[i]] <- mean_matrix
+#         } else {
+#             mean_matrices[[i]] <- NULL  # Placeholder for no valid data
+#         }
+#     }
+# 
+#     return(mean_matrices)
+# }
 
 
 #######################

@@ -157,13 +157,6 @@ stop()
 
 
 
-        est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]]))))
-    }
-
-    est$summary <- vector('numeric', nlams)
-    for (i in 1:nlams) {
-        est$summary[i] <- mean(est$merge[[i]]) # Fill summary: ith lambda = mean of ith lambda over all j subsamples
-    }
 
 
 

@@ -14,6 +14,12 @@ output: gitHub_document
 #install.packages("BigQuic")
 #install.packages("corrplot")
 
+library(corrplot)
+library(BigQuic)
+library(batchtools)
+library(devtools)
+library(htmltools)
+
 # Define main directory paths
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/"
 dir_path_results <- file.path(dir_path2, "Results")
@@ -78,7 +84,7 @@ for (rep in 1:num_repetitions) {
       subsample.ratio = b,
       criterion=c('stars', 'gcd', 'gcd_prior'), 
       lb.stars = TRUE, 
-      ub.stars = TRUE, 
+      ub.stars = FALSE, 
       seed = FALSE,
       refit = TRUE,
       prior_graph = true_graph,
@@ -122,15 +128,15 @@ for (rep in 1:num_repetitions) {
     categorized_info <- extract_categorized_optimal_info(out.p)
 
     # Lambda path plots
-    plot_lambda_path <- function(config, rep, prefix, dir_path) {
+    plot_lambda_path <- function(config, rep, prefix, dir_path, show) {
       plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
       pdf(file.path(dir_path, plot_filename), width = 8, height = 6)
-      plot(out.p, legends = TRUE, show = c("stars", "gcd", "gcd_prior"))
+      plot(out.p, legends = TRUE, show = show)
       dev.off()
     }
 
-    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir)
-    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir)
+    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir, show = c("stars", "gcd"))
+    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir, show = c("stars", "gcd_prior"))
     
     
     # Adding gcm for true_graph 
