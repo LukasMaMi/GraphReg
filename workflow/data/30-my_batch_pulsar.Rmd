@@ -373,6 +373,7 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
               # Processing and gathering results
               gcdpremerge_gcm <- c(reduceGCDargs_gcm[[meth]]$init,
                                batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
+              #est[[paste("gcdpremerge_gcm", meth, sep = "_")]] <- gcdpremerge_gcm
               
               gcm_mean <- calculateMeanMatrices(gcdpremerge_gcm, nlams, rep.num)
               
@@ -385,7 +386,7 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
                   est[[paste("gcd", meth, sep = "_")]]$gcm <- gcm_mean
               }
           
-              if (crit == "gcd_prior") {
+              else if (crit == "gcd_prior") {
                   est[[paste("gcd_prior", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge, 
                                                       thresh, rep.num, p, nlams, prior_graph = prior_graph, 
                                                       use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
@@ -414,8 +415,6 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
       # Optimal index stars
       est$stars$opt.index <- est$stars$opt.index + ub.index - 1
 
-      # Bounded lambda path
-      est$additional$lambda_bound <- fargs$lambda
       # lb and ub index
       est$additional$lb.index <- lb.est$opt.index
       est$additional$ub.index <- ub.index
@@ -435,15 +434,19 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
     criterion <- unique(c(criterion, updated_criteria))
     criterion <- setdiff(criterion, c("gcd", "gcd_prior"))
     est$criterion <- criterion
+    
     # Full lambda path
     est$additional$lambda_full <- lambda_full
+    # Bounded lambda path
+    est$additional$lambda_bound <- fargs$lambda
     
     # Naming new criterion description according to cirterion
     for (crit in criterion) {
       est[[crit]]$criterion <- crit
     }
+  
     
-    
+    # Determine optimal gcm according to optimal index
     for (crit in criterion) {
       if (startsWith(crit, "gcd")) {
         gcdind <- which.min(est[[crit]]$summary)
@@ -466,15 +469,8 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
       
       # Iterate over each criterion and store the corresponding optimal lambda value
       for (crit in criterion) {
-          if (crit == "stars") {
-              opt_ind <- est$stars$opt.index
-              est$stars$opt.lambda <- signif(lambda_full[opt_ind], 3)
-          } 
-        
-          else if (startsWith(crit, "gcd")) { 
              opt_ind <- est[[crit]]$opt.index
              est[[crit]]$opt.lambda <- signif(lambda_full[opt_ind], 3)
-          }
       }
       
       # Refit each criterion with optimal index
@@ -488,8 +484,49 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
           }
         }
       }
+      
+      # Determine adjacency matrices for full lambda path
+      for (crit in criterion) {
+        if (startsWith(crit, "gcd")) { 
+          for (i in 1:nlams) {
+            gcdind <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
+            gcdind <- gcdind + est$additional$ub.index - 1
+            est[[crit]]$all_adj[[i]] <- fullmodel$path[[gcdind]]
+          }
+        }
+      }
+    }
+    
+    # Determine F1 score and hamming distance
+    if (!is.null(prior_graph)) {
+      est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
+      est$additional$hamming_dist <- numeric(length = length(fargs$lambda))
+      est$additional$f1_score <- numeric(length = length(fargs$lambda))
+      
+      for (i in 1:nlams) {
+        gcdind <- which(fargs$lambda == fargs$lambda[[i]])
+        gcdind <- gcdind + est$additional$ub.index - 1
+        est$additional$hamming_dist[[i]] <- sum(tril(fullmodel$path[[gcdind]]) != tril(prior_graph))
+        est$additional$f1_score[[i]] <- my.f1_score(predicted = fullmodel$path[[gcdind]], actual = prior_graph)
+      }
+      
+      est$oracle_f1$opt.index <- which.max(est$additional$f1_score)
+      est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
+      est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
+      est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
+  
+      est$oracle_hamming$opt.index <- which.min(est$additional$hamming_dist)
+      est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
+      est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
+      est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
+    }
+    
+    # Calculate sparsity for criteria
+    for (crit in criterion) {
+      est[[crit]]$sparsity <- sum(est[[crit]]$refit) / (p * (p - 1))
     }
 
+  
     est$id <- id
     est$reg <- reg
     est$call <- match.call()
@@ -506,6 +543,30 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
 
 
 #########################################################################################################
+
+#F1-Score as criterium for Oracle
+my.f1_score <- function(actual, predicted) {
+if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
+  stop("Matrices should be of class lgCMatrix")
+}
+  
+ # Calculating TP, FP, and FN using sparse matrix operations
+TP <- sum(predicted & actual)
+FP <- sum(predicted & !actual)
+FN <- sum(!predicted & actual)
+
+# Calculate Precision and Recall
+Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
+Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
+
+# Calculate F1 Score
+f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
+
+return(f1)
+}
+
+#########################################################################################################
+
 
 print.batch.pulsar <- function(x, ...) {
     cat("Mode: batch\n")
@@ -613,10 +674,14 @@ modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range)
   return(orb_count)
 }
 
+#######################################################
+# Function to calculate F1-score and Hamming distance
+my.hamming <- function(premerge, prior_graph) {
+    hamming_distance <- sum(tril(estimated) != tril(actual))
+    return(hamming_distance)
+}
 
-
-
-################ 
+###################################################### 
 
 
 my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, use_prior = FALSE, method, orbind, five_node, ...) { 
@@ -639,8 +704,8 @@ my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, u
             }
             est$merge[[i]] <- lambda_distances 
         }
-    } else {
-        est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]]))))
+    } else { 
+        est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]])))) 
     }
 
     est$summary <- vector('numeric', nlams)
@@ -727,7 +792,7 @@ stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # 
       est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1)) # binomial probab for edge appearing
     }
     ## monotonize variability
-    est$summary   <- cummax(est$summary)
+    est$summary   <- cummax(est$summary) # !!!!!!!!!!!!!!!! Check, if applicable on gcd? Why not taking same approach as in stars?
     est$opt.index <- .starsind(est$summary, stars.thresh) # Based on computed stability measures and provided threshold, function identifies optimal point 
     est$criterion <- "stars.stability"
     est$thresh    <- stars.thresh
@@ -810,31 +875,6 @@ findConfFile <- function(name='') {
         }
     }
 
-}
-
-
-#' @keywords internal
-sufficiency <- function(merge, rep.num, p, nlams) {
-## Merge solution from StARS
-  est <- list()
-  est$merge <- sapply(merge, function(x) apply(x*(1-x), 2, max)) # Find maximum value of variance-like measure for each column of x.
-  est$summary <- colMeans(est$merge)
-  est$criterion <- 'sufficiency'
-  return(est)
-}
-
-
-#' @keywords internal
-estrada.stability <- function(merge, thresh, rep.num, p, nlams) {
-    est <- list()
-    est$summary <- unlist(lapply(merge, function(x) estrada.class(x >= .05)))
-    if (!is.null(thresh))
-      est$opt.index <- max(which.max(est$summary >= thresh)[1] - 1, 1)
-    else
-      est$opt.index <- 0
-
-    est$criterion <- "estrada.stability"
-    return(est)
 }
 
 

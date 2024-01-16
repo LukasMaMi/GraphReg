@@ -99,6 +99,7 @@ for (rep in 1:num_repetitions) {
       optimal_indices <- list()
       optimal_lambdas <- list()
       selected_graphs <- list()
+      act_sparsity <- list()
     
       # Extract the criteria from the output object
       criteria <- output[["criterion"]]
@@ -112,6 +113,7 @@ for (rep in 1:num_repetitions) {
         optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
         optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
         selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
+        act_sparsity[[crit_name]] <- output[[crit_name]][["sparsity"]]
       }
     
       # Create a list to store all categorized results
@@ -119,6 +121,7 @@ for (rep in 1:num_repetitions) {
         "optimal_indices" = optimal_indices,
         "optimal_lambdas" = optimal_lambdas,
         "selected_graphs" = selected_graphs,
+        "act_sparsity" = act_sparsity,
         "additional_metrics" = output$additional
       )
     
@@ -126,6 +129,18 @@ for (rep in 1:num_repetitions) {
     }
     
     categorized_info <- extract_categorized_optimal_info(out.p)
+    
+    for (crit in out.p$criterion) {
+      categorized_info$raw_summary[[crit]] <- out.p[[crit]]$summary
+    }
+    
+    categorized_info$selected_graphs[["null_graph"]] <- null_graph
+    categorized_info$selected_graphs[["true_graph"]] <- true_graph
+    categorized_info$act_sparsity[["null_graph"]] <- sum(null_graph) / (config$p * (config$p - 1))
+    categorized_info$act_sparsity[["true_graph"]] <- sum(true_graph) / (config$p * (config$p - 1))
+    criterion <- unique(c(out.p$criterion, "null_graph"))
+    categorized_info$criterion <- criterion
+    
 
     # Lambda path plots
     plot_lambda_path <- function(config, rep, prefix, dir_path, show) {
@@ -179,5 +194,7 @@ print("Estimation completed and plots saved!")
 ```{r}
 sessionInfo()
 ```
+
+
 
 

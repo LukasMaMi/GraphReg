@@ -89,19 +89,19 @@ method_colors <- c(
   "stars" = "lightblue",
   "oracle_f1" = "black",
   "oracle_hamming" = "black",
-  "null_graph" = "darkred",
+  "null_graph" = "orange",
   "gcd_spearman" = "darkgreen",
   "gcd_kendall" = "darkblue",
-  "gcd_latentcor" = "purple",
-  "gcd_pseudo_spearman" = "orange",
-  "gcd_pseudo_kendall" = "pink",
-  "gcd_pseudo_latentcor" = "brown",
-  "gcd_prior_spearman" = "grey",
-  "gcd_prior_kendall" = "yellow",
-  "gcd_prior_latentcor" = "cyan",
-  "gcd_prior_pseudo_spearman" = "magenta",
-  "gcd_prior_pseudo_kendall" = "red",
-  "gcd_prior_pseudo_latentcor" = "blue"
+  "gcd_latentcor" = "darkred",
+  "gcd_pseudo_spearman" = "green",
+  "gcd_pseudo_kendall" = "blue",
+  "gcd_pseudo_latentcor" = "red",
+  "gcd_prior_spearman" = "darkgreen",
+  "gcd_prior_kendall" = "darkblue",
+  "gcd_prior_latentcor" = "darkred",
+  "gcd_prior_pseudo_spearman" = "green",
+  "gcd_prior_pseudo_kendall" = "blue",
+  "gcd_prior_pseudo_latentcor" = "red"
 )
 
 # Function to add sparsity values with color coding to configuration labels
@@ -270,6 +270,406 @@ lambda_plot_set_2
 ## Why does gcd_pseudo_kendall and gcd_pseudo_spearman perform in f1 scores drastically better, but pick a mean optimal lambda which is further apart from oracle lambda??? (same for stars). Should not gcd_pseudo_latentcor have the best performance???
 ## Main problem that gcd are non-monoton functions???
 ## If stars fit bad, then the bounded lambda path is bad and therefore gcd???
+
+
+## Lambda path plots
+```{r}
+
+# install.packages('reticulate')
+# reticulate::install_miniconda()
+# reticulate::conda_install('r-reticulate', 'python-kaleido')
+# reticulate::conda_install('r-reticulate', 'plotly', channel = 'plotly')
+# reticulate::use_miniconda('r-reticulate')
+
+library(plotly)
+library(reticulate)
+
+# Function to create the plot
+create_plot <- function(data, gcd_crit, gcd_crit_psd) {
+  
+  p <- plot_ly() %>%
+    add_trace(x = data$lambda_path, y = data$hamming_mean, yaxis = 'y1', name = 'Hamming Distance', 
+              type = 'scatter', mode = 'lines', line = list(color = 'rgba(255, 165, 0, 1)'))
+
+  # Adding ribbons for Hamming CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$hamming_mean, yaxis = 'y1', ymin = data$hamming_ci[, 1], ymax = data$hamming_ci[, 2],
+                name = 'Hamming CI', line = list(color = 'transparent'), fillcolor = 'rgba(255, 165, 0, 0.2)', showlegend = FALSE)
+
+  # Adding mean GCD line
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_mean, name = gcd_crit,
+              type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = 'rgba(255, 0, 0, 1)'))
+  
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_mean_psd, name = gcd_crit_psd,
+              type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = 'rgba(0, 0, 255, 1)'))
+  
+  # Adding ribbons for GCD CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$gcd_mean, ymin = data$gcd_ci[, 1], ymax = data$gcd_ci[, 2],
+                name = paste('GCD', gcd_crit, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
+                fillcolor = 'rgba(255, 0, 0, 0.2)', showlegend = FALSE)
+  
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$gcd_mean_psd, ymin = data$gcd_ci_psd[, 1], ymax = data$gcd_ci_psd[, 2],
+                name = paste('GCD', gcd_crit_psd, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
+                fillcolor = 'rgba(0, 0, 255, 0.2)', showlegend = FALSE)
+  
+  # Adding vertical lines for optimal lambda values
+    p <- p %>%
+  add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), 
+          type = 'scatter', mode = "lines", 
+          line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+    
+  # Adding an annotation for lambda_opt_hamming
+  p <- p %>%
+    add_annotations(x = data$lambda_opt_hamming, y = 0, text =  'λ<sub>oracle</sub>', 
+                    showarrow = FALSE, xshift = 5, yshift = -20)
+  
+  
+  # Calculate the range for y2-axis (GCD values)
+  gcd_all_values <- c(unlist(data$gcd_mean), unlist(data$gcd_ci), unlist(data$gcd_mean_psd), unlist(data$gcd_ci_psd))
+  max_gcd <- max(gcd_all_values)
+  max_hamming <- max(c(unlist(data$hamming_mean, data$hamming_ci)))
+  
+# Set the range for y2-axis in the layout
+p <- p %>% layout(
+    title = 'Lambda Path Analysis',
+    xaxis = list(title = 'Lambda path', title_standoff = 0.5, showgrid = FALSE),
+    yaxis = list(title = 'Hamming Distance', showgrid = FALSE, range = c(0, max_hamming)),
+    yaxis2 = list(title = 'GCD', overlaying = 'y',
+                  side = 'right',
+                  showgrid = FALSE,
+                  range = c(0, max_gcd)),
+    legend = list(
+        x = 0,  # Position the legend to the right of the plot
+        y = -0.15,   # Center the legend vertically
+        orientation = 'h',  # Vertical orientation of the legend
+        font = list(size = 10) 
+    ),
+    plot_bgcolor = 'rgba(0,0,0,0)',
+    margin = list(l = 50, r = 50, t = 50, b = 50)
+)
+
+return(p)
+}
+   
+# Function to extract data
+extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
+  
+  lambda_path <- config_results[[config]][["Lambda_Stats"]][["Mean"]][, 1]
+  
+  # Extracting Hamming data
+  hamming_mean <- config_results[[config]][["Hamming_Stats"]][["Mean"]][, 1]
+  hamming_ci <- config_results[[config]][["Hamming_Stats"]][["CI"]]
+  
+  # Extracting GCD data for the selected criterion
+  gcd_mean <- config_results[[config]][["Summary_Stats"]][[gcd_crit]][["Mean"]][, 1]
+  gcd_ci <- config_results[[config]][["Summary_Stats"]][[gcd_crit]][["CI"]]
+  
+  # Extracting GCD data for the selected pseudo criterion
+  gcd_mean_psd <- config_results[[config]][["Summary_Stats"]][[gcd_crit_psd]][["Mean"]][, 1]
+  gcd_ci_psd <- config_results[[config]][["Summary_Stats"]][[gcd_crit_psd]][["CI"]]
+  
+  # Extracting optimal lambda values
+  lambda_opt_gcd <- config_results[[config]][["Aggregated"]][[gcd_crit]][["Lambda"]][["Mean"]]
+  lambda_opt_gcd_psd <- config_results[[config]][["Aggregated"]][[gcd_crit_psd]][["Lambda"]][["Mean"]]
+  lambda_opt_hamming <- config_results[[config]][["Aggregated"]][["oracle_hamming"]][["Lambda"]][["Mean"]]
+
+  list(lambda_path = lambda_path, hamming_mean = hamming_mean, hamming_ci = hamming_ci, gcd_mean = gcd_mean, gcd_ci = gcd_ci, 
+       gcd_mean_psd = gcd_mean_psd, gcd_ci_psd = gcd_ci_psd, lambda_opt_gcd = lambda_opt_gcd, 
+       lambda_opt_gcd_psd = lambda_opt_gcd_psd, lambda_opt_hamming = lambda_opt_hamming)
+}
+
+
+# Function to automatically extract configurations
+extract_configs <- function(configs) {
+  lapply(configs, function(config) {
+    paste("n", config$n, "p", config$p, sep = "_")
+  })
+}
+
+# Function to identify available criteria from Summary_Stats
+extract_criteria <- function(config_results, config) {
+  names(config_results[[config]][["Summary_Stats"]])
+}
+
+# Function to create and save plots for each configuration and criteria
+create_and_save_plots <- function(config_results, configs, dir_path) {
+  if (!dir.exists(dir_path)) {
+    dir.create(dir_path, recursive = TRUE)
+  }
+
+  for (config in configs) {
+    criteria <- extract_criteria(config_results, config)
+    
+    # Filter out the criteria to only include 'gcd_' and 'gcd_prior_'
+    gcd_criteria <- grep("^gcd_\\w+$", criteria, value = TRUE)
+    gcd_prior_criteria <- grep("^gcd_prior_\\w+$", criteria, value = TRUE)
+
+    for (crit in gcd_criteria) {
+      gcd_pseudo_crit <- paste0("gcd_pseudo_", gsub("^gcd_", "", crit))
+
+      if (gcd_pseudo_crit %in% criteria) {
+        # Extract data
+        data_extracted <- extract_data(config_results, config, crit, gcd_pseudo_crit)
+
+        # Create plot
+        plot <- create_plot(data_extracted, crit, gcd_pseudo_crit)
+
+        # Save plot
+        plot_filename <- sprintf("%s_%s.pdf", config, crit)
+        scope <- kaleido()
+        for (i in 1:5) {
+          scope$transform(plot, file.path(dir_path, plot_filename))
+        }
+        # Remove and garbage collect to remove 
+        # R/Python objects and shutdown subprocesses
+        rm(scope); gc()
+      }
+    }
+    
+    for (crit in gcd_prior_criteria) {
+      gcd_prior_pseudo_crit <- paste0("gcd_prior_pseudo_", gsub("^gcd_prior_", "", crit))
+
+      if (gcd_prior_pseudo_crit %in% criteria) {
+        
+        # Extract data
+        data_extracted <- extract_data(config_results, config, crit, gcd_prior_pseudo_crit)
+        
+        # Create plot
+        plot <- create_plot(data_extracted, crit, gcd_prior_pseudo_crit)
+
+        # Save plot using orca
+        plot_filename <- sprintf("%s_%s.pdf", config, crit)
+        #plotly::save_image(plot, file.path(dir_path, plot_filename))
+        scope <- kaleido()
+        for (i in 1:5) {
+          scope$transform(plot, file.path(dir_path, plot_filename))
+        }
+        # Remove and garbage collect to remove 
+        # R/Python objects and shutdown subprocesses
+        rm(scope); gc()
+      }
+    }
+  }
+}
+
+# Extract configurations from the 'configs' object
+config_names <- extract_configs(configs)
+
+# Set the directory path where plots will be saved
+dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
+
+# Create and save plots
+create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
+
+
+```
+
+
+```{r}
+
+library(plotly)
+
+# Function to extract data from the config_results
+extract_data <- function(config_results, gcd_crit, gcd_crit_psd) {
+  lambda_path <- config_results[["n_800_p_40"]][["Lambda_Stats"]][["Mean"]][, 1]
+  
+  # Extracting Hamming data
+  hamming_mean <- config_results[["n_800_p_40"]][["Hamming_Stats"]][["Mean"]][, 1]
+  hamming_ci <- config_results[["n_800_p_40"]][["Hamming_Stats"]][["CI"]]
+  
+  # Extracting GCD data for the selected criterion
+  gcd_mean <- config_results[["n_800_p_40"]][["Summary_Stats"]][[gcd_crit]][["Mean"]][, 1]
+  gcd_ci <- config_results[["n_800_p_40"]][["Summary_Stats"]][[gcd_crit]][["CI"]]
+  
+  # Extracting GCD data for the selected criterion
+  gcd_mean_psd <- config_results[["n_800_p_40"]][["Summary_Stats"]][[gcd_crit_psd]][["Mean"]][, 1]
+  gcd_ci_psd <- config_results[["n_800_p_40"]][["Summary_Stats"]][[gcd_crit_psd]][["CI"]]
+  
+  # Extracting optimal lambda values
+  lambda_opt_gcd <- config_results[["n_800_p_40"]][["Aggregated"]][[gcd_crit]][["Lambda"]][["Mean"]]
+  lambda_opt_gcd_psd <- config_results[["n_800_p_40"]][["Aggregated"]][[gcd_crit_psd]][["Lambda"]][["Mean"]]
+  lambda_opt_hamming <- config_results[["n_800_p_40"]][["Aggregated"]][["oracle_hamming"]][["Lambda"]][["Mean"]]
+
+  list(lambda_path = lambda_path, hamming_mean = hamming_mean, 
+       hamming_ci = hamming_ci, gcd_mean = gcd_mean, gcd_ci = gcd_ci, 
+       gcd_mean_psd = gcd_mean_psd, gcd_ci_psd = gcd_ci_psd, 
+       lambda_opt_gcd = lambda_opt_gcd, lambda_opt_gcd_psd = lambda_opt_gcd_psd, 
+       lambda_opt_hamming = lambda_opt_hamming)
+}
+
+# Function to create the plot
+create_plot <- function(data, gcd_crit, gcd_crit_psd) {
+  
+  p <- plot_ly() %>%
+    add_trace(x = data$lambda_path, y = data$hamming_mean, yaxis = 'y1', name = 'Hamming Distance', 
+              type = 'scatter', mode = 'lines', line = list(color = 'rgba(255, 165, 0, 1)'))
+
+  # Adding ribbons for Hamming CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$hamming_mean, yaxis = 'y1', ymin = data$hamming_ci[, 1], ymax = data$hamming_ci[, 2],
+                name = 'Hamming CI', line = list(color = 'transparent'), fillcolor = 'rgba(255, 165, 0, 0.2)', showlegend = FALSE)
+
+  # Adding mean GCD line
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_mean, name = gcd_crit,
+              type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = 'rgba(255, 0, 0, 1)'))
+  
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_mean_psd, name = gcd_crit_psd,
+              type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = 'rgba(0, 0, 255, 1)'))
+  
+  # Adding ribbons for GCD CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$gcd_mean, ymin = data$gcd_ci[, 1], ymax = data$gcd_ci[, 2],
+                name = paste('GCD', gcd_crit, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
+                fillcolor = 'rgba(255, 0, 0, 0.2)', showlegend = FALSE)
+  
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$gcd_mean_psd, ymin = data$gcd_ci_psd[, 1], ymax = data$gcd_ci_psd[, 2],
+                name = paste('GCD', gcd_crit_psd, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
+                fillcolor = 'rgba(0, 0, 255, 0.2)', showlegend = FALSE)
+  
+  # Adding vertical lines for optimal lambda values
+    p <- p %>%
+  add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), 
+          type = 'scatter', mode = "lines", 
+          line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+    
+  # Adding an annotation for lambda_opt_hamming
+  p <- p %>%
+    add_annotations(x = data$lambda_opt_hamming, y = 0, text =  'λ<sub>oracle</sub>', 
+                    showarrow = FALSE, xshift = 5, yshift = -20)
+  
+  
+  # Calculate the range for y2-axis (GCD values)
+  gcd_all_values <- c(unlist(data$gcd_mean), unlist(data$gcd_ci), unlist(data$gcd_mean_psd), unlist(data$gcd_ci_psd))
+  max_gcd <- max(gcd_all_values)
+  max_hamming <- max(c(unlist(data$hamming_mean, data$hamming_ci)))
+  
+# Set the range for y2-axis in the layout
+p <- p %>% layout(
+    title = 'Lambda Path Analysis',
+    xaxis = list(title = 'Lambda path', title_standoff = 1, showgrid = FALSE),
+    yaxis = list(title = 'Hamming Distance', showgrid = FALSE, range = c(0, max_hamming)),
+    yaxis2 = list(title = 'GCD', overlaying = 'y',
+                  side = 'right',
+                  showgrid = FALSE,
+                  range = c(0, max_gcd)),
+    legend = list(
+        x = 0,  # Position the legend to the right of the plot
+        y = -0.1,   # Center the legend vertically
+        orientation = 'h',  # Vertical orientation of the legend
+        font = list(size = 15) 
+    ),
+    plot_bgcolor = 'rgba(0,0,0,0)',
+    margin = list(l = 50, r = 50, t = 50, b = 50)
+)
+
+return(p)
+}
+   
+data_extracted <- extract_data(config_results, gcd_crit = "gcd_spearman", gcd_crit_psd = "gcd_pseudo_spearman")
+plot <- create_plot(data_extracted, gcd_crit = "gcd_spearman", gcd_crit_psd = "gcd_pseudo_spearman")
+
+plot
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+library(plotly)
+
+# Function to extract data from the config_results
+extract_data <- function(config_results, gcd_criteria) {
+  lambda_path <- config_results[["n_800_p_40"]][["Lambda_Stats"]][["Mean"]][,1]
+  
+  # Extracting Hamming data
+  hamming_mean <- config_results[["n_800_p_40"]][["Hamming_Stats"]][["Mean"]][,1]
+  hamming_ci <- config_results[["n_800_p_40"]][["Hamming_Stats"]][["CI"]]
+  
+  # Extracting GCD data using lapply
+  gcd_means <- lapply(gcd_criteria, function(crit) 
+    config_results[["n_800_p_40"]][["Summary_Stats"]][[crit]][["Mean"]][,1])
+  gcd_cis <- lapply(gcd_criteria, function(crit) 
+    config_results[["n_800_p_40"]][["Summary_Stats"]][[crit]][["CI"]])
+  
+  list(lambda_path = lambda_path, hamming_mean = hamming_mean, 
+       hamming_ci = hamming_ci, gcd_means = gcd_means, gcd_cis = gcd_cis)
+}
+
+# Function to create the plot
+create_plot <- function(data, gcd_criteria) {
+  p <- plot_ly() %>%
+    add_trace(x = data$lambda_path, y = data$hamming_mean, name = 'Hamming Distance', type = 'scatter', mode = 'lines')
+
+  # Adding ribbons for Hamming CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$hamming_mean, ymin = data$hamming_ci[,1], ymax = data$hamming_ci[,2],
+                name = 'Hamming CI', line = list(color = 'transparent'), fillcolor = 'rgba(255, 127, 80, 0.2)', showlegend = FALSE)
+
+  for(i in 1:length(gcd_criteria)) {
+  crit_name <- gcd_criteria[i]
+  crit_color <- ifelse(i == 1, 'red', 'green') # Change colors as needed
+
+  # Adding mean GCD lines
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_means[[i]], name = paste('GCD', crit_name),
+  type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = crit_color))
+  
+  # Add dashed lines for GCD CI
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_cis[[i]][,1], name = paste('GCD', crit_name, 'CI Lower'), 
+              type = 'scatter', mode = 'lines', line = list(dash = 'dash', color = crit_color), yaxis = 'y2') %>%
+    add_trace(x = data$lambda_path, y = data$gcd_cis[[i]][,2], name = paste('GCD', crit_name, 'CI Upper'), 
+              type = 'scatter', mode = 'lines', line = list(dash = 'dash', color = crit_color), yaxis = 'y2')
+  
+  }
+  
+  p <- p %>% layout(
+title = 'Lambda Path Analysis',
+xaxis = list(title = 'Lambda', showgrid = FALSE),
+yaxis = list(title = 'Hamming Distance', showgrid = FALSE),
+yaxis2 = list(title = 'GCD Values', overlaying = 'y', side = 'right', showgrid = FALSE),
+legend = list(orientation = 'h', x = 0.3, y = 1.1),
+plot_bgcolor = 'rgba(0,0,0,0)' # Transparent background
+)
+
+return(p)
+}
+
+gcd_criteria_selected <- c("gcd_pseudo_spearman", "gcd_pseudo_latentcor") # Specify your GCD criteria
+data_extracted <- extract_data(config_results, gcd_criteria_selected)
+plot <- create_plot(data_extracted, gcd_criteria_selected)
+
+plot
+
+
+
+
+```
+
+
+
 
 ## Gap plots across different graph topologies additional criteria
 ```{r}

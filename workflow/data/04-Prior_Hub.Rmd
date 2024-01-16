@@ -76,7 +76,7 @@ p <- 100 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-N = 20 # Number of Repetitions
+N = 5 # Number of Repetitions
 rho <- 0.20 # Off-Diagonal Effect Strength
 
 Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
@@ -96,11 +96,11 @@ out.p <- my.batch.pulsar(
   fun = "QUIC", 
   fargs = lambda, 
   rep.num = N,
-  thresh = 0.1,
+  thresh = 0.05,
   subsample.ratio = b,
   criterion=c('stars', 'gcd', 'gcd_prior'), 
   lb.stars = TRUE, 
-  ub.stars = TRUE, 
+  ub.stars = FALSE, 
   seed = FALSE,
   refit = TRUE,
   prior_graph = true_graph,
@@ -112,58 +112,104 @@ out.p <- my.batch.pulsar(
 
 out.p
 
+stop()
+
+
+extract_categorized_optimal_info <- function(output) {
+      # Initialize lists to store the categorized results
+      optimal_indices <- list()
+      optimal_lambdas <- list()
+      selected_graphs <- list()
+      act_sparsity <- list()
+    
+      # Extract the criteria from the output object
+      criteria <- output[["criterion"]]
+    
+      # Loop through each criterion
+      for (crit in criteria) {
+        # Extract the criterion name
+        crit_name <- crit[[1]]
+    
+        # Store the optimal index, lambda, and refit graph for the current criterion
+        optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
+        optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
+        selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
+        act_sparsity[[crit_name]] <- output[[crit_name]][["sparsity"]]
+      }
+    
+      # Create a list to store all categorized results
+      categorized_results <- list(
+        "optimal_indices" = optimal_indices,
+        "optimal_lambdas" = optimal_lambdas,
+        "selected_graphs" = selected_graphs,
+        "act_sparsity" = act_sparsity,
+        "additional_metrics" = output$additional
+      )
+    
+      return(categorized_results)
+}
+    
+# Usage example
+categorized_info <- extract_categorized_optimal_info(out.p)
+
+for (crit in out.p$criterion) {
+  categorized_info$raw_summary[[crit]] <- out.p[[crit]]$summary
+}
+
 stop() 
 
 plot(out.p, legends = TRUE, show = c("stars", "gcd"))
 plot(out.p, legends = TRUE, show = c("stars", "gcd_prior"))
 
-stop() 
+stop()
 
-extract_categorized_optimal_info <- function(output) {
-  # Initialize lists to store the categorized results
-  optimal_indices <- list()
-  optimal_lambdas <- list()
-  selected_graphs <- list()
+#install.packages("plotly")
 
-  # Extract the criteria from the output object
-  criteria <- output[["criterion"]]
 
-  # Loop through each criterion
-  for (crit in criteria) {
-    # Extract the criterion name
-    crit_name <- crit[[1]]
+library(plotly)
 
-    # Store the optimal index, lambda, and refit graph for the current criterion
-    optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
-    optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
-    selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
+plot_criteria <- function(data, criterion1, criterion2) {
+  # Check for existence of lambda_bound and select appropriate lambda values
+  if (!is.null(data[["additional"]][["lambda_bound"]])) {
+    lambda_values <- data[["additional"]][["lambda_bound"]]
+  } else {
+    lambda_values <- data[["additional"]][["lambda_full"]]
   }
+  
+  # Extract hamming and GCD values
+  hamming_distances <- unlist(data[["additional"]][["hamming_dist"]])
+  gcd_values1 <- data[[criterion1]][["summary"]]
+  gcd_values2 <- data[[criterion2]][["summary"]]
+  
+  # Oracle Hamming index and corresponding lambda value
+  oracle_index <- data[["oracle_hamming"]][["opt.index"]]
+  oracle_lambda <- lambda_values[oracle_index]
 
-  # Create a list to store all categorized results
-  categorized_results <- list(
-    "optimal_indices" = optimal_indices,
-    "optimal_lambdas" = optimal_lambdas,
-    "selected_graphs" = selected_graphs
-  )
+  # Create plot with plotly
+  p <- plot_ly() %>%
+    add_trace(x = lambda_values, y = hamming_distances, type = 'scatter', mode = 'lines', 
+              name = 'Hamming Distance', yaxis = 'y1', line = list(color = 'blue')) %>%
+    add_trace(x = lambda_values, y = gcd_values1, type = 'scatter', mode = 'lines', 
+              name = criterion1, yaxis = 'y2', line = list(color = 'red', dash = 'dash')) %>%
+    add_trace(x = lambda_values, y = gcd_values2, type = 'scatter', mode = 'lines', 
+              name = criterion2, yaxis = 'y2', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = c(oracle_lambda, oracle_lambda), y = c(min(hamming_distances, gcd_values1, gcd_values2), 
+              max(hamming_distances, gcd_values1, gcd_values2)), type = 'scatter', mode = 'lines', 
+              name = 'Oracle Hamming', line = list(color = 'black')) %>%
+    layout(title = '',
+           xaxis = list(title = 'Lambda'),
+           yaxis = list(title = 'Hamming Distance', showgrid = FALSE),
+           yaxis2 = list(title = 'GCD', overlaying = 'y', side = 'right', showgrid = FALSE))
 
-  return(categorized_results)
+  return(p)
 }
 
-# Usage example
-categorized_info <- extract_categorized_optimal_info(out.p)
-
-
-stop() 
+# Example usage
+plot_criteria(out.p, "gcd_pseudo_kendall", "gcd_latentcor")
 
 
 
 
-
-
-
-
-
-###########################################################
 
 
 
