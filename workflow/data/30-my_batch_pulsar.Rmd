@@ -11,8 +11,13 @@ output: github_document
 # Option to make a non-monoton function monoton?
 # Other dependency measures than correlation? Maybe Mutual information?
 
-my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
-                    criterion=c("stars"), thresh = 0.05, subsample.ratio = NULL,
+####### Packages needed:
+#library(Matrix)
+#library(BigQuic)
+
+
+my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
+                    criterion = c("stars"), thresh = 0.05, subsample.ratio = NULL,
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
                     job.res=list(), cleanup=FALSE, refit = TRUE, 
@@ -27,41 +32,16 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
         stop('Registry directory already exists')
     }
     
-    ## Code that smoother with else if
-    if (!funct %in% c("QUIC", "glasso")) stop("Please choose either 'QUIC' or 'glasso' as function") 
-
-    if (funct == "QUIC") {
-
+    # Integrated QUIC and GLASSO Methods
+    if (fun == "QUIC") {
       # Using QUIC
-      fun <- function(data, lambda, ...) {
-          p <- ncol(data)
-          est  <- BigQuic::BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-          est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-          path <-  lapply(seq(length(lambda)), function(i) {
-                      tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                      diag(tmp) <- 0
-                      as(tmp!=0, "lMatrix")
-          })
-          est$path <- path
-          est
-      }
-    }
-
-    if (funct == "glasso") {
-
+      fun <- fun_QC
+    } else if (fun == "GLASSO") {
       # Using Huge GLASSO
-      fun <- function(data, lambda, ...) {
-        est  <- huge::huge(data, lambda = lambda, method = "glasso")
-        path <- lapply(seq(length(lambda)), function(i) {
-        # convert precision array to adj list
-        tmp <- est$path[[i]]
-        tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
-        return(tmp)
-        })
-        est$path <- path
-        est
-      }
-    }
+      fun <- fun_GL
+    } else if (!is.null(fun)) {
+      fun <- fun
+      } else stop("Please choose either 'QUIC' or 'GLASSO' as function argument or define a function yourself by defining 'fun <-'")
 
     n <- nrow(data)
     p <- ncol(data)
@@ -117,7 +97,7 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
         minN <- rep.num + refit # minimum number of subsamples is set to the number of repetitions
     }
     
-
+    ## Analysing if lb.stars == TRUE: First 2 subsample + refit, if lb.stars == FALSE: All subsamples + refit
     isamp <- ind.sample[1:minN] # selects the first minN subsamples # ind.sample is a list of indices for subsampling the data
     out <- batchply(data, estFun, fun, fargs, isamp, wkdir, regdir, conffile, job.res) 
     reg <- out$reg # extract the registry object
@@ -399,8 +379,10 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
 
     if (lb.stars) {
       ## split indices of init and full stars estimate
-      pind <- ub.index:lb.est$opt.index
-      pinv <- setdiff(1:length(lb.est$summary), pind)
+      pind <- ub.index:lb.est$opt.index # bounded indices 
+      pinv <- setdiff(1:length(lb.est$summary), pind) # full indices
+      est$additional$ind_bound <- pind
+      est$additional$ind_full <- pinv
       ## stitch back together init and full stars summaries
       tmpsumm       <- vector('numeric', length(lb.est$summary))
       tmpsumm[pinv] <- lb.est$summary[pinv]
@@ -411,10 +393,8 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
       tmpmerg[pinv]   <- lb.est$merge[pinv]
       tmpmerg[pind]   <- est$stars$merge
       est$stars$merge <- tmpmerg
-        
       # Optimal index stars
       est$stars$opt.index <- est$stars$opt.index + ub.index - 1
-
       # lb and ub index
       est$additional$lb.index <- lb.est$opt.index
       est$additional$ub.index <- ub.index
@@ -445,7 +425,6 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
       est[[crit]]$criterion <- crit
     }
   
-    
     # Determine optimal gcm according to optimal index
     for (crit in criterion) {
       if (startsWith(crit, "gcd")) {
@@ -459,22 +438,20 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
 
       # Compute and set optimal indices directly (excluding StARS)
       for (crit in criterion) {
-          if (startsWith(crit, "gcd")) { 
-            gcdind <- which.min(est[[crit]]$summary)
-            gcdind <- gcdind + est$additional$ub.index - 1
-            est[[crit]]$opt.index <- gcdind
-          }
+        if (startsWith(crit, "gcd")) {
+          gcdind <- which.min(est[[crit]]$summary)
+          gcdind <- gcdind + est$additional$ub.index - 1
+          est[[crit]]$opt.index <- gcdind
+        }
+        
+        # Iterate over each criterion and store the corresponding optimal lambda value
+        est[[crit]]$opt.lambda <- signif(lambda_full[est[[crit]]$opt.index], 3)
       }
       
-      
-      # Iterate over each criterion and store the corresponding optimal lambda value
-      for (crit in criterion) {
-             opt_ind <- est[[crit]]$opt.index
-             est[[crit]]$opt.lambda <- signif(lambda_full[opt_ind], 3)
-      }
-      
-      # Refit each criterion with optimal index
+      ## Refit section
       if (refit == TRUE) {
+        
+        # Refit each criterion with optimal index
         for (crit in criterion) {
           opt_ind <- est[[crit]]$opt.index
           if (!is.null(opt_ind)) {
@@ -483,47 +460,48 @@ my.batch.pulsar <- function(data, funct = c("QUIC"), fargs=list(),
             est[[crit]]$refit <- NULL
           }
         }
-      }
       
-      # Determine adjacency matrices for full lambda path
-      for (crit in criterion) {
-        if (startsWith(crit, "gcd")) { 
-          for (i in 1:nlams) {
-            gcdind <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
-            gcdind <- gcdind + est$additional$ub.index - 1
-            est[[crit]]$all_adj[[i]] <- fullmodel$path[[gcdind]]
+        # Determine adjacency matrices for full lambda path
+        for (crit in criterion) {
+          if (startsWith(crit, "gcd")) { 
+            for (i in 1:length(fargs$lambda)) {
+              gcdind <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
+              gcdind <- gcdind + est$additional$ub.index - 1
+              est[[crit]]$all_adj[[i]] <- fullmodel$path[[gcdind]]
+            }
           }
         }
-      }
-    }
-    
-    # Determine F1 score and hamming distance
-    if (!is.null(prior_graph)) {
-      est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
-      est$additional$hamming_dist <- numeric(length = length(fargs$lambda))
-      est$additional$f1_score <- numeric(length = length(fargs$lambda))
       
-      for (i in 1:nlams) {
-        gcdind <- which(fargs$lambda == fargs$lambda[[i]])
-        gcdind <- gcdind + est$additional$ub.index - 1
-        est$additional$hamming_dist[[i]] <- sum(tril(fullmodel$path[[gcdind]]) != tril(prior_graph))
-        est$additional$f1_score[[i]] <- my.f1_score(predicted = fullmodel$path[[gcdind]], actual = prior_graph)
-      }
-      
-      est$oracle_f1$opt.index <- which.max(est$additional$f1_score)
-      est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
-      est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
-      est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
-  
-      est$oracle_hamming$opt.index <- which.min(est$additional$hamming_dist)
-      est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
-      est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
-      est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
-    }
+        # Determine F1 score and hamming distance
+        if (!is.null(prior_graph)) {
+          est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
+          est$additional$hamming_dist <- numeric(length = length(fargs$lambda))
+          est$additional$f1_score <- numeric(length = length(fargs$lambda))
     
-    # Calculate sparsity for criteria
-    for (crit in criterion) {
-      est[[crit]]$sparsity <- sum(est[[crit]]$refit) / (p * (p - 1))
+          for (i in 1:length(fargs$lambda)) {
+            gcdind <- which(fargs$lambda == fargs$lambda[[i]])
+            gcdind <- gcdind + est$additional$ub.index - 1
+            est$additional$hamming_dist[[i]] <- my.hamming(estimated = fullmodel$path[[gcdind]], actual = prior_graph) 
+            est$additional$f1_score[[i]] <- my.f1_score(predicted = fullmodel$path[[gcdind]], actual = prior_graph)
+          }
+          
+          # Define Oracle_f1 and Oracle_hamming
+          est$oracle_f1$opt.index <- which.max(est$additional$f1_score)
+          est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
+          est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
+          est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
+    
+          est$oracle_hamming$opt.index <- which.min(est$additional$hamming_dist)
+          est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
+          est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
+          est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
+        }
+        
+        # Calculate sparsity for criteria
+        for (crit in criterion) {
+          est[[crit]]$sparsity <- sum(est[[crit]]$refit) / (p * (p - 1))
+        }
+      }
     }
 
   
@@ -564,6 +542,47 @@ f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Rec
 
 return(f1)
 }
+
+#######################################################
+# Function to calculate F1-score and Hamming distance
+my.hamming <- function(estimated, actual) {
+    hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
+    return(hamming_distance)
+}
+
+
+######################################################
+
+## Estimation functions
+
+# Using Huge GLASSO
+fun_GL <- function(data, lambda, ...) {
+  est  <- huge::huge(data, lambda = lambda, method = "glasso")
+  path <- lapply(seq(length(lambda)), function(i) {
+  # convert precision array to adj list
+  tmp <- est$path[[i]]
+  tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
+  return(tmp)
+  })
+  est$path <- path
+  est
+}
+
+# Using QUIC
+fun_QC <- function(data, lambda, ...) {
+    p <- ncol(data)
+    est  <- BigQuic::BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+    est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+    path <-  lapply(seq(length(lambda)), function(i) {
+                tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                diag(tmp) <- 0
+                as(tmp!=0, "lMatrix")
+    })
+    est$path <- path
+    est
+}
+
+# Set up for
 
 #########################################################################################################
 
@@ -674,12 +693,6 @@ modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range)
   return(orb_count)
 }
 
-#######################################################
-# Function to calculate F1-score and Hamming distance
-my.hamming <- function(premerge, prior_graph) {
-    hamming_distance <- sum(tril(estimated) != tril(actual))
-    return(hamming_distance)
-}
 
 ###################################################### 
 
@@ -737,31 +750,6 @@ calculateMeanMatrices <- function(data, nlams, rep.num) {
     return(mean_matrices)
 }
 
-# calculateMeanMatrices <- function(data, nlams, rep.num) {
-#     mean_matrices <- vector("list", nlams)
-#     
-#     for (i in 1:nlams) {
-#         matrices <- lapply(data, function(sublist) sublist[[i]])
-#         valid_matrices <- Filter(function(m) is.matrix(m) && nrow(m) > 0 && ncol(m) > 0, matrices)
-# 
-#         # Identify and print invalid matrices
-#         invalid_matrices <- setdiff(matrices, valid_matrices)
-#         if (length(invalid_matrices) > 0) {
-#             cat(sprintf("Invalid matrices for lambda index %d:\n", i))
-#             lapply(invalid_matrices, print)
-#         }
-#         
-#         if (length(valid_matrices) > 0) {
-#             sum_matrix <- Reduce("+", valid_matrices)
-#             mean_matrix <- sum_matrix / length(valid_matrices)
-#             mean_matrices[[i]] <- mean_matrix
-#         } else {
-#             mean_matrices[[i]] <- NULL  # Placeholder for no valid data
-#         }
-#     }
-# 
-#     return(mean_matrices)
-# }
 
 
 #######################
@@ -1023,6 +1011,22 @@ plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE,
 
 
 
+```{r}
+## Set up for custom function
+
+    # Integrated QUIC and GLASSO Methods
+    if (fun == "QUIC") {
+      # Using QUIC
+      fun <- fun_QC
+    } else if (fun == "GLASSO") {
+      # Using Huge GLASSO
+      fun <- fun_GL
+    } else if (!is.null(fun)) {
+      fun <- fun
+      } else stop("Please choose either 'QUIC' or 'GLASSO' as function argument or define a function yourself by defining 'fun <-'")
+
+
+```
 
 
 

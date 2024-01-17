@@ -71,8 +71,8 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 }
 
 
-n <- 400 # Samples
-p <- 100 # Dimensions
+n <- 100 # Samples
+p <- 400 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
@@ -85,7 +85,7 @@ true_graph <- Hub$theta
 act_sparsity <- Hub$act_sparsity
 
 maxCov <- getMaxCov(Hub_data)
-lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
+lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 8) #,log = TRUE
 lambda <- list(lambda=lambda_path)
     
   

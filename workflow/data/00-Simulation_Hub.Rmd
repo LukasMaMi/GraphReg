@@ -91,14 +91,14 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Hub/"
 
-num_repetitions <- 2
+num_repetitions <- 3
 
 # Specify configurations
 configs <- list(
   list(n=800, p=40),
-  list(n=400, p=100)
-  #list(n=200, p=200),
-  #list(n=100, p=400)
+  list(n=400, p=100),
+  list(n=200, p=200),
+  list(n=100, p=400)
 )
 
 #Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
@@ -119,7 +119,7 @@ for(rep in 1:num_repetitions) {
   s <- 20    # Size Hub Group
   J <- floor(p/s) # Number of Hubs
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-  N = 4 # Number of Repetitions
+  N = 20 # Number of Repetitions
   rho <- 0.20 # Off-Diagonal Effect Strength
 
   Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
@@ -130,7 +130,7 @@ for(rep in 1:num_repetitions) {
   null_data <- Hub$null_data
 
   maxCov <- getMaxCov(Hub_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 8) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   cat("Condition number:", kappa(Hub$omega), "\n")
