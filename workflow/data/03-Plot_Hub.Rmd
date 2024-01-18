@@ -358,18 +358,18 @@ return(p)
 # Function to extract data
 extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   
-  lambda_path <- config_results[[config]][["Lambda_Stats"]][["Mean"]][, 1]
+  lambda_path <- config_results[[config]][["Lambda_Stats"]][["Mean"]]
   
   # Extracting Hamming data
-  hamming_mean <- config_results[[config]][["Hamming_Stats"]][["Mean"]][, 1]
+  hamming_mean <- config_results[[config]][["Hamming_Stats"]][["Mean"]]
   hamming_ci <- config_results[[config]][["Hamming_Stats"]][["CI"]]
   
   # Extracting GCD data for the selected criterion
-  gcd_mean <- config_results[[config]][["Summary_Stats"]][[gcd_crit]][["Mean"]][, 1]
+  gcd_mean <- config_results[[config]][["Summary_Stats"]][[gcd_crit]][["Mean"]]
   gcd_ci <- config_results[[config]][["Summary_Stats"]][[gcd_crit]][["CI"]]
   
   # Extracting GCD data for the selected pseudo criterion
-  gcd_mean_psd <- config_results[[config]][["Summary_Stats"]][[gcd_crit_psd]][["Mean"]][, 1]
+  gcd_mean_psd <- config_results[[config]][["Summary_Stats"]][[gcd_crit_psd]][["Mean"]]
   gcd_ci_psd <- config_results[[config]][["Summary_Stats"]][[gcd_crit_psd]][["CI"]]
   
   # Extracting optimal lambda values

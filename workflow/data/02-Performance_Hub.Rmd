@@ -48,24 +48,38 @@ calc_mean_ci <- function(values) {
 }
 
 calc_mean_ci_summary <- function(summary_values) {
-  len <- length(summary_values[[1]])
-  means <- matrix(NA, nrow = len, ncol = 1)
-  cis <- matrix(NA, nrow = len, ncol = 2)
+    # Determine the maximum length among the summaries
+    num_lambdas <- max(sapply(summary_values, function(x) {
+        if (is.numeric(x)) length(x) else length(unlist(x))
+    }))
 
-  for (i in 1:len) {
-      ith_values <- sapply(summary_values, function(x) x[i], simplify = TRUE, USE.NAMES = FALSE)
-  
-      if (length(ith_values) > 0) {
-          mean_val <- mean(ith_values, na.rm = FALSE)
-          sem_val <- sd(ith_values, na.rm = FALSE) / sqrt(length(ith_values))
-          z_value <- qnorm(0.975) # For a 95% CI
-          ci_val <- mean_val + c(-z_value, z_value) * sem_val
-          means[i, 1] <- mean_val
-          cis[i, ] <- ci_val
-      }
-  }
-  return(list(Mean = means, CI = cis))
+    means <- numeric(num_lambdas)
+    cis <- matrix(NA, nrow = num_lambdas, ncol = 2)
+
+    for (i in 1:num_lambdas) {
+        ith_values <- sapply(summary_values, function(x) {
+            if (is.numeric(x)) {
+                if (length(x) >= i) x[i] else NA
+            } else {
+                if (length(x) >= i && !is.null(x[[i]])) x[[i]] else NA
+            }
+        }, simplify = TRUE, USE.NAMES = FALSE)
+
+        if (all(is.na(ith_values))) {
+            means[i] <- NA
+            cis[i, ] <- c(NA, NA)
+        } else {
+            mean_val <- mean(ith_values, na.rm = TRUE)
+            sem_val <- sd(ith_values, na.rm = TRUE) / sqrt(sum(!is.na(ith_values)))
+            z_value <- qnorm(0.975)  # For a 95% CI
+            ci_val <- mean_val + c(-z_value, z_value) * sem_val
+            means[i] <- mean_val
+            cis[i, ] <- ci_val
+        }
+    }
+    return(list(Mean = means, CI = cis))
 }
+
 
 
 # Initialize list to store results for each configuration
@@ -204,188 +218,7 @@ sessionInfo()
 
 
 
-## Step 3: Performance + Prior + additional criteria
-```{r}
 
-# Step 3: Performance
-
-# Load session settings
-Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
-load(hub_settings_file)
-
-dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
-
-# Function to generate file names
-get_filename <- function(config, rep, prefix = "Hub") {
-    sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
-}
-
-# Function to calculate F1-score and Hamming distance
-compute_metrics <- function(estimated, actual) {
-    TP <- sum(estimated & actual)
-    FP <- sum(estimated & !actual)
-    FN <- sum(!estimated & actual)
-    Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-    Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-    F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-    hamming_distance <- sum(tril(estimated) != tril(actual))
-    list(F1 = F1, Hamming = hamming_distance)
-}
-
-# Function to calculate mean and CI
-calc_mean_ci <- function(values) {
-    numeric_values <- values[!is.na(values) & !is.null(values)]
-    if (length(numeric_values) > 0) {
-        mean_val <- mean(numeric_values, na.rm = TRUE)
-        sem_val <- sd(numeric_values, na.rm = TRUE) / sqrt(length(numeric_values)) #weighted sd
-        z_value <- qnorm(0.975)  # For a 95% CI
-        ci_val <- mean_val + c(-z_value, z_value) * sem_val
-        return(c(Mean = mean_val, CI = ci_val))
-    } else {
-        return(c(Mean = NA, CI = c(NA, NA)))
-    }
-}
-
-# Function to calculate mean and CI for each index of summary values
-calc_mean_ci_summary <- function(summary_values) {
-  # Ensure summary_values is a list of vectors
-  if (!is.list(summary_values) || !all(sapply(summary_values, is.numeric))) {
-      stop("summary_values must be a list of numeric vectors")
-  }
-  
-  # Determine the length of the summary vectors (assuming all are the same length)
-  len <- length(summary_values[[1]])
-  
-  # Initialize matrices to store means and CIs
-  means <- matrix(NA, nrow = len, ncol = 1)
-  cis <- matrix(NA, nrow = len, ncol = 2)
-  
-  for (i in 1:len) {
-  # Extract the i-th element from each vector in the list
-  ith_values <- sapply(summary_values, function(x) x[i], simplify = TRUE, USE.NAMES = FALSE)
-  # Remove NA values
-  ith_values <- ith_values[!is.na(ith_values)]
-
-    # Calculate mean and CI if there are enough data points
-    if (length(ith_values) > 1) {
-        mean_val <- mean(ith_values)
-        sd_val <- sd(ith_values)
-        n <- length(ith_values)
-        error_margin <- qt(0.975, df = n-1) * sd_val / sqrt(n)
-
-        means[i, 1] <- mean_val
-        cis[i, ] <- c(mean_val - error_margin, mean_val + error_margin)
-    }
-  }
-  return(list(Mean = means, CI = cis))
-}
-
-
-# Initialize list to store results for each configuration
-config_results <- list()
-
-# Loop over configurations and repetitions
-for(cfg in configs) {
-    cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
-    individual_results <- list()
-    aggregated_metrics <- list()
-    lambda_values_methods <- list()
-    sparsity_values_methods <- list()
-    gap_values_b <- numeric()
-    gap_values_beta <- numeric()
-    summary_values_methods <- list()
-    f1_scores <- list()
-    hamming_dists <- list()
-    lambda_bounds <- list()
-    
-
-    for(rep in 1:num_repetitions) {
-        # Load estimation data for each repetition
-        load(paste0(dir_path_results, "/", get_filename(cfg, rep, "estimation")))
-
-        # Compute metrics for each method in categorized_info
-        method_metrics <- list()
-        for(method_name in categorized_info[["criterion"]]) {
-            method_graph <- categorized_info[["selected_graphs"]][[method_name]]
-            true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
-            method_metrics[[method_name]] <- compute_metrics(method_graph, true_graph)
-
-            # Accumulate lambda and sparsity values
-            lambda_values_methods[[method_name]] <- c(lambda_values_methods[[method_name]], 
-                                                      categorized_info[["optimal_lambdas"]][[method_name]])
-            sparsity_values_methods[[method_name]] <- c(sparsity_values_methods[[method_name]], 
-                                                       categorized_info[["act_sparsity"]][[method_name]])
-        }
-
-        # Accumulate gap values
-        gap_values_b <- c(gap_values_b, categorized_info[["additional_metrics"]][["gap_b"]])
-        gap_values_beta <- c(gap_values_beta, categorized_info[["additional_metrics"]][["gap_beta"]])
-
-        # Store individual results
-        individual_results[[paste("Rep", rep)]] <- method_metrics
-        
-        f1_scores[[rep]] <- categorized_info[["additional_metrics"]][["f1_score"]]
-        hamming_dists[[rep]] <- categorized_info[["additional_metrics"]][["hamming_dist"]]
-        lambda_bounds[[rep]] <- categorized_info[["additional_metrics"]][["lambda_bound"]]
-        
-        # Accumulate summary values for each method
-        for(method_name in categorized_info[["criterion"]]) {
-        summary_values_methods[[method_name]] <- c(summary_values_methods[[method_name]], 
-                                               list(categorized_info[["raw_summary"]][[method_name]]))
-        }
-    }
-
-    # Aggregated metrics (mean and CI) for each method
-    for (method_name in categorized_info[["criterion"]]) {
-        # Calculate mean and CI for F1, Hamming, Lambda, and Sparsity for each method
-        aggregated_metrics[[method_name]] <- list(
-            F1 = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$F1)),
-            Hamming = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$Hamming)),
-            Lambda = calc_mean_ci(lambda_values_methods[[method_name]]),
-            Sparsity = calc_mean_ci(sparsity_values_methods[[method_name]])
-        )
-    }
-
-    # Calculate mean gap values
-    aggregated_gap_values <- list(
-        Gap_B = calc_mean_ci(gap_values_b),
-        Gap_Beta = calc_mean_ci(gap_values_beta)
-    )
-    
-    # Aggregated summary statistics (mean and CI) for each method
-    aggregated_summary_stats <- list()
-    for (method_name in categorized_info[["criterion"]]) {
-        if (startsWith(method_name, "gcd_")) {
-            aggregated_summary_stats[[method_name]] <- calc_mean_ci_summary(summary_values_methods[[method_name]])
-        }
-    }
-    
-    # Aggregated metrics for f1_score, hamming_dist, and lambda_bound
-    aggregated_f1_stats <- calc_mean_ci_summary(f1_scores)
-    aggregated_hamming_stats <- calc_mean_ci_summary(hamming_dists)
-    aggregated_lambda_stats <- calc_mean_ci_summary(lambda_bounds)
-
-    # Store results for the current configuration
-    config_results[[cfg_key]] <- list(
-        Individual = individual_results,
-        Aggregated = aggregated_metrics,
-        Gap_Values = aggregated_gap_values,
-        Summary_Stats = aggregated_summary_stats,
-        F1_Stats = aggregated_f1_stats,
-        Hamming_Stats = aggregated_hamming_stats,
-        Lambda_Stats = aggregated_lambda_stats
-    )
-}
-
-# Save the results to a file
-save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, dir_path3, config_results, file = hub_settings_file)
-performance_filename <- "all_performance_results.RData"
-save(config_results, file = file.path(dir_path3, performance_filename))
-
-cat("Performance metrics for each configuration and repetition calculated and saved!\n")
-
-```
 
 ############################ ##### #############################################
 

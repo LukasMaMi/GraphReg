@@ -54,6 +54,11 @@ plot_and_save_gcm <- function(output, criterion, config, rep, dir_path) {
 # Main loop over each configuration and repetition
 for (rep in 1:num_repetitions) {
   for (i in seq_along(configs)) {
+    
+    # Reinitialize or clear relevant variables
+    out.p <- NULL
+    categorized_info <- list()
+    
     config <- configs[[i]]
     
     # Prepare directories for storing results
@@ -71,6 +76,7 @@ for (rep in 1:num_repetitions) {
 
     # Load the dataset for the current configuration and repetition
     filename <- get_filename(config, rep)
+    print(paste("Loading data from:", filename))
     load(paste0(dir_path, "/", filename))
 
     # Run batch pulsar
@@ -91,7 +97,8 @@ for (rep in 1:num_repetitions) {
       method = c("spearman", "kendall", "latentcor"),
       five_node = FALSE,
       use_pseudo_count = TRUE, 
-      pseudo_count_range = c(0, 0.1)
+      pseudo_count_range = c(0, 0.05),
+      cleanup = TRUE
     )
   
     extract_categorized_optimal_info <- function(output) {
