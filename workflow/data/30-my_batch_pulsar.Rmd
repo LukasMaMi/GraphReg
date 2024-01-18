@@ -407,8 +407,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
       est$additional$gap_beta <- abs(stars_lambda - est$additional$lb.lambda)
     }
 
-    if (cleanup) unlink(reg$file.dir, recursive = TRUE)
-
     
     # Update criterion vector outside the loop, before returning the output
     criterion <- unique(c(criterion, updated_criteria))
@@ -435,7 +433,12 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
     
     
     if (lb.stars) {
-
+      
+      #######
+      est$fargs <- fargs$lambda
+      est$path <- fullmodel$path
+      ########
+      
       # Compute and set optimal indices directly (excluding StARS)
       for (crit in criterion) {
         if (startsWith(crit, "gcd")) {
@@ -463,48 +466,77 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
       
         # Determine adjacency matrices for full lambda path
         for (crit in criterion) {
-          if (startsWith(crit, "gcd")) { 
-            for (i in 1:length(fargs$lambda)) {
-              gcdind <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
-              gcdind <- gcdind + est$additional$ub.index - 1
-              est[[crit]]$all_adj[[i]] <- fullmodel$path[[gcdind]]
+            est[[crit]]$all_adj <- list()
+            if (startsWith(crit, "gcd")) {
+                for (i in seq_along(fargs$lambda)) {
+                    gcdinds <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
+                    gcdinds <- gcdinds + est$additional$ub.index - 1
+                    print(gcdinds)
+        
+                    valid_gcdind <- NULL
+                    for (gcdind in gcdinds) {
+                        if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
+                            valid_gcdind <- gcdind
+                            break
+                        }
+                    }
+        
+                    if (!is.null(valid_gcdind)) {
+                        estim <- fullmodel$path[[valid_gcdind]]
+                        est[[crit]]$all_adj[[i]] <- estim
+                    } else {
+                        est[[crit]]$all_adj[[i]] <- NULL
+                    }
+                }
             }
-          }
         }
+
       
         # Determine F1 score and hamming distance
         if (!is.null(prior_graph)) {
-          est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
-          est$additional$hamming_dist <- numeric(length = length(fargs$lambda))
-          est$additional$f1_score <- numeric(length = length(fargs$lambda))
-    
-          for (i in 1:length(fargs$lambda)) {
-            gcdind <- which(fargs$lambda == fargs$lambda[[i]])
-            gcdind <- gcdind + est$additional$ub.index - 1
-            est$additional$hamming_dist[[i]] <- my.hamming(estimated = fullmodel$path[[gcdind]], actual = prior_graph) 
-            est$additional$f1_score[[i]] <- my.f1_score(predicted = fullmodel$path[[gcdind]], actual = prior_graph)
-          }
-          
-          # Define Oracle_f1 and Oracle_hamming
-          est$oracle_f1$opt.index <- which.max(est$additional$f1_score)
-          est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
-          est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
-          est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
-    
-          est$oracle_hamming$opt.index <- which.min(est$additional$hamming_dist)
-          est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
-          est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
-          est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
-        }
+            est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
+            
+            # Directly initialize as lists
+            est$additional$hamming_dist <- list()
+            est$additional$f1_score <- list()
         
+            for (i in seq_along(fargs$lambda)) {
+                gcdind <- NULL
+                gcdind <- which(fargs$lambda == fargs$lambda[[i]])
+                gcdind <- gcdind + est$additional$ub.index - 1
+                #print(gcdind)
+        
+                if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
+                    estim <- fullmodel$path[[gcdind]]
+                    est$additional$hamming_dist[[i]] <- my.hamming(estimated = estim, actual = prior_graph) 
+                    est$additional$f1_score[[i]] <- my.f1_score(predicted = estim, actual = prior_graph)
+                } else {
+                    est$additional$hamming_dist[[i]] <- NULL
+                    est$additional$f1_score[[i]] <- NULL
+                }
+            }
+            
+            # Define Oracle_f1 and Oracle_hamming
+            est$oracle_f1$opt.index <- which.max(est$additional$f1_score)
+            est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
+            est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
+            est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
+  
+            est$oracle_hamming$opt.index <- which.min(est$additional$hamming_dist)
+            est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
+            est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
+            est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
+        }
+  
         # Calculate sparsity for criteria
         for (crit in criterion) {
           est[[crit]]$sparsity <- sum(est[[crit]]$refit) / (p * (p - 1))
         }
       }
     }
+    
+    if (cleanup) unlink(reg$file.dir, recursive = TRUE)
 
-  
     est$id <- id
     est$reg <- reg
     est$call <- match.call()
@@ -655,7 +687,7 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   }
   
   else if (method == "latentcor") {
-  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = TRUE))
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
   gcm <- gcm$R
   }
   
@@ -1013,19 +1045,18 @@ plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE,
 
 ```{r}
 ## Set up for custom function
+lambda <- out.p$additional$lambda_bound
+fullmodel <- out.p$est$path
+prior_graph <- true_graph
 
-    # Integrated QUIC and GLASSO Methods
-    if (fun == "QUIC") {
-      # Using QUIC
-      fun <- fun_QC
-    } else if (fun == "GLASSO") {
-      # Using Huge GLASSO
-      fun <- fun_GL
-    } else if (!is.null(fun)) {
-      fun <- fun
-      } else stop("Please choose either 'QUIC' or 'GLASSO' as function argument or define a function yourself by defining 'fun <-'")
+        for (i in 1:length(lambda)) {
+            gcdind <- which(lambda == lambda[[i]])
+            gcdind <- gcdind + out.p$additional$ub.index - 1
+            additional$hamming_dist[[i]] <- my.hamming(estimated = fullmodel[[gcdind]], actual = prior_graph) 
+            additional$f1_score[[i]] <- my.f1_score(predicted = fullmodel[[gcdind]], actual = prior_graph)
+          }
 
-
+my.hamming(estimated = fullmodel[[2]], actual = prior_graph) 
 ```
 
 
