@@ -43,13 +43,21 @@ get_filename <- function(config, rep, prefix = "Hub") {
 plot_and_save_gcm <- function(output, criterion, config, rep, dir_path) {
   if ("gcm" %in% names(output[[criterion]])) {
     gcm <- output[[criterion]][["gcm"]]
-    plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
-    plot_path <- file.path(dir_path, plot_filename)
-    pdf(plot_path, width = 8, height = 6)
-    corrplot::corrplot(gcm, method = "circle")
-    dev.off()
+    
+    # Check if values are within the range [-1, 1] for this GCM
+    if(min(gcm) >= -1 && max(gcm) <= 1) {
+      plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
+      plot_path <- file.path(dir_path, plot_filename)
+      pdf(plot_path, width = 8, height = 6)
+      corrplot::corrplot(gcm, method = "circle")
+      dev.off()
+    } else {
+      # Handle the case where GCM is not within the range
+      cat(sprintf("Skipping plot for %s: GCM values are not in [-1, 1]\n", criterion))
+    }
   }
 }
+
 
 # Main loop over each configuration and repetition
 for (rep in 1:num_repetitions) {
@@ -97,7 +105,7 @@ for (rep in 1:num_repetitions) {
       method = c("spearman", "kendall", "latentcor"),
       five_node = FALSE,
       use_pseudo_count = TRUE, 
-      pseudo_count_range = c(0, 0.05),
+      pseudo_count_range = c(0, 0.1),
       cleanup = TRUE
     )
   

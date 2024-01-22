@@ -471,7 +471,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                 for (i in seq_along(fargs$lambda)) {
                     gcdinds <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
                     gcdinds <- gcdinds + est$additional$ub.index - 1
-                    print(gcdinds)
         
                     valid_gcdind <- NULL
                     for (gcdind in gcdinds) {
@@ -504,7 +503,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                 gcdind <- NULL
                 gcdind <- which(fargs$lambda == fargs$lambda[[i]])
                 gcdind <- gcdind + est$additional$ub.index - 1
-                #print(gcdind)
         
                 if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
                     estim <- fullmodel$path[[gcdind]]
@@ -673,13 +671,13 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
   ## or completely empty graph and can be safely suppressed.
   
-  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
-  gdm <- rbind(gdm[,orbind],1)
-  
   if (pseudo_count == TRUE) {
     ## Add pseudo_count to orb_count
     gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = pseudo_count_range)
   }
+  
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
+  gdm <- rbind(gdm[,orbind],1)
   
   if (method %in% c("kendall", "spearman")){
   #Then calculate the graphlet correlation matrix with method
@@ -687,7 +685,7 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   }
   
   else if (method == "latentcor") {
-  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = TRUE))
   gcm <- gcm$R
   }
   

@@ -316,11 +316,21 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
                 name = paste('GCD', gcd_crit_psd, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
                 fillcolor = 'rgba(0, 0, 255, 0.2)', showlegend = FALSE)
   
-  # Adding vertical lines for optimal lambda values
-    p <- p %>%
-  add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), 
-          type = 'scatter', mode = "lines", 
-          line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+  # Adding vertical lines for optimal lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), 
+            type = 'scatter', mode = "lines", 
+            line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+  
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
+            type = 'scatter', mode = "lines",
+            line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
+            type = 'scatter', mode = "lines",
+            line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
     
   # Adding an annotation for lambda_opt_hamming
   p <- p %>%
@@ -358,24 +368,29 @@ return(p)
 # Function to extract data
 extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   
-  lambda_path <- config_results[[config]][["Lambda_Stats"]][["Mean"]]
+  lambda_path <- config_results[[config]][["Lambda_Path"]][["Mean"]]
   
   # Extracting Hamming data
-  hamming_mean <- config_results[[config]][["Hamming_Stats"]][["Mean"]]
-  hamming_ci <- config_results[[config]][["Hamming_Stats"]][["CI"]]
+  hamming_mean <- config_results[[config]][["Hamming_Path"]][["Mean"]]
+  hamming_ci <- config_results[[config]][["Hamming_Path"]][["CI"]]
   
   # Extracting GCD data for the selected criterion
-  gcd_mean <- config_results[[config]][["Summary_Stats"]][[gcd_crit]][["Mean"]]
-  gcd_ci <- config_results[[config]][["Summary_Stats"]][[gcd_crit]][["CI"]]
+  gcd_mean <- config_results[[config]][["Summary_Path"]][[gcd_crit]][["Mean"]]
+  gcd_ci <- config_results[[config]][["Summary_Path"]][[gcd_crit]][["CI"]]
   
   # Extracting GCD data for the selected pseudo criterion
-  gcd_mean_psd <- config_results[[config]][["Summary_Stats"]][[gcd_crit_psd]][["Mean"]]
-  gcd_ci_psd <- config_results[[config]][["Summary_Stats"]][[gcd_crit_psd]][["CI"]]
+  gcd_mean_psd <- config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["Mean"]]
+  gcd_ci_psd <- config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["CI"]]
   
-  # Extracting optimal lambda values
-  lambda_opt_gcd <- config_results[[config]][["Aggregated"]][[gcd_crit]][["Lambda"]][["Mean"]]
-  lambda_opt_gcd_psd <- config_results[[config]][["Aggregated"]][[gcd_crit_psd]][["Lambda"]][["Mean"]]
-  lambda_opt_hamming <- config_results[[config]][["Aggregated"]][["oracle_hamming"]][["Lambda"]][["Mean"]]
+  # Extracting optimal lambda Index
+  index_opt_gcd <- round(config_results[[config]][["Aggregated"]][[gcd_crit]][["Index"]][["Mean"]])
+  lambda_opt_gcd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd]]
+  
+  index_opt_gcd_psd <- round(config_results[[config]][["Aggregated"]][[gcd_crit_psd]][["Index"]][["Mean"]])
+  lambda_opt_gcd_psd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd_psd]]
+  
+  index_opt_hamming <- round(config_results[[config]][["Aggregated"]][["oracle_hamming"]][["Index"]][["Mean"]])
+  lambda_opt_hamming <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_hamming]]
 
   list(lambda_path = lambda_path, hamming_mean = hamming_mean, hamming_ci = hamming_ci, gcd_mean = gcd_mean, gcd_ci = gcd_ci, 
        gcd_mean_psd = gcd_mean_psd, gcd_ci_psd = gcd_ci_psd, lambda_opt_gcd = lambda_opt_gcd, 
@@ -390,10 +405,12 @@ extract_configs <- function(configs) {
   })
 }
 
+
 # Function to identify available criteria from Summary_Stats
 extract_criteria <- function(config_results, config) {
-  names(config_results[[config]][["Summary_Stats"]])
+  names(config_results[[config]][["Summary_Path"]])
 }
+
 
 # Function to create and save plots for each configuration and criteria
 create_and_save_plots <- function(config_results, configs, dir_path) {
