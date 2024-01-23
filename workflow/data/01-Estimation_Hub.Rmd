@@ -91,6 +91,10 @@ for (rep in 1:num_repetitions) {
 
     # Run batch pulsar
     library(batchtools)
+    options(mc.cores = 5)
+    options(batchtools.progress=TRUE, batchtools.verbose=FALSE)
+    resources <- list(mem="1GB", nodes="1", walltime="00:30:00")
+    
     out.p <- my.batch.pulsar(
       data = Hub_data, 
       fun = "QUIC", 
@@ -108,7 +112,8 @@ for (rep in 1:num_repetitions) {
       five_node = FALSE,
       use_pseudo_count = TRUE, 
       pseudo_count_range = c(0, 0.1),
-      cleanup = TRUE
+      cleanup = TRUE,
+      job.res = resources
     )
   
     extract_categorized_optimal_info <- function(output) {
