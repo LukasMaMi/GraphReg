@@ -515,12 +515,14 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
             }
             
             # Define Oracle_f1 and Oracle_hamming
-            est$oracle_f1$opt.index <- which.max(est$additional$f1_score)
+            gcdind <- which.max(est$additional$f1_score)
+            est$oracle_f1$opt.index <- gcdind + est$additional$ub.index - 1
             est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
             est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
             est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
-  
-            est$oracle_hamming$opt.index <- which.min(est$additional$hamming_dist)
+            
+            gcdind <- which.min(est$additional$hamming_dist)
+            est$oracle_hamming$opt.index <- gcdind + est$additional$ub.index - 1
             est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
             est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
             est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))

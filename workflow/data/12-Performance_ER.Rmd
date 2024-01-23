@@ -3,7 +3,7 @@ title: "12-Performance_ER"
 output: github_document
 ---
 
-## Step 3: Performance
+## Step 3: Performance + Prior + additional criteria
 ```{r}
 
 # Step 3: Performance
@@ -28,126 +28,187 @@ compute_metrics <- function(estimated, actual) {
     Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
     Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
     F1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-    hamming_distance <- sum(tril(estimated) != tril(actual))
+    hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
     list(F1 = F1, Hamming = hamming_distance)
 }
+
+calc_mean_ci <- function(values) {
+    # Filter out NA, NULL, and non-numeric values
+    numeric_values <- sapply(values, function(x) if(is.numeric(x) && !is.na(x)) x else NA, simplify = TRUE)
+
+    # Calculate mean and CI if there are any non-NA values
+    if (sum(!is.na(numeric_values)) > 0) {
+        mean_val <- mean(numeric_values, na.rm = TRUE)
+        sem_val <- sd(numeric_values, na.rm = TRUE) / sqrt(sum(!is.na(numeric_values)))
+        z_value <- qnorm(0.975)  # For a 95% CI
+        ci_val <- mean_val + c(-z_value, z_value) * sem_val
+        return(c(Mean = mean_val, CI = ci_val))
+    } else {
+        return(c(Mean = NA, CI = c(NA, NA)))
+    }
+}
+
+calc_mean_ci_summary <- function(summary_values) {
+    # Determine the maximum length among the summaries
+    num_lambdas <- max(sapply(summary_values, function(x) {
+        if (is.numeric(x)) length(x) else length(unlist(x))
+    }))
+
+    means <- numeric(num_lambdas)
+    cis <- matrix(NA, nrow = num_lambdas, ncol = 2)
+
+    for (i in 1:num_lambdas) {
+        ith_values <- sapply(summary_values, function(x) {
+            if (is.numeric(x)) {
+                if (length(x) >= i) x[i] else NA
+            } else {
+                if (length(x) >= i && !is.null(x[[i]])) x[[i]] else NA
+            }
+        }, simplify = TRUE, USE.NAMES = FALSE)
+
+        if (all(is.na(ith_values))) {
+            means[i] <- NA
+            cis[i, ] <- c(NA, NA)
+        } else {
+            mean_val <- mean(ith_values, na.rm = TRUE)
+            sem_val <- sd(ith_values, na.rm = TRUE) / sqrt(sum(!is.na(ith_values)))
+            z_value <- qnorm(0.975)  # For a 95% CI
+            ci_val <- mean_val + c(-z_value, z_value) * sem_val
+            means[i] <- mean_val
+            cis[i, ] <- ci_val
+        }
+    }
+    return(list(Mean = means, CI = cis))
+}
+
+
 
 # Initialize list to store results for each configuration
 config_results <- list()
 
 # Loop over configurations and repetitions
+# Assuming configs is a list of configurations and each configuration has n and p attributes
 for(cfg in configs) {
-    cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
+  cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
+  
     individual_results <- list()
     aggregated_metrics <- list()
-    lambda_values_methods <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
-    sparsity_values_methods <- list(stars = numeric(), gstars = numeric(), oracle_f1 = numeric(), oracle_hamming = numeric())
-    gap_values <- list()
+    gap_values_b <- numeric()
+    gap_values_beta <- numeric()
+    hamming_dists <- list()
+    lambda_bound <- list()
+    f1_score <- list()
+    
+    gcd_spearman <- list()
+    gcd_pseudo_spearman <- list()
+    gcd_prior_spearman <- list()
+    gcd_prior_pseudo_spearman <- list()
+    
+    gcd_kendall <- list()
+    gcd_pseudo_kendall <- list()
+    gcd_prior_kendall <- list()
+    gcd_prior_pseudo_kendall <- list()
+    
+    gcd_latentcor <- list()
+    gcd_pseudo_latentcor <- list()
+    gcd_prior_latentcor <- list()
+    gcd_prior_pseudo_latentcor <- list()
 
-    # Loop over repetitions for each configuration
     for(rep in 1:num_repetitions) {
-        # Load estimation data
-        load(paste0(dir_path2, "/", get_filename(cfg, rep, "estimation")))
+      
+      # Corrected key for accessing the results
+      filename <- get_filename(cfg, rep, "estimation")
+      print(paste("Loading data from:", filename))
+      load(paste0(dir_path_results, "/", get_filename(cfg, rep, "estimation")))
+      
+      # Compute metrics for each method in categorized_info
+      method_metrics <- list()
+      
+      for(method_name in categorized_info[["criterion"]]) {
+          method_graph <- categorized_info[["selected_graphs"]][[method_name]]
+          true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
+          method_metrics[[method_name]] <- compute_metrics(method_graph, true_graph)
+          method_metrics[[method_name]]$Sparsity <- categorized_info[["act_sparsity"]][[method_name]]
+          method_metrics[[method_name]]$Lambda <- categorized_info[["optimal_lambdas"]][[method_name]]
+          method_metrics[[method_name]]$Index <- categorized_info[["optimal_indices"]][[method_name]]
+      }
 
-        # Compute metrics for each method
-        stars_metrics <- compute_metrics(stars_graph, true_graph)
-        gstars_metrics <- compute_metrics(gstars_graph, true_graph)
-        oracle_metrics_f1 <- compute_metrics(oracle_graph_f1, true_graph)
-        oracle_metrics_hamming <- compute_metrics(oracle_graph_hamming, true_graph)
-        null_metrics <- compute_metrics(null_graph, true_graph)
+      # Accumulate gap values
+      gap_values_b <- c(gap_values_b, categorized_info[["additional_metrics"]][["gap_b"]])
+      gap_values_beta <- c(gap_values_beta, categorized_info[["additional_metrics"]][["gap_beta"]])
 
-        # Accumulate additional metrics
-        additional_metrics <- list(
-            stars_lambda = best_lambda_stars,
-            gstars_lambda = best_lambda_gstars,
-            oracle_lambda_f1 = best_lambda_oracle_f1,
-            oracle_lambda_hamming = best_lambda_oracle_hamming,
-            stars_sparsity = act_sparsity_stars,
-            gstars_sparsity = act_sparsity_gstars,
-            oracle_sparsity_f1 = act_sparsity_oracle_f1,
-            oracle_sparsity_hamming = act_sparsity_oracle_hamming,
-            stars_index = stars_index,
-            stars_lb = stars_lb,
-            stars_ub = stars_ub,
-            gstars_index = gstars_index,
-            oracle_index_f1 = oracle_index_f1,
-            oracle_index_hamming = oracle_index_hamming,
-            gap_b = ifelse(!is.null(gap_b), gap_b, NA),
-            gap_beta = ifelse(!is.null(gap_beta), gap_beta, NA)
-        )
+      # Store individual results
+      individual_results[[paste("Rep", rep)]] <- method_metrics
 
-        # Store individual results
-        individual_results[[paste("Rep", rep)]] <- list(
-            Stars = stars_metrics,
-            GStars = gstars_metrics,
-            Oracle_f1 = oracle_metrics_f1,
-            Oracle_hamming = oracle_metrics_hamming,
-            Null = null_metrics,
-            Additional = additional_metrics
-        )
+    # Extract the specific metrics for each repetition
+      hamming_dists[[rep]] <- categorized_info[["additional_metrics"]][["hamming_dist"]]
+      lambda_bound[[rep]] <- categorized_info[["additional_metrics"]][["lambda_bound"]]
+      f1_score[[rep]] <- categorized_info[["additional_metrics"]][["f1_score"]]
+      
+      gcd_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_spearman"]]
+      gcd_pseudo_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_pseudo_spearman"]]
+      gcd_prior_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_spearman"]]
+      gcd_prior_pseudo_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_pseudo_spearman"]]
+      
+      gcd_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_kendall"]]
+      gcd_pseudo_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_pseudo_kendall"]]
+      gcd_prior_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_kendall"]]
+      gcd_prior_pseudo_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_pseudo_kendall"]]
+      
+      gcd_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_latentcor"]]
+      gcd_pseudo_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_pseudo_latentcor"]]
+      gcd_prior_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_latentcor"]]
+      gcd_prior_pseudo_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_pseudo_latentcor"]]
 
-        lambda_values_methods$stars <- c(lambda_values_methods$stars, best_lambda_stars)
-        lambda_values_methods$gstars <- c(lambda_values_methods$gstars, best_lambda_gstars)
-        lambda_values_methods$oracle_f1 <- c(lambda_values_methods$oracle_f1, best_lambda_oracle_f1)
-        lambda_values_methods$oracle_hamming <- c(lambda_values_methods$oracle_hamming, best_lambda_oracle_hamming)
-        sparsity_values_methods$stars <- c(sparsity_values_methods$stars, act_sparsity_stars)
-        sparsity_values_methods$gstars <- c(sparsity_values_methods$gstars, act_sparsity_gstars)
-        sparsity_values_methods$oracle_f1 <- c(sparsity_values_methods$oracle_f1, act_sparsity_oracle_f1)
-        sparsity_values_methods$oracle_hamming <- c(sparsity_values_methods$oracle_hamming, act_sparsity_oracle_hamming)
-
-        if (!is.na(additional_metrics$gap_b)) gap_values$gap_b <- c(gap_values$gap_b, gap_b)
-        if (!is.na(additional_metrics$gap_beta)) gap_values$gap_beta <- c(gap_values$gap_beta, gap_beta)
     }
-
-    # Function to calculate mean and CI
-    calc_mean_ci <- function(values) {
-        numeric_values <- values[!is.na(values) & !is.null(values)]
-        if (length(numeric_values) > 0) {
-            mean_val <- mean(numeric_values, na.rm = TRUE)
-            sem_val <- sd(numeric_values, na.rm = TRUE) / sqrt(length(numeric_values))
-            z_value <- qnorm(0.975)  # For a 95% CI
-            ci_val <- mean_val + c(-z_value, z_value) * sem_val
-            return(c(Mean = mean_val, CI = ci_val))
-        } else {
-            return(c(Mean = NA, CI = c(NA, NA)))
-        }
-    }
-
-    # Loop over methods to calculate aggregated metrics
-    for (method in c("Stars", "GStars", "Oracle_f1", "Oracle_hamming", "Null")) {
-        # Extract individual metrics for the method
-        method_metrics <- lapply(individual_results, function(x) x[[method]])
-
-        # Calculate mean and CI for F1, Hamming for the method
-        aggregated_f1 <- calc_mean_ci(unlist(lapply(method_metrics, function(x) x$F1)))
-        aggregated_hamming <- calc_mean_ci(unlist(lapply(method_metrics, function(x) x$Hamming)))
-        aggregated_lambda <- calc_mean_ci(lambda_values_methods[[tolower(method)]])
-        aggregated_sparsity <- calc_mean_ci(sparsity_values_methods[[tolower(method)]])
-
-        # Store in aggregated_metrics
-        aggregated_metrics[[tolower(method)]] <- list(
-            F1 = aggregated_f1,
-            Hamming = aggregated_hamming,
-            Lambda = aggregated_lambda,
-            Sparsity = aggregated_sparsity
+    
+    # Aggregated metrics (mean and CI) for each method
+    for (method_name in categorized_info[["criterion"]]) {
+        # Calculate mean and CI for F1, Hamming, Lambda, Sparsity, and Index for each method
+        aggregated_metrics[[method_name]] <- list(
+            F1 = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$F1)),
+            Hamming = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$Hamming)),
+            Lambda = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$Lambda)),
+            Sparsity = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$Sparsity)),
+            Index = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$Index))
         )
     }
-
+    
     # Calculate mean gap values
     aggregated_gap_values <- list(
-        Gap_B = calc_mean_ci(gap_values$gap_b),
-        Gap_Beta = calc_mean_ci(gap_values$gap_beta)
-    )
-
+        Gap_B = calc_mean_ci(gap_values_b),
+        Gap_Beta = calc_mean_ci(gap_values_beta))
+    
     # Store results for the current configuration
-    config_results[[cfg_key]] <- list(
-        Individual = individual_results,
-        Aggregated = aggregated_metrics,
-        Gap_Values = aggregated_gap_values
-    )
+    config_results[[cfg_key]]$Individual = individual_results
+    config_results[[cfg_key]]$Aggregated = aggregated_metrics
+    config_results[[cfg_key]]$Gap_Values = aggregated_gap_values
+  
+
+    # Corrected assignments to config_results[[cfg_key]]
+    config_results[[cfg_key]]$F1_Path <- calc_mean_ci_summary(f1_score)
+    config_results[[cfg_key]]$Hamming_Path <- calc_mean_ci_summary(hamming_dists)
+    config_results[[cfg_key]]$Lambda_Path <- calc_mean_ci_summary(lambda_bound)
+    
+    config_results[[cfg_key]]$Summary_Path[["gcd_spearman"]] <- calc_mean_ci_summary(gcd_spearman)
+    config_results[[cfg_key]]$Summary_Path[["gcd_pseudo_spearman"]] <- calc_mean_ci_summary(gcd_pseudo_spearman)
+    config_results[[cfg_key]]$Summary_Path[["gcd_prior_spearman"]] <- calc_mean_ci_summary(gcd_prior_spearman)
+    config_results[[cfg_key]]$Summary_Path[["gcd_prior_pseudo_spearman"]] <- calc_mean_ci_summary(gcd_prior_pseudo_spearman)
+    
+    config_results[[cfg_key]]$Summary_Path[["gcd_kendall"]] <- calc_mean_ci_summary(gcd_kendall)
+    config_results[[cfg_key]]$Summary_Path[["gcd_pseudo_kendall"]] <- calc_mean_ci_summary(gcd_pseudo_kendall)
+    config_results[[cfg_key]]$Summary_Path[["gcd_prior_kendall"]] <- calc_mean_ci_summary(gcd_prior_kendall)
+    config_results[[cfg_key]]$Summary_Path[["gcd_prior_pseudo_kendall"]] <- calc_mean_ci_summary(gcd_prior_pseudo_kendall)
+    
+    config_results[[cfg_key]]$Summary_Path[["gcd_latentcor"]] <- calc_mean_ci_summary(gcd_latentcor)
+    config_results[[cfg_key]]$Summary_Path[["gcd_pseudo_latentcor"]] <- calc_mean_ci_summary(gcd_pseudo_latentcor)
+    config_results[[cfg_key]]$Summary_Path[["gcd_prior_latentcor"]] <- calc_mean_ci_summary(gcd_prior_latentcor)
+    config_results[[cfg_key]]$Summary_Path[["gcd_prior_pseudo_latentcor"]] <- calc_mean_ci_summary(gcd_prior_pseudo_latentcor)
+
 }
 
 # Save the results to a file
+save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, dir_path3, config_results, file = ER_settings_file)
 performance_filename <- "all_performance_results.RData"
 save(config_results, file = file.path(dir_path3, performance_filename))
 
