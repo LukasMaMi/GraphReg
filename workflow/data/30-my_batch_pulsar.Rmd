@@ -702,8 +702,28 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
 
 #################
 
-## Add noise to orb_count
-modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
+# ## Add noise to orb_count
+# modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
+#   # Validate the orbit_count_range input
+#   if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+#     stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+#          \n i.e. pseudo_count_range = c(0, 0.1)")
+#   }
+# 
+#   # Generate a random matrix with the same dimensions as orb_count
+#   random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+#                                min = pseudo_count_range[1], 
+#                                max = pseudo_count_range[2]), 
+#                           nrow = nrow(orb_count), 
+#                           ncol = ncol(orb_count))
+#   
+#   # Add the random matrix to orb_count
+#   orb_count <- orb_count + random_matrix
+# 
+#   return(orb_count)
+# }
+
+modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
   # Validate the orbit_count_range input
   if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
     stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
@@ -717,10 +737,16 @@ modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range)
                           nrow = nrow(orb_count), 
                           ncol = ncol(orb_count))
   
-  # Add the random matrix to orb_count
-  orb_count <- orb_count + random_matrix
+  # Apply conditional logic to add random noise only to the zero elements of orb_count
+  modified_orb_count <- mapply(function(orb_elem, random_elem) {
+                               if (orb_elem == 0) orb_elem + random_elem else orb_elem
+                             }, orb_count, random_matrix)
+  
+  # Convert the modified_orb_count to a matrix and set the column names
+  modified_orb_count_matrix <- matrix(modified_orb_count, nrow = nrow(orb_count), ncol = ncol(orb_count))
+  colnames(modified_orb_count_matrix) <- colnames(orb_count)
 
-  return(orb_count)
+  return(modified_orb_count_matrix)
 }
 
 
@@ -1042,19 +1068,27 @@ plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE,
 
 
 ```{r}
-## Set up for custom function
-lambda <- out.p$additional$lambda_bound
-fullmodel <- out.p$est$path
-prior_graph <- true_graph
 
-        for (i in 1:length(lambda)) {
-            gcdind <- which(lambda == lambda[[i]])
-            gcdind <- gcdind + out.p$additional$ub.index - 1
-            additional$hamming_dist[[i]] <- my.hamming(estimated = fullmodel[[gcdind]], actual = prior_graph) 
-            additional$f1_score[[i]] <- my.f1_score(predicted = fullmodel[[gcdind]], actual = prior_graph)
-          }
+## Add noise to orb_count
+modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
+  # Validate the orbit_count_range input
+  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+         \n i.e. pseudo_count_range = c(0, 0.1)")
+  }
 
-my.hamming(estimated = fullmodel[[2]], actual = prior_graph) 
+  # Generate a random matrix with the same dimensions as orb_count
+  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+                               min = pseudo_count_range[1], 
+                               max = pseudo_count_range[2]), 
+                          nrow = nrow(orb_count), 
+                          ncol = ncol(orb_count))
+  
+  # Add the random matrix to orb_count
+  orb_count <- orb_count + random_matrix
+
+  return(orb_count)
+}
 ```
 
 

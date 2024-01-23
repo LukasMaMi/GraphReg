@@ -119,7 +119,7 @@ for(rep in 1:num_repetitions) {
   s <- 20    # Size Hub Group
   J <- floor(p/s) # Number of Hubs
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-  N = 20 # Number of Repetitions
+  N = 5 # Number of Repetitions
   rho <- 0.20 # Off-Diagonal Effect Strength
 
   Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
@@ -130,7 +130,7 @@ for(rep in 1:num_repetitions) {
   null_data <- Hub$null_data
 
   maxCov <- getMaxCov(Hub_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 100) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   cat("Condition number:", kappa(Hub$omega), "\n")

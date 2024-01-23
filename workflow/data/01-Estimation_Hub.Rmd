@@ -98,7 +98,7 @@ for (rep in 1:num_repetitions) {
       subsample.ratio = b,
       criterion=c('stars', 'gcd', 'gcd_prior'), 
       lb.stars = TRUE, 
-      ub.stars = FALSE, 
+      ub.stars = TRUE, 
       seed = FALSE,
       refit = TRUE,
       prior_graph = true_graph,

@@ -5,6 +5,7 @@ output: github_document
 
 
 ```{r}
+
 library(MASS)
 library(Matrix)
 library(igraph)
@@ -71,8 +72,8 @@ generator_Hub <- function (n, p, rho, g, vis, verbose)
 }
 
 
-n <- 100 # Samples
-p <- 400 # Dimensions
+n <- 800 # Samples
+p <- 40 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
@@ -226,17 +227,18 @@ plot_criteria(out.p, "gcd_pseudo_kendall", "gcd_latentcor")
 ## Playground
 ```{r}
 
-
-modify_orb_count <- function(orb_count, orbit_count_range = c(0, 0.1)) {
+## Add noise to orb_count
+modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
   # Validate the orbit_count_range input
-  if (length(orbit_count_range) != 2 || orbit_count_range[1] >= orbit_count_range[2]) {
-    stop("orbit_count_range must be a vector of two numbers, where the first is less than the second.")
+  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+         \n i.e. pseudo_count_range = c(0, 0.1)")
   }
 
   # Generate a random matrix with the same dimensions as orb_count
   random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
-                               min = orbit_count_range[1], 
-                               max = orbit_count_range[2]), 
+                               min = pseudo_count_range[1], 
+                               max = pseudo_count_range[2]), 
                           nrow = nrow(orb_count), 
                           ncol = ncol(orb_count))
   
@@ -247,11 +249,39 @@ modify_orb_count <- function(orb_count, orbit_count_range = c(0, 0.1)) {
 }
 
 
+modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
+  # Validate the orbit_count_range input
+  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+         \n i.e. pseudo_count_range = c(0, 0.1)")
+  }
+
+  # Generate a random matrix with the same dimensions as orb_count
+  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+                               min = pseudo_count_range[1], 
+                               max = pseudo_count_range[2]), 
+                          nrow = nrow(orb_count), 
+                          ncol = ncol(orb_count))
+  
+  # Apply conditional logic to add random noise only to the zero elements of orb_count
+  modified_orb_count <- mapply(function(orb_elem, random_elem) {
+                               if (orb_elem == 0) orb_elem + random_elem else orb_elem
+                             }, orb_count, random_matrix)
+  
+  # Convert the modified_orb_count to a matrix and set the column names
+  modified_orb_count_matrix <- matrix(modified_orb_count, nrow = nrow(orb_count), ncol = ncol(orb_count))
+  colnames(modified_orb_count_matrix) <- colnames(orb_count)
+
+  return(modified_orb_count_matrix)
+}
+
+
 
 graph <- true_graph
 graph <- gstars_graph
 
 orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
+pseudo_count_range = c(0, 0.1)
 nx2 <- .adj2elist(graph)
 nx2 
 n <- length(orbind)
@@ -265,7 +295,7 @@ orb_count
 orb_count_normal = rbind(orb_count[,orbind],1)
 orb_count_normal
 
-orb_count_noise <- modify_orb_count(orb_count_normal)
+orb_count_noise <- modify_orb_count(orb_count_normal, pseudo_count_range = pseudo_count_range)
 orb_count_noise
 
 gcm <- suppressWarnings(cor(orb_count_normal, method = "spearman"))

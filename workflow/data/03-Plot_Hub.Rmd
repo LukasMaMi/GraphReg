@@ -175,11 +175,6 @@ save_and_display(F1_Hub_Set_2, "F1_Hub_Set_2")
 save_and_display(Hamming_Hub_Set_1, "Hamming_Hub_Set_1")
 save_and_display(Hamming_Hub_Set_2, "Hamming_Hub_Set_2")
 
-
-
-
-
-
 ```
 
 
@@ -325,12 +320,12 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
   p <- p %>%
     add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
             type = 'scatter', mode = "lines",
-            line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+            line = list(color = 'rgba(0, 0, 255, 0.2)', dash = "dot"), showlegend = FALSE)
 
   p <- p %>%
     add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
             type = 'scatter', mode = "lines",
-            line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+            line = list(color = 'rgba(255, 0, 0, 0.2)', dash = "dot"), showlegend = FALSE)
     
   # Adding an annotation for lambda_opt_hamming
   p <- p %>%
