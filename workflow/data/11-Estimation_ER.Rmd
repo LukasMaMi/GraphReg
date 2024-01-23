@@ -193,7 +193,7 @@ for (rep in 1:num_repetitions) {
     }
 
     # Save the results in the Results directory
-    save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, file = ER_settings_file)
+    save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, file = ER_settings_file)
     result_filename <- get_filename(config, rep, "estimation")
     save(out.p, categorized_info, file = file.path(dir_path_results, result_filename))
   }
