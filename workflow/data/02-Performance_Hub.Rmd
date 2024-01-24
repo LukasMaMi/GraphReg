@@ -134,7 +134,7 @@ for(cfg in configs) {
           method_metrics[[method_name]]$Sparsity <- categorized_info[["act_sparsity"]][[method_name]]
           method_metrics[[method_name]]$Lambda <- categorized_info[["optimal_lambdas"]][[method_name]]
           
-          if (method_name %in% categorized_info[["optimal_indices"]]) {
+          if(method_name %in% names(categorized_info[["optimal_indices"]])) {
           corrected_ind <- ((categorized_info[["optimal_indices"]][[method_name]] -
                               categorized_info[["additional_metrics"]][["ub.index"]]) + 1)
           method_metrics[[method_name]]$Index <- as.numeric(corrected_ind)
