@@ -91,9 +91,9 @@ for (rep in 1:num_repetitions) {
 
     # Run batch pulsar
     library(batchtools)
-    options(mc.cores = 5)
+    options(mc.cores = 2) #Speed up by setting number of cores available
     options(batchtools.progress=TRUE, batchtools.verbose=FALSE)
-    resources <- list(mem="1GB", nodes="1", walltime="00:30:00")
+    #resources <- list(mem="1GB", nodes="1", walltime="00:30:00") # number of computers or servers you are requesting for your job
     
     out.p <- my.batch.pulsar(
       data = ER_data, 
@@ -104,7 +104,7 @@ for (rep in 1:num_repetitions) {
       subsample.ratio = b,
       criterion=c('stars', 'gcd', 'gcd_prior'), 
       lb.stars = TRUE, 
-      ub.stars = TRUE, 
+      ub.stars = FALSE, 
       seed = FALSE,
       refit = TRUE,
       prior_graph = true_graph,
@@ -112,8 +112,8 @@ for (rep in 1:num_repetitions) {
       five_node = FALSE,
       use_pseudo_count = TRUE, 
       pseudo_count_range = c(0, 0.1),
-      cleanup = TRUE,
-      job.res = resources
+      cleanup = TRUE
+      #job.res = resources
     )
   
     extract_categorized_optimal_info <- function(output) {

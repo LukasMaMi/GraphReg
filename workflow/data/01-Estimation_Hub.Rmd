@@ -91,9 +91,9 @@ for (rep in 1:num_repetitions) {
 
     # Run batch pulsar
     library(batchtools)
-    options(mc.cores = 5)
+    options(mc.cores = 2) #Speed up by setting number of cores available
     options(batchtools.progress=TRUE, batchtools.verbose=FALSE)
-    resources <- list(mem="1GB", nodes="1", walltime="00:30:00")
+    #resources <- list(mem="1GB", nodes="1", walltime="00:30:00") # number of computers or servers you are requesting for your job
     
     out.p <- my.batch.pulsar(
       data = Hub_data, 
