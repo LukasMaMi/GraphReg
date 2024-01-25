@@ -9,11 +9,13 @@ output: github_document
 # Step 3: Performance
 
 # Load session settings
-ER_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#ER_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
 ER_settings_file <- file.path(ER_setting_path, "ER_settings.RData")
 load(ER_settings_file)
 
-dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_ER"
+#dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_ER"
+dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_ER"
 
 # Function to generate file names
 get_filename <- function(config, rep, prefix = "ER") {
