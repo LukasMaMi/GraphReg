@@ -8,13 +8,13 @@ output: github_document
 ```{r}
 
 # Load session settings and performance results
-#ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
-ER_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+#ER_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
 ER_settings_file <- file.path(ER_setting_path, "ER_settings.RData")
 load(ER_settings_file)
 
-#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_ER"
-dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_ER"
+dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_ER"
+#dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_ER"
 performance_filename <- file.path(dir_path3, "all_performance_results.RData")
 load(performance_filename)
 ```
@@ -23,8 +23,8 @@ load(performance_filename)
 ## Preparing data frames for plotting + additional criteria
 ```{r}
 
-#dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_ER"
-dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_ER"
+dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_ER"
+#dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_ER"
 
 # Load necessary libraries
 library(ggplot2)
@@ -317,15 +317,15 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
             type = 'scatter', mode = "lines", 
             line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
   
-  p <- p %>%
-    add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
-            type = 'scatter', mode = "lines",
-            line = list(color = 'rgba(0, 0, 255, 0.2)', dash = "dot"), showlegend = FALSE)
-
-  p <- p %>%
-    add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
-            type = 'scatter', mode = "lines",
-            line = list(color = 'rgba(255, 0, 0, 0.2)', dash = "dot"), showlegend = FALSE)
+  # p <- p %>%
+  #   add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
+  #           type = 'scatter', mode = "lines",
+  #           line = list(color = 'rgba(0, 0, 255, 0.2)', dash = "dot"), showlegend = FALSE)
+  # 
+  # p <- p %>%
+  #   add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
+  #           type = 'scatter', mode = "lines",
+  #           line = list(color = 'rgba(255, 0, 0, 0.2)', dash = "dot"), showlegend = FALSE)
     
   # Adding an annotation for lambda_opt_hamming
   p <- p %>%
@@ -472,7 +472,8 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 config_names <- extract_configs(configs)
 
 # Set the directory path where plots will be saved
-dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_ER/Lam_path_plots"
+#dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_ER/Lam_path_plots"
+dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
 
 # Create and save plots
 create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
