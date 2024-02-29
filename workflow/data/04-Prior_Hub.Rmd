@@ -5,6 +5,162 @@ output: github_document
 
 
 ```{r}
+library(MASS)
+library(Matrix)
+library(igraph)
+library(huge)
+library(pulsar)
+
+
+generator_Hub <- function (n, p, rho, g, vis, verbose) 
+{
+    gcinfo(FALSE)
+    if (verbose) 
+        cat("Generating data from the multivariate normal distribution with the Hub graph structure....")
+  
+  g.large = p%%g #Rest Funktion
+    g.small = g - g.large
+    n.small = floor(p/g)
+    n.large = n.small + 1
+    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
+    g.ind = rep(c(1:g), g.list)
+    rm(g.large, g.small, n.small, n.large, g.list)
+    gc()
+    
+    theta = matrix(0, p, p) #Here Theta defined (pxp matrix with entries "0")
+  
+    for (i in 1:g) {
+        tmp = which(g.ind == i)
+        theta[tmp[1], tmp] = 1
+        theta[tmp, tmp[1]] = 1
+        rm(tmp)
+        gc()
+    }
+  
+    diag(theta) = 0
+    omega = theta * rho
+    diag(omega) = 1 #Set diagonal of precision matrix to 1 (Liu et al.)
+    sigma = cov2cor(omega) #Knackpunkt! Das ist nun das Sigma, welche zu unserem simulierten theta gehört.
+    x = mvrnorm(n, rep(0, p), sigma) #Dieses Sigma wird schlussendlich verwendet, um die Daten zu simulieren!!!
+    sigmahat = cor(x) #Empirical covariance matrix
+    
+    if (vis == TRUE) {
+        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
+            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
+        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
+        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
+        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
+        layout.grid = layout.fruchterman.reingold(g)
+        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
+            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
+            main = "Graph Pattern")
+        fullfig[4] = image(sigmahat, col = gray.colors(256), 
+            main = "Empirical Matrix")
+        rm(fullfig, g, layout.grid)
+        gc()
+    }
+    if (verbose) 
+        cat("done.\n")
+    rm(vis, verbose)
+    gc()
+    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
+        omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
+        act_sparsity = sum(theta)/(p * (p - 1))) #-1 because every node can connect to p-1 nodes (discarding diag)
+    class(sim) = "sim"
+    return(sim)
+}
+
+
+n <- 800 # Samples
+p <- 40 # Dimensions
+s <- 20    # Size Hub Group
+J <- floor(p/s) # Number of Hubs
+b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
+N = 5 # Number of Repetitions
+rho <- 0.20 # Off-Diagonal Effect Strength
+
+Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
+Hub_data <- Hub$data
+true_graph <- Hub$theta
+act_sparsity <- Hub$act_sparsity
+
+maxCov <- getMaxCov(Hub_data)
+lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
+lambda <- list(lambda=lambda_path)
+
+
+# Using QUIC
+library(BigQuic)
+quicr <- function(data, lambda) {
+    p <- ncol(data)
+    est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+    est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+    path <-  lapply(seq(length(lambda)), function(i) {
+                tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                diag(tmp) <- 0
+                as(tmp!=0, "lMatrix")
+    })
+    est$path <- path
+    est
+}
+
+quicargs <- list(lambda = lambda_path)    
+  
+library(batchtools)
+library(pulsar)
+#options(mc.cores = 2) #Speed up by setting number of cores available
+#options(batchtools.progress=TRUE, batchtools.verbose = TRUE)
+
+time1    <- system.time(    
+out.p <- Graphreg(
+  data = Hub_data, 
+  fun = quicr, 
+  fargs = quicargs, 
+  rep.num = N,
+  thresh = 0.05,
+  subsample.ratio = b,
+  criterion=c('stars', 'gcd', 'gcd_prior'), 
+  lb.stars = FALSE, 
+  ub.stars = FALSE, 
+  seed = FALSE,
+  refit = TRUE,
+  prior_graph = true_graph,
+  method = c("spearman", "latentcor", "kendall"),
+  five_node = FALSE,
+  use_pseudo_count = TRUE
+))
+
+out.p
+
+stop()
+
+for (crit in out.p$criterion) {
+  if (startsWith(crit, "gcd_")) {
+    opt.index(out.p, criterion = crit) <- get.opt.index(out.p, criterion = crit)
+  }
+}
+
+out.p
+
+refit <- refit.pulsar(out.p)
+
+stop()
+
+plot(out.p, legends = T, show = c("stars", "gcd_pseudo_kendall", "gcd_prior_pseudo_kendall", "gcd_kendall", "gcd_prior_kendall"))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
 
 library(MASS)
 library(Matrix)
@@ -77,7 +233,7 @@ p <- 40 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-N = 20 # Number of Repetitions
+N = 5 # Number of Repetitions
 rho <- 0.20 # Off-Diagonal Effect Strength
 
 Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
@@ -88,33 +244,146 @@ act_sparsity <- Hub$act_sparsity
 maxCov <- getMaxCov(Hub_data)
 lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
 lambda <- list(lambda=lambda_path)
-    
+
+
+# Using QUIC
+library(BigQuic)
+quicr <- function(data, lambda) {
+    p <- ncol(data)
+    est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+    est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+    path <-  lapply(seq(length(lambda)), function(i) {
+                tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                diag(tmp) <- 0
+                as(tmp!=0, "lMatrix")
+    })
+    est$path <- path
+    est
+}
+
+quicargs <- list(lambda = lambda_path)    
   
 library(batchtools)
 library(pulsar)
-out.p <- my.batch.pulsar(
+#options(mc.cores = 2) #Speed up by setting number of cores available
+#options(batchtools.progress=TRUE, batchtools.verbose = TRUE)
+
+time1    <- system.time(    
+out.p <- Graphreg(
   data = Hub_data, 
-  fun = "QUIC", 
-  fargs = lambda, 
+  fun = quicr, 
+  fargs = quicargs, 
   rep.num = N,
   thresh = 0.05,
   subsample.ratio = b,
   criterion=c('stars', 'gcd', 'gcd_prior'), 
   lb.stars = TRUE, 
-  ub.stars = FALSE, 
+  ub.stars = TRUE, 
   seed = FALSE,
   refit = TRUE,
   prior_graph = true_graph,
-  method = c("spearman", "kendall", "latentcor"),
+  method = c("spearman", "latentcor", "kendall"),
   five_node = FALSE,
   use_pseudo_count = TRUE, 
   pseudo_count_range = c(0, 0.1)
-)
+))
 
 out.p
 
 stop()
 
+for (crit in out.p$criterion) {
+  if (startsWith(crit, "gcd_")) {
+    opt.index(out.p, criterion = crit) <- get.opt.index(out.p, criterion = crit)
+  }
+}
+
+out.p
+
+refit <- refit.pulsar(out.p)
+
+stop()
+
+
+
+
+
+
+
+
+
+
+
+
+for (crit in out.p$criterion) {
+    opt.lambda(out.p, criterion = crit) <- get.opt.lambda(out.p, criterion = crit)
+}
+
+stop()
+
+for (crit in out.p$criterion) {
+    adj(out.p, criterion = crit) <- get.adj(out.p, criterion = crit)
+}
+
+stop()
+est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
+
+# Directly initialize as lists
+est$additional$hamming_dist <- list()
+est$additional$f1_score <- list()
+
+for (i in seq_along(fargs$lambda)) {
+    gcdind <- NULL
+    gcdind <- which(fargs$lambda == fargs$lambda[[i]])
+    gcdind <- gcdind + est$additional$ub.index - 1
+
+    if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
+        estim <- fullmodel$path[[gcdind]]
+        est$additional$hamming_dist[[i]] <- my.hamming(estimated = estim, actual = prior_graph)
+        est$additional$f1_score[[i]] <- my.f1_score(predicted = estim, actual = prior_graph)
+    } else {
+        est$additional$hamming_dist[[i]] <- NULL
+        est$additional$f1_score[[i]] <- NULL
+    }
+}
+
+# Define Oracle_f1 and Oracle_hamming
+gcdind <- which.max(est$additional$f1_score)
+est$oracle_f1$opt.index <- gcdind + est$additional$ub.index - 1
+est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
+est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
+est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
+
+gcdind <- which.min(est$additional$hamming_dist)
+est$oracle_hamming$opt.index <- gcdind + est$additional$ub.index - 1
+est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
+est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
+est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+crit = "gcd_pseudo_kendall"
+opt.index(out.p, criterion = crit) <- get.opt.index(out.p, criterion = crit)
+
+
+plot(out.p, legends = T, show = c("stars","gcd_prior_kendall", "gcd_prior_pseudo_spearman", "gcd_spearman"))
+plot(out.p, legends = T)
 
 extract_categorized_optimal_info <- function(output) {
       # Initialize lists to store the categorized results
@@ -167,48 +436,6 @@ stop()
 #install.packages("plotly")
 
 
-library(plotly)
-
-plot_criteria <- function(data, criterion1, criterion2) {
-  # Check for existence of lambda_bound and select appropriate lambda values
-  if (!is.null(data[["additional"]][["lambda_bound"]])) {
-    lambda_values <- data[["additional"]][["lambda_bound"]]
-  } else {
-    lambda_values <- data[["additional"]][["lambda_full"]]
-  }
-  
-  # Extract hamming and GCD values
-  hamming_distances <- unlist(data[["additional"]][["hamming_dist"]])
-  gcd_values1 <- data[[criterion1]][["summary"]]
-  gcd_values2 <- data[[criterion2]][["summary"]]
-  
-  # Oracle Hamming index and corresponding lambda value
-  oracle_index <- data[["oracle_hamming"]][["opt.index"]]
-  oracle_lambda <- lambda_values[oracle_index]
-
-  # Create plot with plotly
-  p <- plot_ly() %>%
-    add_trace(x = lambda_values, y = hamming_distances, type = 'scatter', mode = 'lines', 
-              name = 'Hamming Distance', yaxis = 'y1', line = list(color = 'blue')) %>%
-    add_trace(x = lambda_values, y = gcd_values1, type = 'scatter', mode = 'lines', 
-              name = criterion1, yaxis = 'y2', line = list(color = 'red', dash = 'dash')) %>%
-    add_trace(x = lambda_values, y = gcd_values2, type = 'scatter', mode = 'lines', 
-              name = criterion2, yaxis = 'y2', line = list(color = 'green', dash = 'dot')) %>%
-    add_trace(x = c(oracle_lambda, oracle_lambda), y = c(min(hamming_distances, gcd_values1, gcd_values2), 
-              max(hamming_distances, gcd_values1, gcd_values2)), type = 'scatter', mode = 'lines', 
-              name = 'Oracle Hamming', line = list(color = 'black')) %>%
-    layout(title = '',
-           xaxis = list(title = 'Lambda'),
-           yaxis = list(title = 'Hamming Distance', showgrid = FALSE),
-           yaxis2 = list(title = 'GCD', overlaying = 'y', side = 'right', showgrid = FALSE))
-
-  return(p)
-}
-
-# Example usage
-plot_criteria(out.p, "gcd_pseudo_kendall", "gcd_latentcor")
-
-
 
 
 
@@ -218,6 +445,73 @@ plot_criteria(out.p, "gcd_pseudo_kendall", "gcd_latentcor")
 
 
 
+```{r}
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, 
+                     pseudo_count_range = pseudo_count_range, return_gcm = FALSE) {
+  
+  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
+  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
+  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
+  n <- length(orbind)
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(0, n*(n-1)/2)) # Return empty vector
+  }
+
+  p <- ncol(graph)
+  if (five_node == TRUE) { gdm <- orca::count5(nx2)
+    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
+  } 
+  
+  ## expand missing nodes
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
+  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
+  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
+  ## or completely empty graph and can be safely suppressed.
+  
+  if (pseudo_count == TRUE) {
+    ## Add pseudo_count to orb_count
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = pseudo_count_range)
+  }
+  
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
+  gdm <- rbind(gdm[,orbind],1)
+  
+  if (method %in% c("kendall", "spearman")){
+  #Then calculate the graphlet correlation matrix with method
+  gcm <- suppressWarnings(cor(gdm, method = method))
+  }
+  
+  else if (method == "latentcor") {
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = TRUE))
+  gcm <- gcm$R
+  }
+  
+  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
+  
+  if (return_gcm == TRUE) {
+      return(gcm)
+  } else {
+      return(gcv)
+  }
+  
+}
+
+
+
+
+#' @keywords internal
+.adj2elist <- function(G) {
+    if (inherits(G, "sparseMatrix")) {
+        G <- Matrix::triu(G, k=1)
+        index_i_j <- Matrix::mat2triplet(G)[1:2]
+        return(as.data.frame(index_i_j))
+    } else {
+        p <- ncol(G)
+        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
+    }
+}
+```
 
 
 
@@ -226,28 +520,6 @@ plot_criteria(out.p, "gcd_pseudo_kendall", "gcd_latentcor")
 
 ## Playground
 ```{r}
-
-## Add noise to orb_count
-modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
-  # Validate the orbit_count_range input
-  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
-    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
-         \n i.e. pseudo_count_range = c(0, 0.1)")
-  }
-
-  # Generate a random matrix with the same dimensions as orb_count
-  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
-                               min = pseudo_count_range[1], 
-                               max = pseudo_count_range[2]), 
-                          nrow = nrow(orb_count), 
-                          ncol = ncol(orb_count))
-  
-  # Add the random matrix to orb_count
-  orb_count <- orb_count + random_matrix
-
-  return(orb_count)
-}
-
 
 modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
   # Validate the orbit_count_range input
@@ -276,11 +548,24 @@ modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
 }
 
 
+# Warum sind die estimated GCM nicht in der Lage die negative Correlation zu messen?
+# Mhm warum sind die GCMs bei Yaveroglu et al NUR positiv korreliert aber niemals negativ? 
+#Hub: It semms that orb 0 and 1 are konkurieren and 0 and 6 konkurieren
+# VERGLEICHE GCM VS GCM PRIOR um herauszufinden, was makante Unterschiede zwischen ihnen sind. Dann vergleiche GCM PRIOR VS GCM PRIOR PSEUDO um herauszufinden was die unterschiede zwischen ihnen sind und warum PSEUDO besser performt!!!
+# Bei Verwendung von Noise sollte hinzufügen von einer Reihe Einsen nicht mehr notwendig sein, Überprüfe das!
 
 graph <- true_graph
 graph <- gstars_graph
+graph <- out.p[["gcd_spearman"]][["refit"]]
 
 orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
+
+orbind = c(4, 5, 8, 9, 10, 11, 0, 1, 2, 6, 7)+1
+
+# orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
+# orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
+# orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
+
 pseudo_count_range = c(0, 0.1)
 nx2 <- .adj2elist(graph)
 nx2 
@@ -302,6 +587,18 @@ gcm <- suppressWarnings(cor(orb_count_normal, method = "spearman"))
 gcm <- suppressMessages(latentcor::latentcor(orb_count_normal, method = "approx", use.nearPD = TRUE))
 gcm 
 
+corrplot::corrplot(gcm)
+
+gcv2 <- gcm[upper.tri(gcm)]
+gcv1
+
+gcd <- dist(gcv1, gcv2)
+gcd
+
+
+
+
+
 
 test <- my.gcvec(true_graph, method = "spearman", orbind = orbind, five_node = FALSE,
                                                          pseudo_count = TRUE, return_gcm = TRUE, 
@@ -309,48 +606,6 @@ test <- my.gcvec(true_graph, method = "spearman", orbind = orbind, five_node = F
 
 test
 
-pseudo_count_range <- c(0, 0.1)
-
-
-gcv1 <- gcm[upper.tri(gcm)] 
-
-gcv2 <- gcm[upper.tri(gcm)] 
-
-gcd <- dist(rbind(gcv1,gcv2))[[1]]
-
-gcv1 
-orb_count_normal[1:5,]
-gcm <- latentcor::latentcor(orb_count_normal, method = "original")
-gcm <- gcm$K
-suppressWarnings(cor(orb_count_normal, method = "spearman"))
-
-    latentcor(
-      X,
-      types = NULL,
-      method = c("approx", "original"),
-      use.nearPD = TRUE,
-      nu = 0.001,
-      tol = 1e-08,
-      ratio = 0.9,
-      showplot = FALSE
-)
-
-
-    
-
-# Example usage
-# Assuming orb_count is your matrix
-orb_count_noisy <- modify_orb_count(orb_count_normal)
-orb_count_noisy[1:5,] 
-
-
-
-gcm_norm
-gcm_rand <- suppressWarnings(cor(orb_count_random, method = method))
-gcm_rand
-
-gcv1 <- gcm[upper.tri(gcm)] 
-gcv
 
 GCD <- function(gcv1, gcv2){
   res = dist(rbind(gcv1,gcv2))[[1]]
@@ -361,127 +616,6 @@ GCD(gcv1,gcv2)
 
 
 
-###################################
-## Add noise to orb_count
-modify_orb_count <- function(orb_count, noise_prob, noise_strength) {
-  # Iterate over each element of the matrix
-  for (i in 1:nrow(orb_count)) {
-    for (j in 1:ncol(orb_count)) {
-      # Decide whether to modify this element
-      if (runif(1) < noise_prob) {
-        # Randomly choose to add or only subtract if orbit count is greater than 0
-        if (runif(1) < 0.5) {
-          orb_count[i, j] <- orb_count[i, j] + noise_strength
-        } else {
-          if (orb_count[i, j] > 0) {
-            orb_count[i, j] <- max(0, orb_count[i, j] - noise_strength)  # Ensures orbit count does not go negative
-          }
-        }
-      }
-    }
-  }
-  return(orb_count)
-}
-
-#noise = pseudo counts
-my.gcvec <- function(graph, method = "spearman", orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1, 
-                     five_node = FALSE, noise = FALSE, noise_prob = 0.5, noise_strength = 1) {
-  
-  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
-  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
-  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
-  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
-  n <- length(orbind)
-  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
-      return(rep(0, n*(n-1)/2)) # Return empty vector
-  }
-
-  p <- ncol(graph)
-  if (five_node == TRUE) { gdm <- orca::count5(nx2)
-    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
-  } 
-  
-  ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
-  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
-  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
-  ## or completely empty graph and can be safely suppressed.
-  
-  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
-  gdm <- rbind(gdm[,orbind],1)
-  
-  if (noise == TRUE) {
-    ## Add noise to orb_count
-    gdm <- modify_orb_count(gdm, noise_prob = noise_prob, noice_strength = noise_strength)
-  }
-  
-  if (method %in% c("kendall", "spearman")){
-  #Then calculate the graphlet correlation matrix with method
-  gcm <- suppressWarnings(cor(gdm, method = method))
-  }
-  
-  else if (method == "latentcor") {
-  gcm <- suppressWarnings(latentcor::latentcor(gdm))  
-  }
-  
-  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
-  return(gcv)
-}
-
-##############
-
-my.gcd.stability_extended <- function(premerge, thresh, rep.num, p, nlams, prior_graph = NULL) {  
-est <- list()
-
-  if (!(prior_graph = NULL)) {
-    for(j in 1:length(premerge)){ # j subsamples
-      res_tot = c()
-      for(i in 1:length(premerge[[j]])){ # i lambda values
-        gcv_sub = premerge[[j]][[i]] # gcv of subsample j and lambda i
-        gcv_true = my.gcvec(prior_graph) # gcv for true_graph
-        res = GCD(gcv_sub, gcv_true) # calculate gcd between (1) gcv of subsample j lambda i and (2) gcv of the true graph
-        gcd = c(res_tot, res) # contains all gcd: Numb of gcd = numb of gcv = numb of lams * numb of subsamples N
-      }
-    
-    est$gcv_sub
-    est$gcv_true
-    est$res
-    
-    est$merge[[j]] <- gcd # gcd for all j different lambda values (mean over all subsample for each lambda value)
-    est$gcv_sub[[j]] = gcv_sub
-    est$gcv_true = gcv_true
-    }
-    
-    est$criterion <- "gcd_prior"
-  } 
-  
-  else {
-    est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]]))))
-    est$criterion <- "gcd"
-  }
-
-  est$summary <- vector('numeric', nlams) # set up empty vector
-  for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]]) # fill summary: ith subsamples = mean of ith subsample over all j lambdas
- 
-  return(est)
-} 
-
-
-#' @importFrom stats dist
-#' @keywords internal
-gcd.stability <- function(premerge, thresh, rep.num, p, nlams, merge=NULL) { # 6 argumets including nlams
-    est <- list()
-    
-    if (is.null(merge)) {
-        est$merge <- lapply(premerge, function(pm) dist(t(sapply(pm, gcvec))))
-    } else est$merge <- merge
-    
-
-    est$summary <- vector('numeric', nlams) # set up empty vector
-    for (i in 1:nlams) est$summary[i] <- mean(est$merge[[i]]) # fill summary i with mean over all subsamples rep.num N
-    est$criterion <- "graphlet.stability"
-    return(est)
-}
 
 
 ```

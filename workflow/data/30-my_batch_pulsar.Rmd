@@ -5,24 +5,17 @@ output: github_document
 
 ## my.batch.pulsar function
 ```{r}
+
 ## To Do List:
-# if lb.stars and ub.stars == FALSE, gcd are not calculated for some reason. Fix that.
-# Maybe check if we do not need to calculate gcm separate from gcv
-# Option to make a non-monoton function monoton?
-# Other dependency measures than correlation? Maybe Mutual information?
+# Die N mal lambda_k graphs existieren nicht, wenn lb and ub == TRUE. Was existiert ist eine Liste mit N = 2 subsample dann N subsample für den regulierten Pfad und dann wieder N subsample.
 
-####### Packages needed:
-#library(Matrix)
-#library(BigQuic)
-
-
-my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
+Graphreg <- function(data, fun = huge::huge, fargs=list(),
                     criterion = c("stars"), thresh = 0.05, subsample.ratio = NULL,
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
                     job.res=list(), cleanup=FALSE, refit = TRUE, 
-                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1,
-                    use_pseudo_count = FALSE, pseudo_count_range = c(0, 0.1), five_node = FALSE) {
+                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11),
+                    use_pseudo_count = FALSE, five_node = FALSE) {
 
     if (!requireNamespace('batchtools', quietly=TRUE)) {
         stop("'batchtools' package required to run 'batch.pulsar'")
@@ -32,17 +25,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
         stop('Registry directory already exists')
     }
     
-    # Integrated QUIC and GLASSO Methods
-    if (fun == "QUIC") {
-      # Using QUIC
-      fun <- fun_QC
-    } else if (fun == "GLASSO") {
-      # Using Huge GLASSO
-      fun <- fun_GL
-    } else if (!is.null(fun)) {
-      fun <- fun
-      } else stop("Please choose either 'QUIC' or 'GLASSO' as function argument or define a function yourself by defining 'fun <-'")
-
     n <- nrow(data)
     p <- ncol(data)
     knowncrits <- c("stars", "gcd", "gcd_prior")
@@ -77,14 +59,11 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
 
     est <- list()
     reduceargs <- list()
+    reduceargs2 <- list()
     reduceGCDargs <- list()
-    reduceGCDargs_gcm <- list()
     reduceGCDargs_pseudo <- list()
-    reduceGCDargs_pseudo_gcm <- list()
     lb.gcdpremerge <- list()
-    lb.gcdpremerge_gcm <- list()
     lb.gcdpremerge_pseudo <- list()
-    lb.gcdpremerge_pseudo_gcm <- list()
   
     
     if (lb.stars) {
@@ -112,10 +91,28 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
     } else {
         fullmodel <- NULL #  indicating that no full dataset fit was performed.
     }
-
     
-    starsaggfun <- function(res, aggr) lapply(1:length(aggr), function(i) aggr[[i]] + res[[i]])
+    ## Merge Function Stars
+    #starsaggfun <- function(res, aggr) lapply(1:length(aggr), function(i) aggr[[i]] + res[[i]])
     # This is a custom function defined to aggregate the results of the subsampled analyses.
+    
+    ## Premerge Function Stars
+    starsaggfun <- function(res, aggr) {
+      if (is.null(aggr)) {
+        # If aggr is NULL (first call), initialize it as a list of lists
+        aggr <- vector("list", length(res))
+        for (i in seq_along(aggr)) {
+          aggr[[i]] <- list()
+        }
+      }
+      
+      # For each lambda, append the res to the corresponding list in aggr
+      for (i in seq_along(res)) {
+        aggr[[i]] <- append(aggr[[i]], res[[i]])
+      }
+  
+      return(aggr)
+    }
     
     
     if (lb.stars) {
@@ -127,11 +124,14 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
         }
         
         # collect initial results
-        lb.starsmerge <- batchtools::reduceResults(reg = reg, ids = pulsar.jobs, fun = starsaggfun)
-        # Aggregates the results of the initial set of jobs (for StARS method) using reduceResults
-        lb.est <- stars.stability(NULL, thresh, minN, p, lb.starsmerge) 
+        lb.starspremerge <- batchtools::reduceResults(reg = reg, ids = pulsar.jobs, fun = starsaggfun)
+        lb.est <- stars.stability(premerge = lb.starspremerge, thresh, minN, p, merge = NULL)
+        est$lb.starspremerge <- lb.starspremerge
+
         # Calculates the stability of the lower bound estimate using the aggregated results.
+        #lb.est <- stars.stability(NULL, thresh, minN, p, lb.starsmerge) 
         gc(FALSE)
+        
 
         # Collect initial gcd results (We first compute only two subsamples and then the leftover N-2 subsamples later on)
         if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) {
@@ -143,22 +143,11 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                 # Gather GCV for pseudo
                 aggfun <- function(res, ...) {
                     lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
-                                                     pseudo_count = TRUE, pseudo_count_range = pseudo_count_range, ...))
+                                                     pseudo_count = TRUE, ...))
                 }
                 
                 lb.gcdpremerge_pseudo[[meth]] <- do.call(batchtools::reduceResultsList,
                                                        c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs_pseudo))
-  
-                # Gather GCM for pseudo
-                aggfun <- function(res, ...) {
-                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
-                                                         pseudo_count = TRUE, return_gcm = TRUE, 
-                                                         pseudo_count_range = pseudo_count_range, ...))
-                }
-                
-                lb.gcdpremerge_pseudo_gcm[[meth]] <- do.call(batchtools::reduceResultsList,
-                                                             c(list(reg = reg, ids = pulsar.jobs, 
-                                                                  fun = aggfun), reduceGCDargs_pseudo_gcm))
                 
               }
               
@@ -172,15 +161,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
               lb.gcdpremerge[[meth]] <- do.call(batchtools::reduceResultsList,
                                                      c(list(reg = reg, ids = pulsar.jobs, fun = aggfun), reduceGCDargs))
               
-              # Gather GCM 
-              aggfun <- function(res, ...) {
-                      lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
-                                                       return_gcm = TRUE, ...))
-              }
-              
-              lb.gcdpremerge_gcm[[meth]] <- do.call(batchtools::reduceResultsList,
-                                                           c(list(reg = reg, ids = pulsar.jobs, 
-                                                                fun = aggfun), reduceGCDargs_gcm))
             }
         }
         
@@ -204,13 +184,17 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
             ub.index <- 1
         }
         
-
-        fargs$lambda <- fargs$lambda[ub.index:lb.est$opt.index] # Adjusts the lambda path to be within the bounds !!!!!!!
+        # Adjusts the lambda path to be within the bounds
+        fargs$lambda <- fargs$lambda[ub.index:lb.est$opt.index] 
         nlams <- length(fargs$lambda)
-        reduceargs <- list(init = lb.starsmerge[ub.index:lb.est$opt.index]) 
-        # Prepare arguments for reducing results in the subsequent batch jobs.
-  
+        # Prepare arguments for reducing results in the subsequent batch jobs
+        reduceargs <- list(init = lb.starspremerge[ub.index:lb.est$opt.index])
         
+        #######
+        est$reduceargs <- reduceargs
+        ########
+       
+  
         # If lb.stars was set to TRUE, create now the reduction arguments for gcd
         if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { 
         
@@ -220,20 +204,11 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                 # Create Pseudo GCV reduceGCDargs for the current method
                 reduceGCDargs_pseudo[[meth]] <- list(init = lapply(lb.gcdpremerge_pseudo[[meth]], 
                                                                 function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
-                
-                # Create Pseudo GCM reduceGCDargs for the current method
-                reduceGCDargs_pseudo_gcm[[meth]] <- list(init = lapply(lb.gcdpremerge_pseudo_gcm[[meth]], 
-                                                                function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
-                
               }
               
-            # Create GCV reduceGCDargs for the current method
-            reduceGCDargs[[meth]] <- list(init = lapply(lb.gcdpremerge[[meth]], 
-                                                            function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
-            # Create GCM reduceGCDargs for the current method
-            reduceGCDargs_gcm[[meth]] <- list(init = lapply(lb.gcdpremerge_gcm[[meth]], 
-                                                            function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
-    
+              # Create GCV reduceGCDargs for the current method
+              reduceGCDargs[[meth]] <- list(init = lapply(lb.gcdpremerge[[meth]], 
+                                                              function(gcdpm) gcdpm[ub.index:lb.est$opt.index]))
             }
         }
 
@@ -261,13 +236,16 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
         crit <- criterion[i]
         
         if (crit == "stars") {
-            starsmerge <- do.call(batchtools::reduceResults,
+          
+            starspremerge <- do.call(batchtools::reduceResults,
                                   c(list(reg = reg, ids = pulsar.jobs, fun = starsaggfun), reduceargs))
             
-            est$stars <- stars.stability(NULL, thresh, rep.num, p, starsmerge)
+            #est$stars <- stars.stability(premerge = NULL, thresh, rep.num, p, merge = starsmerge)
+            est$stars <- stars.stability(premerge = starspremerge, thresh, rep.num, p, merge = NULL)
+            est$starspremerge <- starspremerge
         }
         
-        # Actual calculation of graphlet correlation distance (gcd)
+        # Actual calculation of N-2 graphlet correlation distance (gcd)
         if (crit == "gcd" || crit == "gcd_prior") {
           
             for (meth in method) {
@@ -286,8 +264,7 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                 # Gather GCV for Pseudo
                 aggfun <- function(res, ...) {
                   lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
-                                                         pseudo_count = TRUE, 
-                                                         pseudo_count_range = pseudo_count_range, ...))
+                                                         pseudo_count = TRUE, ...))
                 }
                 
                 # Processing and gathering gcv results
@@ -295,26 +272,12 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                                  batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
                 
                 
-                # Gather GCM for Pseudo
-                aggfun <- function(res, ...) {
-                        lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
-                                                         pseudo_count = TRUE, return_gcm = TRUE, 
-                                                         pseudo_count_range = pseudo_count_range, ...))
-                }
-
-                # Processing and gathering gcm results
-                gcdpremerge_pseudo_gcm <- c(reduceGCDargs_pseudo_gcm[[meth]]$init, 
-                                  batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
-
-                gcm_mean <- calculateMeanMatrices(gcdpremerge_pseudo_gcm, nlams, rep.num)
-                
         
                 if (crit == "gcd") {
                     est[[paste("gcd_pseudo", meth, sep = "_")]] <- my.gcd.stability(premerge = gcdpremerge_pseudo, 
                                                         thresh, rep.num, p, nlams, prior_graph = prior_graph, 
                                                         use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
                     #est[[paste("gcdpremerge_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
-                    est[[paste("gcd_pseudo", meth, sep = "_")]]$gcm <- gcm_mean 
                 }
             
                 if (crit == "gcd_prior") {
@@ -322,7 +285,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                                                         thresh, rep.num, p, nlams, prior_graph = prior_graph, 
                                                         use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
                     #est[[paste("gcdpremerge_prior_pseudo", meth, sep = "_")]] <- gcdpremerge_pseudo
-                    est[[paste("gcd_prior_pseudo", meth, sep = "_")]]$gcm <- gcm_mean
                 }
               }
                 
@@ -344,18 +306,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
               gcdpremerge <- c(reduceGCDargs[[meth]]$init,
                                batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
               
-              # Gather GCM
-              aggfun <- function(res, ...) {
-                      lapply(res, function(x) my.gcvec(x, method = meth, orbind = orbind, five_node = five_node,
-                                                       return_gcm = TRUE, ...))
-              }
-              
-              # Processing and gathering results
-              gcdpremerge_gcm <- c(reduceGCDargs_gcm[[meth]]$init,
-                               batchtools::reduceResultsList(reg = reg, ids = pulsar.jobs, fun = aggfun))
-              #est[[paste("gcdpremerge_gcm", meth, sep = "_")]] <- gcdpremerge_gcm
-              
-              gcm_mean <- calculateMeanMatrices(gcdpremerge_gcm, nlams, rep.num)
               
       
               if (crit == "gcd") {
@@ -363,7 +313,6 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                                                       thresh, rep.num, p, nlams, prior_graph = prior_graph, 
                                                       use_prior = FALSE, method = meth, orbind = orbind, five_node = five_node)
                   #est[[paste("gcdpremerge", meth, sep = "_")]] <- gcdpremerge
-                  est[[paste("gcd", meth, sep = "_")]]$gcm <- gcm_mean
               }
           
               else if (crit == "gcd_prior") {
@@ -371,166 +320,194 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
                                                       thresh, rep.num, p, nlams, prior_graph = prior_graph, 
                                                       use_prior = TRUE, method = meth, orbind = orbind, five_node = five_node)
                   #est[[paste("gcdpremerge_prior", meth, sep = "_")]] <- gcdpremerge
-                  est[[paste("gcd_prior", meth, sep = "_")]]$gcm <- gcm_mean
               }
+              
             }
         }
     }
-
+    
     if (lb.stars) {
       ## split indices of init and full stars estimate
-      pind <- ub.index:lb.est$opt.index # bounded indices 
-      pinv <- setdiff(1:length(lb.est$summary), pind) # full indices
-      est$additional$ind_bound <- pind
-      est$additional$ind_full <- pinv
+      pind <- ub.index:lb.est$opt.index
+      pinv <- setdiff(1:length(lb.est$summary), pind)
       ## stitch back together init and full stars summaries
       tmpsumm       <- vector('numeric', length(lb.est$summary))
       tmpsumm[pinv] <- lb.est$summary[pinv]
       tmpsumm[pind] <- est$stars$summary
       est$stars$summary <- tmpsumm
-      ## stitch back together init and full stars merges
+      ## stitch back together init and full stars merges 
       tmpmerg <- vector('list', length(lb.est$summary))
       tmpmerg[pinv]   <- lb.est$merge[pinv]
       tmpmerg[pind]   <- est$stars$merge
       est$stars$merge <- tmpmerg
-      # Optimal index stars
+      ## record stars-related indices
+      est$stars$lb.index  <- lb.est$opt.index
+      est$stars$ub.index  <- ub.index
       est$stars$opt.index <- est$stars$opt.index + ub.index - 1
-      # lb and ub index
-      est$additional$lb.index <- lb.est$opt.index
-      est$additional$ub.index <- ub.index
-      # # lb and ub lambda value
+      
+      ## Additional metrics
+      est$additional$ind_bound <- pind
+      est$additional$ind_rest <- pinv
       est$additional$lb.lambda <- round(lambda_full[lb.est$opt.index], 3)
       est$additional$ub.lambda <- round(lambda_full[ub.index], 3)
       stars_lambda <- round(lambda_full[est$stars$opt.index], 3)
-      # gap b and gab beta
       est$additional$gap_b <- abs(est$additional$ub.lambda - est$additional$lb.lambda)
       est$additional$gap_beta <- abs(stars_lambda - est$additional$lb.lambda)
+      est$additional$lambda_bound <- fargs$lambda
+      
+      ## stitch back together init and full GCD summaries
+      # for (crit in criterion) {
+      #   if (startsWith(crit, "gcd")) {
+      #     tmpsumm <- vector('numeric', length(lb.est[[crit]]$summary))
+      #     tmpsumm[pinv] <- lb.est[[crit]]$summary[pinv]
+      #     tmpsumm[pind] <- est[[crit]]$summary
+      #     est[[crit]]$summary <- tmpsumm
+      #   }
+      # }
     }
-
     
-    # Update criterion vector outside the loop, before returning the output
+    ## Full lambda path
+    est$additional$lambda_full <- lambda_full
+    
+
+    ## Update criterion vector 
     criterion <- unique(c(criterion, updated_criteria))
     criterion <- setdiff(criterion, c("gcd", "gcd_prior"))
     est$criterion <- criterion
-    
-    # Full lambda path
-    est$additional$lambda_full <- lambda_full
-    # Bounded lambda path
-    est$additional$lambda_bound <- fargs$lambda
-    
     # Naming new criterion description according to cirterion
     for (crit in criterion) {
       est[[crit]]$criterion <- crit
     }
-  
-    # Determine optimal gcm according to optimal index
+    
+    ## Compute and set optimal indices directly (excluding StARS)
     for (crit in criterion) {
       if (startsWith(crit, "gcd")) {
         gcdind <- which.min(est[[crit]]$summary)
-        est[[crit]]$gcm <- est[[crit]]$gcm[[gcdind]]
-      }
-    }
-    
-    
-    if (lb.stars) {
-      
-      #######
-      est$fargs <- fargs$lambda
-      est$path <- fullmodel$path
-      ########
-      
-      # Compute and set optimal indices directly (excluding StARS)
-      for (crit in criterion) {
-        if (startsWith(crit, "gcd")) {
-          gcdind <- which.min(est[[crit]]$summary)
-          gcdind <- gcdind + est$additional$ub.index - 1
-          est[[crit]]$opt.index <- gcdind
-        }
-        
-        # Iterate over each criterion and store the corresponding optimal lambda value
-        est[[crit]]$opt.lambda <- signif(lambda_full[est[[crit]]$opt.index], 3)
-      }
-      
-      ## Refit section
-      if (refit == TRUE) {
-        
-        # Refit each criterion with optimal index
-        for (crit in criterion) {
-          opt_ind <- est[[crit]]$opt.index
-          if (!is.null(opt_ind)) {
-            est[[crit]]$refit <- fullmodel$path[[opt_ind]]
-          } else {
-            est[[crit]]$refit <- NULL
-          }
-        }
-      
-        # Determine adjacency matrices for full lambda path
-        for (crit in criterion) {
-            est[[crit]]$all_adj <- list()
-            if (startsWith(crit, "gcd")) {
-                for (i in seq_along(fargs$lambda)) {
-                    gcdinds <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
-                    gcdinds <- gcdinds + est$additional$ub.index - 1
-        
-                    valid_gcdind <- NULL
-                    for (gcdind in gcdinds) {
-                        if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
-                            valid_gcdind <- gcdind
-                            break
-                        }
-                    }
-        
-                    if (!is.null(valid_gcdind)) {
-                        estim <- fullmodel$path[[valid_gcdind]]
-                        est[[crit]]$all_adj[[i]] <- estim
-                    } else {
-                        est[[crit]]$all_adj[[i]] <- NULL
-                    }
-                }
-            }
-        }
 
-      
-        # Determine F1 score and hamming distance
-        if (!is.null(prior_graph)) {
-            est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
-            
-            # Directly initialize as lists
-            est$additional$hamming_dist <- list()
-            est$additional$f1_score <- list()
-        
-            for (i in seq_along(fargs$lambda)) {
-                gcdind <- NULL
-                gcdind <- which(fargs$lambda == fargs$lambda[[i]])
-                gcdind <- gcdind + est$additional$ub.index - 1
-        
-                if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
-                    estim <- fullmodel$path[[gcdind]]
-                    est$additional$hamming_dist[[i]] <- my.hamming(estimated = estim, actual = prior_graph) 
-                    est$additional$f1_score[[i]] <- my.f1_score(predicted = estim, actual = prior_graph)
-                } else {
-                    est$additional$hamming_dist[[i]] <- NULL
-                    est$additional$f1_score[[i]] <- NULL
-                }
-            }
-            
-            # Define Oracle_f1 and Oracle_hamming
-            gcdind <- which.max(est$additional$f1_score)
-            est$oracle_f1$opt.index <- gcdind + est$additional$ub.index - 1
-            est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
-            est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
-            est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
-            
-            gcdind <- which.min(est$additional$hamming_dist)
-            est$oracle_hamming$opt.index <- gcdind + est$additional$ub.index - 1
-            est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
-            est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
-            est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
+        if (lb.stars){
+          gcdind <- gcdind + est$stars$ub.index - 1
         }
-  
-        # Calculate sparsity for criteria
-        for (crit in criterion) {
-          est[[crit]]$sparsity <- sum(est[[crit]]$refit) / (p * (p - 1))
+        est[[crit]]$opt.index <- gcdind
+      }
+
+      ## Iterate over each criterion and store the corresponding optimal lambda value
+      est[[crit]]$opt.lambda <- signif(lambda_full[est[[crit]]$opt.index], 3)
+    }
+
+
+    ## Refit section
+    if (refit == TRUE) {
+
+      # Refit each criterion with optimal index
+      for (crit in criterion) {
+        opt_ind <- est[[crit]]$opt.index
+        if (!is.null(opt_ind)) {
+          est[[crit]]$refit <- fullmodel$path[[opt_ind]]
+        } else {
+          est[[crit]]$refit <- NULL
+        }
+      }
+
+      ## Determine adjacency matrices for full lambda path
+      for (crit in criterion) {
+          if (startsWith(crit, "gcd")) {
+              est[[crit]]$all_adj <- list()
+              for (i in seq_along(fargs$lambda)) {
+                  gcdinds <- which(est[[crit]]$summary == est[[crit]]$summary[[i]])
+                  if (lb.stars) {
+                    gcdinds <- gcdinds + est$stars$ub.index - 1
+                  }
+                  valid_gcdind <- NULL
+                  for (gcdind in gcdinds) {
+                      if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
+                          valid_gcdind <- gcdind
+                          break
+                      }
+                  }
+
+                  if (!is.null(valid_gcdind)) {
+                      estim <- fullmodel$path[[valid_gcdind]]
+                      est[[crit]]$all_adj[[i]] <- estim
+                  } else {
+                      est[[crit]]$all_adj[[i]] <- NULL
+                  }
+              }
+          }
+      }
+
+
+      ## Determine F1 score and hamming distance
+      if (!is.null(prior_graph)) {
+          est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
+
+          # Directly initialize as lists
+          est$additional$hamming_dist <- list()
+          est$additional$f1_score <- list()
+
+          for (i in seq_along(fargs$lambda)) {
+              gcdind <- NULL
+              gcdind <- which(fargs$lambda == fargs$lambda[[i]])
+              if (lb.stars) {
+                gcdind <- gcdind + est$stars$ub.index - 1
+              }
+              
+              if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
+                  estim <- fullmodel$path[[gcdind]]
+                  est$additional$hamming_dist[[i]] <- my.hamming(estimated = estim, actual = prior_graph)
+                  est$additional$f1_score[[i]] <- my.f1_score(predicted = estim, actual = prior_graph)
+              } else {
+                  est$additional$hamming_dist[[i]] <- NULL
+                  est$additional$f1_score[[i]] <- NULL
+              }
+          }
+
+          # Define Oracle_f1 and Oracle_hamming
+          gcdind <- which.max(est$additional$f1_score)
+          if (lb.stars) {
+            gcdind <- gcdind + est$stars$ub.index - 1
+          }
+          est$oracle_f1$opt.index <- gcdind
+          est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
+          est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
+          est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
+
+          gcdind <- which.min(est$additional$hamming_dist)
+          if (lb.stars) {
+            gcdind <- gcdind + est$stars$ub.index - 1
+          }
+          est$oracle_hamming$opt.index <- gcdind
+          est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
+          est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
+          est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
+      }
+
+      # Calculate sparsity for criteria
+      for (crit in criterion) {
+        est[[crit]]$sparsity <- sum(est[[crit]]$refit) / (p * (p - 1))
+      }
+
+      # Determine GCMs for optimal estimate
+      for(crit in criterion) {
+        if (startsWith(crit, "gcd")) {
+
+          count <- FALSE
+          # Determine if 'pseudo' is part of the name
+          if(grepl("pseudo", crit)) {
+            count <-  TRUE
+          }
+
+          meth <- c("spearman")
+          if(grepl("kendall", crit)) {
+            meth <- c("kendall")
+          }
+          else if(grepl("latentcor", crit)) {
+             meth <- c("latentcor")
+          }
+
+          # Apply function with the dynamically determined arguments
+          graph <- est[[crit]][["refit"]]
+          est[[crit]]$gcm <- my.gcvec(graph = graph, method = meth, pseudo_count = count,
+                                        orbind = orbind, return_gcm = TRUE)
         }
       }
     }
@@ -554,7 +531,118 @@ my.batch.pulsar <- function(data, fun = c("QUIC"), fargs=list(),
 
 #########################################################################################################
 
+
+
+#' @export
+get.opt.index <- function(obj, criterion="gcd", ...) {
+    optind <- opt.index(obj, criterion)
+    if (!is.null(optind)) optind
+      if (startsWith(criterion, "gcd_")) {
+        gcdind <- which.min(getElement(obj, criterion)$summary)
+        if (!is.null(obj$stars$ub.index)) {
+          gcdind <- gcdind + obj$stars$ub.index - 1
+        }
+        #names(gcdind) <- criterion
+        return(gcdind)
+      }
+}
+
+#' @export
+opt.index <- function(obj, criterion='gcd') {
+    .pcheck(obj)
+    .critcheck(obj, criterion)
+    getElement(obj, criterion)$opt.index
+}
+
+
+#' @keywords internal
+.pcheck <- function(obj) {
+    if (!inherits(obj, 'pulsar'))
+        stop("obj must be pulsar output")
+}
+
+#' @keywords internal
+.critcheck <- function(obj, criterion=NULL) {
+    if (!(criterion %in% names(obj)))
+        warning('desired criterion was not used in the pulsar run')
+}
+
+
+#' @export
+"opt.index<-" <- function(obj, criterion=names(value), value) {
+    .pcheck(obj)
+    fin <- getArgs(obj$call, obj$envir)
+    .critcheck(obj, criterion)
+    if (length(criterion) > 1) stop("Select one criterion")
+    if (is.null(criterion)) stop("Select one criterion")
+    if (!is.null(value)) {
+      if (!is.numeric(value) || value < 1 || value > length(fin$fargs$lambda))
+        stop('Index value must be positive int within range length of lambda path')
+    }
+    obj[[ criterion ]]$opt.index <- value
+    obj
+}
+
+
+######################################################################################################
+
+#' @export
+refit.pulsar <- function(obj, criterion) {
+    .refit.pulsar(obj, criterion)
+}
+
+#' @keywords internal
+.refit.pulsar <- function(obj, criterion) {
+    est <- vector('list', 2)
+    names(est) <- c('est', 'refit')
+    fin <- getArgs(getCall(obj), getEnvir(obj))
+    fin$criterion <- obj$criterion
+    ## call est function on original dataset
+    if (length(obj$est)) {
+      est$est <- obj$est
+    } else {
+      est$est <- do.call(eval(fin$fun), c(fin$fargs, list(fin$data)))
+    }
+
+    if (missing(criterion)) criterion <- eval(fin$criterion)
+    est$refit <- vector('list', length(criterion))
+    names(est$refit) <- criterion
+    for (crit in criterion) {
+      optind <- obj[[crit]]$opt.index
+      if (!is.null(optind)) {
+        est$refit[[crit]] <- est$est$path[[optind]]
+      } else {
+        est$refit[[crit]] <- NULL
+        if (crit %in% names(obj)) {
+          message(paste('No optimal index selected for', crit, 'criterion', sep=" "))
+        } else
+          warning(paste('Unknown criterion', crit, sep=" "), call.=FALSE)
+      }
+    }
+
+    ## TODO: if fun is null, get formal arg of obj
+    est$fun <- obj$call$fun
+    if (is.null(est$fun))
+      est$fun <- formals(class(obj))$fun
+
+    structure(est, class='pulsar.refit')
+}
+
+#' @keywords internal
+getArgs <- function(call, envir=parent.frame()) {
+    fin    <- lapply(call, eval, envir=envir)
+    forms  <- formals(fin[[1]])
+    iscall <- sapply(forms, class) == 'call'
+    iscall <- iscall & !(names(forms) %in% c('regdir', 'regid'))
+    forms[iscall] <- lapply(forms[iscall], eval)
+    c(forms[!(names(forms) %in% names(fin))], fin)
+}
+
+#####################################################################################################
+
 #F1-Score as criterium for Oracle
+
+#' @keywords internal
 my.f1_score <- function(actual, predicted) {
 if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
   stop("Matrices should be of class lgCMatrix")
@@ -577,82 +665,50 @@ return(f1)
 
 #######################################################
 # Function to calculate F1-score and Hamming distance
+
+#' @keywords internal
 my.hamming <- function(estimated, actual) {
     hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
     return(hamming_distance)
 }
 
 
-######################################################
-
-## Estimation functions
-
-# Using Huge GLASSO
-fun_GL <- function(data, lambda, ...) {
-  est  <- huge::huge(data, lambda = lambda, method = "glasso")
-  path <- lapply(seq(length(lambda)), function(i) {
-  # convert precision array to adj list
-  tmp <- est$path[[i]]
-  tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
-  return(tmp)
-  })
-  est$path <- path
-  est
-}
-
-# Using QUIC
-fun_QC <- function(data, lambda, ...) {
-    p <- ncol(data)
-    est  <- BigQuic::BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-    est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-    path <-  lapply(seq(length(lambda)), function(i) {
-                tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                diag(tmp) <- 0
-                as(tmp!=0, "lMatrix")
-    })
-    est$path <- path
-    est
-}
-
-# Set up for
-
 #########################################################################################################
 
-
+#' @rdname print.pulsar
+#' @export
 print.batch.pulsar <- function(x, ...) {
-    cat("Mode: batch\n")
-    .print.pulsar(x)
+    fin <- getArgs(getCall(x), getEnvir(x))
+    cat("Mode: batch")
+    .print.pulsar(x, fin)
 }
 
-
-.print.pulsar <- function(x) {
-    cat("Path length:", length(x$envir$lambda_path), "\n")
-    cat("Subsamples: ", x$envir$N, "\n")
-    cat("Graph dim:  ", x$envir$p, "\n")
-
-    criteria <- x$criterion
-    critext <- ifelse(length(criteria) > 1, "Criteria:", "Criterion:")
-    cat(critext, "\n")
-
-    for (cr in criteria) {
-        cr_obj <- x[[cr]]
-        opt_index <- cr_obj$opt.index
-        opt_lambda <- cr_obj$opt.lambda
-
-        optext <- ifelse(!is.null(opt_index),
-                         paste("... opt: index ", opt_index, ", lambda ", signif(opt_lambda, 3), sep=""),
-                         "")
-        cat("  ", cr, optext, "\n")
-    }
+#' @keywords internal
+.print.pulsar <- function(x, fin) {
+    if (fin$lb.stars) {
+        cat("... bound index: lower ", x$stars$lb.index,
+            ", upper ", x$stars$ub.index, "\n", sep="")
+    } else cat("\n")
+    cat("Path length:", length(fin$fargs$lambda), "\n")
+    cat("Subsamples: ", fin$rep.num, "\n")
+    cat("Graph dim:  ", ncol(fin$data), "\n")
+    fin$criterion <- x$criterion # Adapt new criteria
+    critext  <- ifelse(length(fin$criterion) > 1, "Criteria:", "Criterion:")
+    critext2 <- lapply(fin$criterion, function(cr) {
+        opt.ind <- x[[cr]]$opt.ind
+        optext  <- ifelse(is.null(opt.ind), "",
+          paste("... opt: index ", opt.ind, ", lambda ",
+          signif(fin$fargs$lambda[opt.ind], 3), sep=""))
+        paste("  ", cr, optext, sep="")
+        })
+    cat(critext, "\n", paste(critext2, collapse="\n"), "\n", sep="")
 }
 
 ##################################################
 
-
-
-my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, 
-                     pseudo_count_range = pseudo_count_range, return_gcm = FALSE) {
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
   
+  orbind <- orbind + 1
   if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
   if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
   if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
@@ -675,11 +731,12 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   
   if (pseudo_count == TRUE) {
     ## Add pseudo_count to orb_count
-    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = pseudo_count_range)
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
+    gdm <- rbind(gdm[,orbind]) 
+  } else {
+    # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
+    gdm <- rbind(gdm[,orbind],1) 
   }
-  
-  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
-  gdm <- rbind(gdm[,orbind],1)
   
   if (method %in% c("kendall", "spearman")){
   #Then calculate the graphlet correlation matrix with method
@@ -687,43 +744,19 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   }
   
   else if (method == "latentcor") {
-  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = TRUE))
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
   gcm <- gcm$R
   }
   
   gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
   
   if (return_gcm == TRUE) {
-      return(gcm)
-  } else {
-      return(gcv)
-  }
-  
+    return(gcm)
+  } else return(gcv)
 }
 
 
 #################
-
-# ## Add noise to orb_count
-# modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
-#   # Validate the orbit_count_range input
-#   if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
-#     stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
-#          \n i.e. pseudo_count_range = c(0, 0.1)")
-#   }
-# 
-#   # Generate a random matrix with the same dimensions as orb_count
-#   random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
-#                                min = pseudo_count_range[1], 
-#                                max = pseudo_count_range[2]), 
-#                           nrow = nrow(orb_count), 
-#                           ncol = ncol(orb_count))
-#   
-#   # Add the random matrix to orb_count
-#   orb_count <- orb_count + random_matrix
-# 
-#   return(orb_count)
-# }
 
 modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
   # Validate the orbit_count_range input
@@ -754,7 +787,6 @@ modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
 
 ###################################################### 
 
-
 my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, use_prior = FALSE, method, orbind, five_node, ...) { 
     est <- list()
 
@@ -781,7 +813,7 @@ my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, u
 
     est$summary <- vector('numeric', nlams)
     for (i in 1:nlams) {
-        est$summary[i] <- mean(est$merge[[i]]) # Fill summary: ith lambda = mean of ith lambda over all j subsamples
+        est$summary[i] <- mean(est$merge[[i]]) # Fill summary: ith lambda = mean over all j subsamples 
     }
 
     return(est)
@@ -789,33 +821,12 @@ my.gcd.stability <- function(premerge, prior_graph, thresh, rep.num, p, nlams, u
 
 #########################################################################
 
-calculateMeanMatrices <- function(data, nlams, rep.num) {
-    mean_matrices <- vector("list", nlams)
 
-    for (i in 1:nlams) {
-        matrices <- lapply(data, function(sublist) sublist[[i]])
-        valid_matrices <- Filter(function(m) is.matrix(m) && nrow(m) > 0 && ncol(m) > 0, matrices)
-
-        if (length(valid_matrices) > 0) {
-            sum_matrix <- Reduce("+", valid_matrices)
-            mean_matrix <- sum_matrix / length(valid_matrices)
-            mean_matrices[[i]] <- mean_matrix
-        } else {
-            mean_matrices[[i]] <- NULL  # or some other placeholder indicating no valid data
-        }
-    }
-
-    return(mean_matrices)
-}
-
-
-
-#######################
 library(batchtools)
 library(pulsar)
 
 #' @keywords internal
-stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # Only 5 arguments!!!
+stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { 
     if (is.null(stars.thresh)) stars.thresh <- 0.1
     est <- list()
 
@@ -832,35 +843,19 @@ stars.stability <- function(premerge, stars.thresh, rep.num, p, merge=NULL) { # 
     
     est$summary <- rep(0, length(est$merge)) # empty array
 
-    for (i in 1:length(est$merge)) { # The function then computes a stability measure for each model (or each level 
-      # of regularization, if applicable). This involves calculating the variability of model selection across subsamples.
-      est$merge[[i]] <- est$merge[[i]]/rep.num # Normalization 
-      est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1)) # binomial probab for edge appearing
+    for (i in 1:length(est$merge)) { # The function calculates the variability of model selection across subsamples
+      est$merge[[i]] <- est$merge[[i]]/rep.num # Normalization: Now we have prob to observe a specific edge over subsamples
+      est$summary[i] <- 4 * sum(est$merge[[i]] * (1 - est$merge[[i]])) / (p * (p - 1)) # Total edge variability measure
     }
-    ## monotonize variability
-    est$summary   <- cummax(est$summary) # !!!!!!!!!!!!!!!! Check, if applicable on gcd? Why not taking same approach as in stars?
-    est$opt.index <- .starsind(est$summary, stars.thresh) # Based on computed stability measures and provided threshold, function identifies optimal point 
-    est$criterion <- "stars.stability"
+
+    est$summary   <- cummax(est$summary)  # Monotonize variability
+    est$opt.index <- .starsind(est$summary, stars.thresh) # Optimal index based on computed stability measures and threshold
     est$thresh    <- stars.thresh
     return(est)
 }
 
 
 #######################
-
-.critcheck <- function(obj, criterion=NULL) {
-    if (!(criterion %in% names(obj)))
-        warning('desired criterion was not used in the pulsar run')
-}
-
-
-
-.pcheck <- function(obj) {
-    if (!inherits(obj, 'pulsar'))
-        stop("obj must be pulsar output")
-}
-
-
 
 findConfFile <- function(name='') {
  ## if x is not a file
@@ -959,36 +954,33 @@ batchply <- function(data, estFun, fun, fargs, ind.sample, wkdir, regdir,
 
 
 #############################################
-plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE, show = c("stars"), ...) {
+
+#' @export
+plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE, show = NULL, ...) {
     .plot.pulsar(x, scale, invlam, loglam, legends, show)
+    return(invisible())
 }
 
 
-.plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE, show = c("stars")) {
-    lams <- x$additional$lambda_full
+#' @keywords internal
+.plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE, show = NULL) {
+    fin  <- getArgs(getCall(x), getEnvir(x))
+    lams <- fin$fargs$lambda
     xlab <- "lambda"
     if (invlam) {lams <- 1/lams ; xlab <- paste("1/", xlab, sep="")}
     if (loglam) {lams <- log(lams) ; xlab <- paste("log[ ", xlab, " ]", sep="")}
 
     nlam  <- length(lams)
+    fin$criterion <- setdiff(out.p$criterion, c("oracle_f1", "oracle_hamming"))
+    crits <- fin$criterion
     
-    crits <- unlist(x$criterion)
-
     # Filter criteria based on 'show' parameter
-    pattern <- c()
-    if ("stars" %in% show) {
-        pattern <- c(pattern, "^stars$")
+    if (!is.null(show) && length(show) > 0) {
+      # Directly filter criteria based on 'show' array
+      crits <- crits[crits %in% show]
     }
-    if ("gcd" %in% show) {
-        pattern <- c(pattern, "^gcd_(?!prior)")
-    }
-    if ("gcd_prior" %in% show) {
-        pattern <- c(pattern, "^gcd_prior")
-    }
-    regex <- paste(pattern, collapse="|")
-    crits <- crits[grepl(regex, crits, perl=TRUE)]
     
-    n  <- length(crits)
+    n <- length(crits)
     if (scale) {
         ylab <- "summary (scaled)"
         if ("stars" %in% crits)
@@ -1002,10 +994,10 @@ plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE,
     yrange <- c(0, ymax)
     plot(lams, seq(yrange[1], yrange[2], length.out=nlam),
          xlab=xlab, ylab=ylab, type='n')
-    if (!is.null(x$additional$lb.index)) {
+    if (!is.null(x$stars$lb.index)) {
         ilams <- 1:length(lams)
-        range1 <- ilams < x$additional$ub.index
-        range2 <- ilams > x$additional$lb.index
+        range1 <- ilams < x$stars$ub.index
+        range2 <- ilams > x$stars$lb.index
         range  <- !(range1 | range2)
         ccol   <- vector('numeric', n+1)
         ltys   <- vector('numeric', n+1)
@@ -1022,7 +1014,7 @@ plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE,
     optcrits <- c() ; optcols <- c()
     for (cr in crits) {
         summs <- x[[ cr ]]$summary
-        optind <- x[[ cr ]]$opt.index
+        optind <- opt.index(x, cr)
         if (scale && cr != "stars") summs <- ymax*summs/max(summs)
         if (length(summs) == nlam) {
             points(lams[range],  summs[range],  type='b', col=lcol)
@@ -1057,41 +1049,17 @@ plot.pulsar <- function(x, scale=TRUE, invlam=FALSE, loglam=FALSE, legends=TRUE,
     }
 
     if (legends) {
-        legend('bottomleft', legs, col=ccol, pch=1, lty=ltys, cex = 0.6)
-        #if (length(optcrits) > 0)
-          #legend('topright', optcrits, pch=16, col=optcols, cex=1.5, title="opt lambda")
+      legend('bottomleft', legs, col=ccol, pch=1, lty=ltys, cex=0.7)
+      if (length(optcrits) > 0) {
+        #legend('left', optcrits, pch=16, col=optcols, cex=0.5, title="opt lambda")
+      }
     }
 }
 
-
-
 ```
 
 
 
-```{r}
-
-## Add noise to orb_count
-modify_orb_count <- function(orb_count, pseudo_count_range = pseudo_count_range) {
-  # Validate the orbit_count_range input
-  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
-    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
-         \n i.e. pseudo_count_range = c(0, 0.1)")
-  }
-
-  # Generate a random matrix with the same dimensions as orb_count
-  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
-                               min = pseudo_count_range[1], 
-                               max = pseudo_count_range[2]), 
-                          nrow = nrow(orb_count), 
-                          ncol = ncol(orb_count))
-  
-  # Add the random matrix to orb_count
-  orb_count <- orb_count + random_matrix
-
-  return(orb_count)
-}
-```
 
 
 
