@@ -21,13 +21,13 @@ library(devtools)
 library(htmltools)
 
 # Define main directory paths
-#dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/"
-dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Hub"
+dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/"
+#dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Hub"
 dir_path_results <- file.path(dir_path2, "Results")
 
 # Load settings
-#Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
+Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
 hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
 load(hub_settings_file)
 
@@ -60,7 +60,6 @@ plot_and_save_gcm <- function(output, criterion, config, rep, dir_path) {
   }
 }
 
-
 # Main loop over each configuration and repetition
 for (rep in 1:num_repetitions) {
   for (i in seq_along(configs)) {
@@ -88,6 +87,23 @@ for (rep in 1:num_repetitions) {
     filename <- get_filename(config, rep)
     print(paste("Loading data from:", filename))
     load(paste0(dir_path, "/", filename))
+    
+    # Using QUIC
+    library(BigQuic)
+    quicr <- function(data, lambda) {
+        p <- ncol(data)
+        est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+        est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+        path <-  lapply(seq(length(lambda)), function(i) {
+                    tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                    diag(tmp) <- 0
+                    as(tmp!=0, "lMatrix")
+        })
+        est$path <- path
+        est
+    }
+    
+    quicargs <- list(lambda = lambda_path)  
 
     # Run batch pulsar
     library(batchtools)
@@ -95,10 +111,10 @@ for (rep in 1:num_repetitions) {
     options(batchtools.progress=TRUE, batchtools.verbose=FALSE)
     #resources <- list(mem="1GB", nodes="1", walltime="00:30:00") # number of computers or servers you are requesting for your job
     
-    out.p <- my.batch.pulsar(
+    out.p <- Graphreg(
       data = Hub_data, 
-      fun = "QUIC", 
-      fargs = lambda, 
+      fun = quicr, 
+      fargs = quicargs, 
       rep.num = N,
       thresh = 0.05,
       subsample.ratio = b,
@@ -110,10 +126,8 @@ for (rep in 1:num_repetitions) {
       prior_graph = true_graph,
       method = c("spearman", "kendall", "latentcor"),
       five_node = FALSE,
-      use_pseudo_count = TRUE, 
-      pseudo_count_range = c(0, 0.1),
-      cleanup = TRUE,
-      job.res = resources
+      use_pseudo_count = TRUE
+      #job.res = resources
     )
   
     extract_categorized_optimal_info <- function(output) {
@@ -162,6 +176,8 @@ for (rep in 1:num_repetitions) {
     categorized_info$act_sparsity[["true_graph"]] <- sum(true_graph) / (config$p * (config$p - 1))
     criterion <- unique(c(out.p$criterion, "null_graph"))
     categorized_info$criterion <- criterion
+    categorized_info$additional_metrics$lb.index <- out.p[["stars"]][["lb.index"]]
+    categorized_info$additional_metrics$ub.index <- out.p[["stars"]][["ub.index"]]
     
 
     # Lambda path plots
@@ -172,15 +188,17 @@ for (rep in 1:num_repetitions) {
       dev.off()
     }
 
-    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir, show = c("stars", "gcd"))
-    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir, show = c("stars", "gcd_prior"))
-    
+    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir, show = c("stars", "gcd_spearman", "gcd_kendall", "gcd_latentcor",
+                                                                   "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor"))
+    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir, show = c("stars", "gcd_prior_spearman", "gcd_prior_kendall", 
+                                                                         "gcd_prior_latentcor", "gcd_prior_pseudo_spearman",
+                                                                         "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor"))
     
     # Adding gcm for true_graph 
     for (meth in c("spearman", "kendall", "latentcor")) {
-      gcm_true <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1, method = meth, return_gcm = TRUE)
-      gcm_true_pseudo <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1, method = meth,
-                                  return_gcm = TRUE, pseudo_count = TRUE, pseudo_count_range = c(0, 0.1))
+      gcm_true <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11), method = meth, return_gcm = TRUE)
+      gcm_true_pseudo <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11), method = meth,
+                                  return_gcm = TRUE, pseudo_count = TRUE)
       out.p[[paste("true_graph", meth, sep = "_")]]$gcm <- gcm_true
       out.p[[paste("true_graph_pseudo", meth, sep = "_")]]$gcm <- gcm_true_pseudo
     }

@@ -120,8 +120,8 @@ out.p <- Graphreg(
   thresh = 0.05,
   subsample.ratio = b,
   criterion=c('stars', 'gcd', 'gcd_prior'), 
-  lb.stars = FALSE, 
-  ub.stars = FALSE, 
+  lb.stars = TRUE, 
+  ub.stars = TRUE, 
   seed = FALSE,
   refit = TRUE,
   prior_graph = true_graph,
@@ -160,295 +160,13 @@ plot(out.p, legends = T, show = c("stars", "gcd_pseudo_kendall", "gcd_prior_pseu
 
 
 
-```{r}
-
-library(MASS)
-library(Matrix)
-library(igraph)
-library(huge)
-library(pulsar)
-
-
-generator_Hub <- function (n, p, rho, g, vis, verbose) 
-{
-    gcinfo(FALSE)
-    if (verbose) 
-        cat("Generating data from the multivariate normal distribution with the Hub graph structure....")
-  
-  g.large = p%%g #Rest Funktion
-    g.small = g - g.large
-    n.small = floor(p/g)
-    n.large = n.small + 1
-    g.list = c(rep(n.small, g.small), rep(n.large, g.large))
-    g.ind = rep(c(1:g), g.list)
-    rm(g.large, g.small, n.small, n.large, g.list)
-    gc()
-    
-    theta = matrix(0, p, p) #Here Theta defined (pxp matrix with entries "0")
-  
-    for (i in 1:g) {
-        tmp = which(g.ind == i)
-        theta[tmp[1], tmp] = 1
-        theta[tmp, tmp[1]] = 1
-        rm(tmp)
-        gc()
-    }
-  
-    diag(theta) = 0
-    omega = theta * rho
-    diag(omega) = 1 #Set diagonal of precision matrix to 1 (Liu et al.)
-    sigma = cov2cor(omega) #Knackpunkt! Das ist nun das Sigma, welche zu unserem simulierten theta gehört.
-    x = mvrnorm(n, rep(0, p), sigma) #Dieses Sigma wird schlussendlich verwendet, um die Daten zu simulieren!!!
-    sigmahat = cor(x) #Empirical covariance matrix
-    
-    if (vis == TRUE) {
-        fullfig = par(mfrow = c(2, 2), pty = "s", omi = c(0.3, 
-            0.3, 0.3, 0.3), mai = c(0.3, 0.3, 0.3, 0.3))
-        fullfig[1] = image(theta, col = gray.colors(256), main = "Adjacency Matrix")
-        fullfig[2] = image(sigma, col = gray.colors(256), main = "Covariance Matrix")
-        g = graph.adjacency(theta, mode = "undirected", diag = FALSE)
-        layout.grid = layout.fruchterman.reingold(g)
-        fullfig[3] = plot(g, layout = layout.grid, edge.color = "gray50", 
-            vertex.color = "red", vertex.size = 3, vertex.label = NA, 
-            main = "Graph Pattern")
-        fullfig[4] = image(sigmahat, col = gray.colors(256), 
-            main = "Empirical Matrix")
-        rm(fullfig, g, layout.grid)
-        gc()
-    }
-    if (verbose) 
-        cat("done.\n")
-    rm(vis, verbose)
-    gc()
-    sim = list(data = x, sigma = sigma, sigmahat = sigmahat, 
-        omega = omega, theta = as(as(as(theta, "lMatrix"), "generalMatrix"), "CsparseMatrix"),
-        act_sparsity = sum(theta)/(p * (p - 1))) #-1 because every node can connect to p-1 nodes (discarding diag)
-    class(sim) = "sim"
-    return(sim)
-}
-
-
-n <- 800 # Samples
-p <- 40 # Dimensions
-s <- 20    # Size Hub Group
-J <- floor(p/s) # Number of Hubs
-b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-N = 5 # Number of Repetitions
-rho <- 0.20 # Off-Diagonal Effect Strength
-
-Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
-Hub_data <- Hub$data
-true_graph <- Hub$theta
-act_sparsity <- Hub$act_sparsity
-
-maxCov <- getMaxCov(Hub_data)
-lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
-lambda <- list(lambda=lambda_path)
-
-
-# Using QUIC
-library(BigQuic)
-quicr <- function(data, lambda) {
-    p <- ncol(data)
-    est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-    est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-    path <-  lapply(seq(length(lambda)), function(i) {
-                tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                diag(tmp) <- 0
-                as(tmp!=0, "lMatrix")
-    })
-    est$path <- path
-    est
-}
-
-quicargs <- list(lambda = lambda_path)    
-  
-library(batchtools)
-library(pulsar)
-#options(mc.cores = 2) #Speed up by setting number of cores available
-#options(batchtools.progress=TRUE, batchtools.verbose = TRUE)
-
-time1    <- system.time(    
-out.p <- Graphreg(
-  data = Hub_data, 
-  fun = quicr, 
-  fargs = quicargs, 
-  rep.num = N,
-  thresh = 0.05,
-  subsample.ratio = b,
-  criterion=c('stars', 'gcd', 'gcd_prior'), 
-  lb.stars = TRUE, 
-  ub.stars = TRUE, 
-  seed = FALSE,
-  refit = TRUE,
-  prior_graph = true_graph,
-  method = c("spearman", "latentcor", "kendall"),
-  five_node = FALSE,
-  use_pseudo_count = TRUE, 
-  pseudo_count_range = c(0, 0.1)
-))
-
-out.p
-
-stop()
-
-for (crit in out.p$criterion) {
-  if (startsWith(crit, "gcd_")) {
-    opt.index(out.p, criterion = crit) <- get.opt.index(out.p, criterion = crit)
-  }
-}
-
-out.p
-
-refit <- refit.pulsar(out.p)
-
-stop()
-
-
-
-
-
-
-
-
-
-
-
-
-for (crit in out.p$criterion) {
-    opt.lambda(out.p, criterion = crit) <- get.opt.lambda(out.p, criterion = crit)
-}
-
-stop()
-
-for (crit in out.p$criterion) {
-    adj(out.p, criterion = crit) <- get.adj(out.p, criterion = crit)
-}
-
-stop()
-est$criterion <- c(criterion, c("oracle_f1", "oracle_hamming"))
-
-# Directly initialize as lists
-est$additional$hamming_dist <- list()
-est$additional$f1_score <- list()
-
-for (i in seq_along(fargs$lambda)) {
-    gcdind <- NULL
-    gcdind <- which(fargs$lambda == fargs$lambda[[i]])
-    gcdind <- gcdind + est$additional$ub.index - 1
-
-    if (!is.null(gcdind) && gcdind > 0 && gcdind <= length(fullmodel$path)) {
-        estim <- fullmodel$path[[gcdind]]
-        est$additional$hamming_dist[[i]] <- my.hamming(estimated = estim, actual = prior_graph)
-        est$additional$f1_score[[i]] <- my.f1_score(predicted = estim, actual = prior_graph)
-    } else {
-        est$additional$hamming_dist[[i]] <- NULL
-        est$additional$f1_score[[i]] <- NULL
-    }
-}
-
-# Define Oracle_f1 and Oracle_hamming
-gcdind <- which.max(est$additional$f1_score)
-est$oracle_f1$opt.index <- gcdind + est$additional$ub.index - 1
-est$oracle_f1$opt.lambda <- signif(lambda_full[est$oracle_f1$opt.index], 3)
-est$oracle_f1$refit <- fullmodel$path[[est$oracle_f1$opt.index]]
-est$oracle_f1$sparsity <- sum(est$oracle_f1$refit) / (p * (p - 1))
-
-gcdind <- which.min(est$additional$hamming_dist)
-est$oracle_hamming$opt.index <- gcdind + est$additional$ub.index - 1
-est$oracle_hamming$opt.lambda <- signif(lambda_full[est$oracle_hamming$opt.index], 3)
-est$oracle_hamming$refit <- fullmodel$path[[est$oracle_hamming$opt.index]]
-est$oracle_hamming$sparsity <- sum(est$oracle_hamming$refit) / (p * (p - 1))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-crit = "gcd_pseudo_kendall"
-opt.index(out.p, criterion = crit) <- get.opt.index(out.p, criterion = crit)
-
-
-plot(out.p, legends = T, show = c("stars","gcd_prior_kendall", "gcd_prior_pseudo_spearman", "gcd_spearman"))
-plot(out.p, legends = T)
-
-extract_categorized_optimal_info <- function(output) {
-      # Initialize lists to store the categorized results
-      optimal_indices <- list()
-      optimal_lambdas <- list()
-      selected_graphs <- list()
-      act_sparsity <- list()
-    
-      # Extract the criteria from the output object
-      criteria <- output[["criterion"]]
-    
-      # Loop through each criterion
-      for (crit in criteria) {
-        # Extract the criterion name
-        crit_name <- crit[[1]]
-    
-        # Store the optimal index, lambda, and refit graph for the current criterion
-        optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
-        optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
-        selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
-        act_sparsity[[crit_name]] <- output[[crit_name]][["sparsity"]]
-      }
-    
-      # Create a list to store all categorized results
-      categorized_results <- list(
-        "optimal_indices" = optimal_indices,
-        "optimal_lambdas" = optimal_lambdas,
-        "selected_graphs" = selected_graphs,
-        "act_sparsity" = act_sparsity,
-        "additional_metrics" = output$additional
-      )
-    
-      return(categorized_results)
-}
-    
-# Usage example
-categorized_info <- extract_categorized_optimal_info(out.p)
-
-for (crit in out.p$criterion) {
-  categorized_info$raw_summary[[crit]] <- out.p[[crit]]$summary
-}
-
-stop() 
-
-plot(out.p, legends = TRUE, show = c("stars", "gcd"))
-plot(out.p, legends = TRUE, show = c("stars", "gcd_prior"))
-
-stop()
-
-#install.packages("plotly")
-
-
-
-
-
-
-
-```
 
 
 
 ```{r}
-my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, 
-                     pseudo_count_range = pseudo_count_range, return_gcm = FALSE) {
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
   
+  orbind <- orbind + 1
   if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
   if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
   if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
@@ -471,11 +189,13 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   
   if (pseudo_count == TRUE) {
     ## Add pseudo_count to orb_count
-    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = pseudo_count_range)
+    gdm2 <- rbind(gdm[,orbind]) 
+    gdm4 <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
+    print(gdm)
+  } else {
+    # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
+    gdm3 <- rbind(gdm[,orbind],1) 
   }
-  
-  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem (1s instead of 0s are now non-present edges)
-  gdm <- rbind(gdm[,orbind],1)
   
   if (method %in% c("kendall", "spearman")){
   #Then calculate the graphlet correlation matrix with method
@@ -483,19 +203,47 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   }
   
   else if (method == "latentcor") {
-  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = TRUE))
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
   gcm <- gcm$R
   }
   
   gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
   
   if (return_gcm == TRUE) {
-      return(gcm)
-  } else {
-      return(gcv)
-  }
-  
+    return(gcm)
+  } else return(gcv)
 }
+
+
+#################
+orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)
+
+modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
+  # Validate the orbit_count_range input
+  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+         \n i.e. pseudo_count_range = c(0, 0.1)")
+  }
+
+  # Generate a random matrix with the same dimensions as orb_count
+  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+                               min = pseudo_count_range[1], 
+                               max = pseudo_count_range[2]), 
+                          nrow = nrow(orb_count), 
+                          ncol = ncol(orb_count))
+  
+  # Apply conditional logic to add random noise only to the zero elements of orb_count
+  modified_orb_count <- mapply(function(orb_elem, random_elem) {
+                               if (orb_elem == 0) orb_elem + random_elem else orb_elem
+                             }, orb_count, random_matrix)
+  
+  # Convert the modified_orb_count to a matrix and set the column names
+  modified_orb_count_matrix <- matrix(modified_orb_count, nrow = nrow(orb_count), ncol = ncol(orb_count))
+  colnames(modified_orb_count_matrix) <- colnames(orb_count)
+
+  return(modified_orb_count_matrix)
+}
+
 
 
 
@@ -566,7 +314,7 @@ orbind = c(4, 5, 8, 9, 10, 11, 0, 1, 2, 6, 7)+1
 # orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
 # orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1
 
-pseudo_count_range = c(0, 0.1)
+
 nx2 <- .adj2elist(graph)
 nx2 
 n <- length(orbind)
@@ -644,206 +392,6 @@ GCD(gcv1,gcv2)
 
 
 
-
-## variability plot
-```{r}
-d_hat <- out.p[["fullgcd"]][["summary"]]
-d_hat
-D_hat <- out.p[["stars"]][["summary"]]
-D_hat
-lambda_path
-thresh <- out.p[["stars"]][["thresh"]]
-#thresh <- 0.1
-stars_index
-gstars_index
-stars_lb
-stars_ub
-
-# Load ggplot2
-library(ggplot2)
-
-# Normalize d_hat and D_hat to range [0, 1]
-normalize <- function(x) {
-    (x - min(x)) / (max(x) - min(x))
-}
-
-d_hat_norm <- normalize(d_hat)
-D_hat_norm <- normalize(D_hat)
-
-d_hat_norm <- d_hat
-D_hat_norm <- D_hat
-
-# Create a data frame for plotting
-data <- data.frame(
-  lambda = lambda_path,
-  d_hat = d_hat_norm,
-  D_hat = D_hat_norm
-)
-
-
-# Use ggplot to create the plot with additional vertical lines, points, and annotations
-Var_path_plot <- ggplot(data) +
-  geom_line(aes(x = lambda, y = d_hat, colour = "d_hat"), size = 1.3) +
-  geom_line(aes(x = lambda, y = D_hat, colour = "D_hat"), size = 1.3) +
-  geom_hline(yintercept = thresh_scaled, linetype = "dashed", color = "black", linewidth = 1) +
-  geom_vline(xintercept = lambda_path[stars_lb], linetype = "dotted", color = "gray", size = 1) +
-  geom_vline(xintercept = lambda_path[stars_ub], linetype = "dotted", color = "gray", size = 1) +
-  geom_point(aes(x = lambda_path[gstars_index], y = d_hat_norm[gstars_index]), color = "#0066cc", size = 2) +
-  geom_point(aes(x = lambda_path[stars_index], y = D_hat_norm[stars_index]), color = "#cc3333", size = 2) +
-  scale_colour_manual("", 
-                      breaks = c("d_hat", "D_hat"),
-                      labels = c(expression(italic(bold(hat(d)))), expression(italic(bold(bar(D))))),
-                      values = c("d_hat" = "#0066cc", "D_hat" = "#cc3333")) +
-  labs(x = expression(italic(bold(lambda[k]))), 
-       y = "Variability", 
-       title = expression(italic(bold("Normalized Variability vs Lambda")))) +
-  theme_minimal() +
-  theme(text = element_text(size = 12),  # Adjust text size globally
-        axis.title = element_text(size = 14),  # Adjust axis title size
-        plot.title = element_text(size = 16, face = "bold.italic"))  # Adjust plot title size and style
-             
-Var_path_plot
-
-
-
-
-```
-
-
-
-## Arriving at gcd
-```{r}
-#n: number of nodes in a network
-
-## Step 1: Grphlet Degree Vector gdv (1x11)
-#skipped
-
-
-## Step 2: Graphlet Degree Matrix gdm (nx11)
-# Converting Hub adjacency matrix to an nx2 edge matrix
-true_graph
-stars_graph
-stars_graph@x
-# Count nodes
-sum(tril(true_graph))
-sum(tril(stars_graph))
-true_edge <- which(tril(true_graph, diag = TRUE) == TRUE, arr.ind=TRUE) 
-stars_edge <- which(tril(stars_graph, diag = TRUE) == TRUE, arr.ind=TRUE) 
-true_edge # 20 hubs*19 connected node = 380/2 = 190 edges
-stars_edge
-# Sparse alternative from .adj2elist
-# (Elist <- .adj2elist(true_graph))
-# (Elist <- .adj2elist(stars_graph))
-# Count nodes
-sum(nrow(true_edge)) # only 190 for p = 200, because diag elements = 0 in adjacency matrix
-sum(nrow(stars_edge))
-# Function to convert adjacency matrix to nx2 edge matrix, considering only the lower triangle
-# convert_to_edge_matrix <- function(adj_matrix) {
-#   edges <- which(tril(adj_matrix) == 1, arr.ind = TRUE)
-#   edge_matrix <- as.matrix(edges)
-#   colnames(edge_matrix) <- c("Node1", "Node2")
-#   return(edge_matrix)
-# }
-# 
-# convert_to_edge_matrix(true_graph)
-
-# Determine graphlets via Orca 
-library(orca)
-true_graphlets <- count4(true_edge)
-stars_graphlets <- count4(stars_edge)
-true_graphlets 
-stars_graphlets
-# Select 11 non-redundant orbits
-true_non_redun <- true_graphlets[, c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1) +1]
-stars_non_redun <- stars_graphlets[, c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1) +1]
-true_non_redun #nx11
-stars_non_redun
-true_non_redun <- rbind(true_non_redun, 1) # Avoid error for std = 0, by setting all zero colomns to 1
-stars_non_redun <- rbind(stars_non_redun, 1) 
-# Each row in this matrix corresponds to a node in the graph, and each column represents a different orbit type within 4-node graphlets. 
-# The values in the matrix are the counts of how many times a node participates in a particular orbit.
-
-
-
-## Step 3: Graphlet Correlation Matrix gcm (11x11)
-# Calculate the Graphlet Correlation Matrix (GCM) using Spearman's correlation
-# Measuring the pairwise correlation between each type of graphlet orbit across all nodes.
-gcm_true <- suppressWarnings(cor(true_non_redun, method = "spearman"))
-gcm_stars <- cor(stars_non_redun, method = "spearman")
-gcm_true 
-gcm_stars
-
-
-
-## Step 4: Graphlet Correlation Vector gcv
-gcv_stars <- gcm_stars[upper.tri(gcm_stars)]
-gcv_true <- gcm_true[upper.tri(gcm_true)]
-gcv_stars # 1 for fake edges
-gcv_true
-
-
-library(pulsar)
-gcv_true_test <- gcvec(true_graph, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1)
-gcv_stars_test <- gcvec(stars_graph, orbind=c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)+1)
-
-gcv_true_test
-gcv_stars_test
-
-
-
-## Step 5: Graphlet Correlation Distance gcd
-
-# Function to calculate total graphlet variability measure over N graphs for each lambda
-calculate_total_graphlet_variability <- function(gcv_list) {
-  n <- length(gcv_list)
-  # Initialize a numeric vector to store the total variability measure for each lambda
-  d_N_vector <- numeric(n)
-  
-  for (k in 1:n) {
-    # Compute all pairwise Euclidean distances for the k-th lambda
-    pairwise_distances <- combn(gcv_list[[k]], 2, function(gcv_pair) {
-      sqrt(sum((gcv_pair[[1]] - gcv_pair[[2]])^2))
-    })
-    # Calculate the total graphlet variability measure for the k-th lambda
-    d_N_vector[k] <- 2 / (n * (n - 1)) * sum(pairwise_distances)
-  }
-  
-  return(d_N_vector)
-}
-
-# Example usage:
-d_N_vector <- calculate_total_graphlet_variability(gcv_list)
-d_N_vector  # This will return the total graphlet variability measure for each lambda
-
-
-
-    
-  # Graphlet stability path
-  d_hat <- out.p$gcd$summary
-  d_hat_scaled <- d_hat / max(d_hat)
-  
-  D_hat
-  d_hat
-  
-  out.p[["gcd"]][["merge"]][[23]] # Already dist of gcv
-  (2/(N*(N-1)))*sum(out.p[["gcd"]][["merge"]][[23]]) # d_hat
-  
-  
-  (hui <- fit[["est"]][["path"]][[23]])
-  (hui2 <- gcvec(hui, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1) + 1))
-  (hui3 <- dist(hui2, method = "euclidean"))
-  (hui4 <- (2/(N*(N-1)))*sum(hui3))
-  
-  hui <- triu(fit[["est"]][["path"]][[23]])
-  hui
-  test <- dist(gcvec(hui, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1) + 1))
-  test <- dist(gcvec_extended(hui, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1) + 1)) # dist of gcv
-  test
-  (2/(N*(N-1)))*sum(test)
-
-  est$merge <- lapply(premerge, function(pm) dist(t(sapply(pm, gcvec))))
-
-```
 
 
 

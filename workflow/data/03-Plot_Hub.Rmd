@@ -8,13 +8,13 @@ output: github_document
 ```{r}
 
 # Load session settings and performance results
-Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
-#Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
 hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
 load(hub_settings_file)
 
-dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
-#dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
+#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
+dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 performance_filename <- file.path(dir_path3, "all_performance_results.RData")
 load(performance_filename)
 ```
@@ -23,8 +23,8 @@ load(performance_filename)
 ## Preparing data frames for plotting + additional criteria
 ```{r}
 
-dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub"
-#dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
+#dir_path4 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub"
+dir_path4 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub"
 
 # Load necessary libraries
 library(ggplot2)
@@ -261,10 +261,6 @@ lambda_plot_set_2
 
 
 ```
-## Notes: Check lambda path! If there is a greater gap between ub.lambda and lb.lambda i.e. more lambda values to pick from than gcd seems to perform drastically better. By small bounded lambda path gcd seems to perform equally bad! Look at gap values
-## Why does gcd_pseudo_kendall and gcd_pseudo_spearman perform in f1 scores drastically better, but pick a mean optimal lambda which is further apart from oracle lambda??? (same for stars). Should not gcd_pseudo_latentcor have the best performance???
-## Main problem that gcd are non-monoton functions???
-## If stars fit bad, then the bounded lambda path is bad and therefore gcd???
 
 
 ## Lambda path plots
@@ -472,8 +468,8 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 config_names <- extract_configs(configs)
 
 # Set the directory path where plots will be saved
-#dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
-dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
+dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
+#dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
 
 # Create and save plots
 create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)

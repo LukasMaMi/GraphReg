@@ -729,15 +729,14 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
   ## or completely empty graph and can be safely suppressed.
   
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
+  gdm <- rbind(gdm[,orbind],1) 
+  
   if (pseudo_count == TRUE) {
     ## Add pseudo_count to orb_count
     gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
-    gdm <- rbind(gdm[,orbind]) 
-  } else {
-    # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
-    gdm <- rbind(gdm[,orbind],1) 
-  }
-  
+  } 
+
   if (method %in% c("kendall", "spearman")){
   #Then calculate the graphlet correlation matrix with method
   gcm <- suppressWarnings(cor(gdm, method = method))
