@@ -46,19 +46,26 @@ plot_and_save_gcm <- function(output, criterion, config, rep, dir_path) {
   if ("gcm" %in% names(output[[criterion]])) {
     gcm <- output[[criterion]][["gcm"]]
     
-    # Check if values are within the range [-1, 1] for this GCM
-    if(min(gcm) >= -1 && max(gcm) <= 1) {
-      plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
-      plot_path <- file.path(dir_path, plot_filename)
-      pdf(plot_path, width = 8, height = 6)
-      corrplot::corrplot(gcm, method = "circle")
-      dev.off()
+    # Check if GCM is a matrix and not empty
+    if(is.matrix(gcm) && length(gcm) > 0) {
+      # Further check if values are within the range [-1, 1]
+      if(min(gcm) >= -1 && max(gcm) <= 1) {
+        plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
+        plot_path <- file.path(dir_path, plot_filename)
+        pdf(plot_path, width = 8, height = 6)
+        corrplot::corrplot(gcm, method = "circle")
+        dev.off()
+      } else {
+        # Handle the case where GCM values are not in the expected range
+        cat(sprintf("Skipping plot for %s: GCM values are not in [-1, 1]\n", criterion))
+      }
     } else {
-      # Handle the case where GCM is not within the range
-      cat(sprintf("Skipping plot for %s: GCM values are not in [-1, 1]\n", criterion))
+      # Handle the case where GCM is not a proper matrix or is empty
+      cat(sprintf("Skipping plot for %s: GCM is empty\n", criterion))
     }
   }
 }
+
 
 # Main loop over each configuration and repetition
 for (rep in 1:num_repetitions) {
@@ -121,7 +128,7 @@ for (rep in 1:num_repetitions) {
       criterion=c('stars', 'gcd', 'gcd_prior'), 
       lb.stars = TRUE, 
       ub.stars = TRUE, 
-      seed = FALSE,
+      seed = 123,
       refit = TRUE,
       prior_graph = true_graph,
       method = c("spearman", "kendall", "latentcor"),
@@ -170,6 +177,7 @@ for (rep in 1:num_repetitions) {
       categorized_info$raw_summary[[crit]] <- out.p[[crit]]$summary
     }
     
+    
     categorized_info$selected_graphs[["null_graph"]] <- null_graph
     categorized_info$selected_graphs[["true_graph"]] <- true_graph
     categorized_info$act_sparsity[["null_graph"]] <- sum(null_graph) / (config$p * (config$p - 1))
@@ -178,6 +186,12 @@ for (rep in 1:num_repetitions) {
     categorized_info$criterion <- criterion
     categorized_info$additional_metrics$lb.index <- out.p[["stars"]][["lb.index"]]
     categorized_info$additional_metrics$ub.index <- out.p[["stars"]][["ub.index"]]
+    
+    # Bounding down again Stars
+    if (!is.null(categorized_info$additional_metrics$lb.index)) {
+      stars_bound <- categorized_info[["additional_metrics"]][["ind_bound"]]
+      categorized_info$raw_summary$stars <- categorized_info$raw_summary$stars[stars_bound]
+    }
     
 
     # Lambda path plots

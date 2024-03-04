@@ -10,13 +10,13 @@ output: github_document
 # Step 3: Performance
 
 # Load session settings
-#Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
+Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
 hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
 load(hub_settings_file)
 
-#dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
-dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
+dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
+#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 # Function to generate file names
 get_filename <- function(config, rep, prefix = "Hub") {
@@ -85,6 +85,28 @@ calc_mean_ci_summary <- function(summary_values) {
 }
 
 
+enforce_monotonic_decrease <- function(mean_vector, ci_matrix) {
+  n <- length(mean_vector)
+  
+  # Ensure the mean vector is monotonically decreasing
+  for (i in 2:n) {
+    if (mean_vector[i] > mean_vector[i - 1]) {
+      mean_vector[i] <- mean_vector[i - 1]
+      ci_matrix[i, ] <- ci_matrix[i - 1, ]
+    }
+  }
+  
+  # Additionally, ensure CIs are adjusted to maintain order
+  for (i in 2:n) {
+    # Adjust lower bound of CI if necessary
+    ci_matrix[i, 1] <- min(ci_matrix[i, 1], ci_matrix[i - 1, 1])
+    # Adjust upper bound of CI if necessary
+    ci_matrix[i, 2] <- min(ci_matrix[i, 2], ci_matrix[i - 1, 2])
+  }
+  
+  list(Mean = mean_vector, CI = ci_matrix)
+}
+
 
 # Initialize list to store results for each configuration
 config_results <- list()
@@ -101,6 +123,8 @@ for(cfg in configs) {
     hamming_dists <- list()
     lambda_bound <- list()
     f1_score <- list()
+    
+    stars <- list()
     
     gcd_spearman <- list()
     gcd_pseudo_spearman <- list()
@@ -127,17 +151,21 @@ for(cfg in configs) {
       # Compute metrics for each method in categorized_info
       method_metrics <- list()
       
+      true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
+      
       for(method_name in categorized_info[["criterion"]]) {
           method_graph <- categorized_info[["selected_graphs"]][[method_name]]
-          true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
           method_metrics[[method_name]] <- compute_metrics(method_graph, true_graph)
           method_metrics[[method_name]]$Sparsity <- categorized_info[["act_sparsity"]][[method_name]]
           method_metrics[[method_name]]$Lambda <- categorized_info[["optimal_lambdas"]][[method_name]]
           
-          if(method_name %in% names(categorized_info[["optimal_indices"]])) {
-          corrected_ind <- ((categorized_info[["optimal_indices"]][[method_name]] -
+          #Opt Index on regularized lambda path
+          if (method_name %in% names(categorized_info[["optimal_indices"]])) {
+            if (!is.null(categorized_info$additional_metrics$lb.index)) {
+              corrected_ind <- ((categorized_info[["optimal_indices"]][[method_name]] -
                               categorized_info[["additional_metrics"]][["ub.index"]]) + 1)
-          method_metrics[[method_name]]$Index <- as.numeric(corrected_ind)
+            } else corrected_ind <- categorized_info[["optimal_indices"]][[method_name]]
+            method_metrics[[method_name]]$Index <- as.numeric(corrected_ind)
           }
       }
 
@@ -152,6 +180,7 @@ for(cfg in configs) {
       hamming_dists[[rep]] <- categorized_info[["additional_metrics"]][["hamming_dist"]]
       lambda_bound[[rep]] <- categorized_info[["additional_metrics"]][["lambda_bound"]]
       f1_score[[rep]] <- categorized_info[["additional_metrics"]][["f1_score"]]
+      stars[[rep]] <- categorized_info[["raw_summary"]][["stars"]]
       
       gcd_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_spearman"]]
       gcd_pseudo_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_pseudo_spearman"]]
@@ -196,7 +225,10 @@ for(cfg in configs) {
     # Corrected assignments to config_results[[cfg_key]]
     config_results[[cfg_key]]$F1_Path <- calc_mean_ci_summary(f1_score)
     config_results[[cfg_key]]$Hamming_Path <- calc_mean_ci_summary(hamming_dists)
-    config_results[[cfg_key]]$Lambda_Path <- calc_mean_ci_summary(lambda_bound)
+    Lambda_Path <- calc_mean_ci_summary(lambda_bound)
+    config_results[[cfg_key]]$Lambda_Path <- enforce_monotonic_decrease(Lambda_Path$Mean, Lambda_Path$CI)
+
+    config_results[[cfg_key]]$Summary_Path[["stars"]] <- calc_mean_ci_summary(stars)
     
     config_results[[cfg_key]]$Summary_Path[["gcd_spearman"]] <- calc_mean_ci_summary(gcd_spearman)
     config_results[[cfg_key]]$Summary_Path[["gcd_pseudo_spearman"]] <- calc_mean_ci_summary(gcd_pseudo_spearman)
@@ -232,114 +264,6 @@ cat("Performance metrics for each configuration and repetition calculated and sa
 ```{r}
 sessionInfo()
 ```
-
-
-
-
-
-############################ ##### #############################################
-
-
-### Check
-```{r}
-
-# Load session settings
-Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
-load(hub_settings_file)
-
-dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
-
-# Function to generate file names
-get_filename <- function(config, rep, prefix = "Hub") {
-    sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
-}
-
-calc_mean_ci_summary <- function(summary_values) {
-    # Determine the maximum length among the summaries
-    num_lambdas <- max(sapply(summary_values, function(x) {
-        if (is.numeric(x)) length(x) else length(unlist(x))
-    }))
-
-    means <- numeric(num_lambdas)
-    cis <- matrix(NA, nrow = num_lambdas, ncol = 2)
-
-    for (i in 1:num_lambdas) {
-        ith_values <- sapply(summary_values, function(x) {
-            if (is.numeric(x)) {
-                if (length(x) >= i) x[i] else NA
-            } else {
-                if (length(x) >= i && !is.null(x[[i]])) x[[i]] else NA
-            }
-        }, simplify = TRUE, USE.NAMES = FALSE)
-
-        if (all(is.na(ith_values))) {
-            means[i] <- NA
-            cis[i, ] <- c(NA, NA)
-        } else {
-            mean_val <- mean(ith_values, na.rm = TRUE)
-            sem_val <- sd(ith_values, na.rm = TRUE) / sqrt(sum(!is.na(ith_values)))
-            z_value <- qnorm(0.975)  # For a 95% CI
-            ci_val <- mean_val + c(-z_value, z_value) * sem_val
-            means[i] <- mean_val
-            cis[i, ] <- ci_val
-        }
-    }
-    return(list(Mean = means, CI = cis))
-}
-
-
-results_list <- list()  # Initialize an empty list to store results
-
-for(cfg in configs) {
-    cfg_key <- paste("n", cfg$n, "p", cfg$p, sep="_")
-    
-    if(cfg$n == 800 && cfg$p == 40) {  # Check if the configuration matches n = 800, p = 40
-        for(rep in 1:num_repetitions) {
-            filename <- get_filename(cfg, rep, "estimation")
-            print(paste("Loading data from:", filename))
-            load(paste0(dir_path_results, "/", filename))
-            
-            # Save the loaded data into the list with a unique key
-            results_list[[paste(cfg_key, "rep", rep, sep="_")]] <- categorized_info
-        }
-    }
-}
-
-hamming_dists <- list()
-lambda_bound <- list()
-gcd_spearman <- list()
-f1_score <- list()
-
-for(rep in 1:num_repetitions) {
-    # Construct the key dynamically based on the repetition number
-    key <- paste("n_800_p_40_rep", rep, sep="_")
-
-    # Access the hamming distance for the current repetition
-    hamming_dist_for_rep <- results_list[[key]][["additional_metrics"]][["hamming_dist"]]
-    lambda_bound_for_rep <- results_list[[key]][["additional_metrics"]][["lambda_bound"]]
-    gcd_spearman_for_rep <- results_list[[key]][["raw_summary"]][["gcd_spearman"]]
-    f1_score_for_rep <- results_list[[key]][["additional_metrics"]][["f1_score"]]
-
-    # Store the hamming distance in the hamming_dists list
-    hamming_dists[[rep]] <- hamming_dist_for_rep
-    lambda_bound[[rep]] <- lambda_bound_for_rep
-    gcd_spearman[[rep]] <- gcd_spearman_for_rep 
-    f1_score[[rep]] <- f1_score_for_rep
-}
-
-# Now you can apply your function to the hamming_dists list
-aggregated_hamming_stats <- calc_mean_ci_summary(hamming_dists)
-aggregated_lambda_stats <- calc_mean_ci_summary(lambda_bound)
-aggregated_f1_stats <- calc_mean_ci_summary(f1_score)
-aggregated_gcd_spearman <- calc_mean_ci_summary(gcd_spearman)
-
-
-```
-
-
-
-
 
 
 

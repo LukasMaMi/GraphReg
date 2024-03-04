@@ -307,59 +307,66 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
                 name = paste('GCD', gcd_crit_psd, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
                 fillcolor = 'rgba(0, 0, 255, 0.2)', showlegend = FALSE)
   
+
   # Adding vertical lines for optimal lambda Index
   p <- p %>%
-    add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), 
-            type = 'scatter', mode = "lines", 
-            line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
-  
-  p <- p %>%
-    add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
-            type = 'scatter', mode = "lines",
-            line = list(color = 'rgba(0, 0, 255, 0.2)', dash = "dot"), showlegend = FALSE)
+    add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
 
-  p <- p %>%
-    add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max(c(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))),
-            type = 'scatter', mode = "lines",
-            line = list(color = 'rgba(255, 0, 0, 0.2)', dash = "dot"), showlegend = FALSE)
-    
   # Adding an annotation for lambda_opt_hamming
   p <- p %>%
     add_annotations(x = data$lambda_opt_hamming, y = 0, text =  'λ<sub>oracle</sub>', 
                     showarrow = FALSE, xshift = 5, yshift = -20)
+
+  # Adding mean Stars line
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$stars_mean, name = "StARS",
+              type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = 'rgba(173, 216, 230, 1)'))
+  
+  # Adding ribbons for Stars CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$stars_mean, ymin = data$stars_ci[, 1], ymax = data$stars_ci[, 2],
+                name = paste('StARS CI'), yaxis = 'y2', line = list(color = 'transparent'), 
+                fillcolor = 'rgba(173, 216, 230, 0.2)', showlegend = FALSE)
+  
   
   
   # Calculate the range for y2-axis (GCD values)
-  gcd_all_values <- c(unlist(data$gcd_mean), unlist(data$gcd_ci), unlist(data$gcd_mean_psd), unlist(data$gcd_ci_psd))
-  max_gcd <- max(gcd_all_values)
-  max_hamming <- max(c(unlist(data$hamming_mean, data$hamming_ci)))
+  max_gcd <- max(c(data$gcd_mean, data$gcd_mean_psd, as.vector(data$gcd_ci), as.vector(data$gcd_ci_psd)), na.rm = TRUE)
+  max_hamming <- max(c(data$hamming_mean, as.vector(data$hamming_ci)), na.rm = TRUE)
+  max_value <- max(c(unlist(list(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), na.rm = TRUE)
   
-# Set the range for y2-axis in the layout
-p <- p %>% layout(
-    title = 'Lambda Path Analysis',
-    xaxis = list(title = 'Lambda path', title_standoff = 0.5, showgrid = FALSE),
-    yaxis = list(title = 'Hamming Distance', showgrid = FALSE, range = c(0, max_hamming)),
-    yaxis2 = list(title = 'GCD', overlaying = 'y',
-                  side = 'right',
-                  showgrid = FALSE,
-                  range = c(0, max_gcd)),
-    legend = list(
-        x = 0,  # Position the legend to the right of the plot
-        y = -0.15,   # Center the legend vertically
-        orientation = 'h',  # Vertical orientation of the legend
-        font = list(size = 10) 
-    ),
-    plot_bgcolor = 'rgba(0,0,0,0)',
-    margin = list(l = 50, r = 50, t = 50, b = 50)
-)
-
-return(p)
+  # Set the range for y2-axis in the layout
+  p <- p %>% layout(
+      title = 'Lambda Path Analysis',
+      xaxis = list(title = 'Lambda path', title_standoff = 0.5, showgrid = FALSE),
+      yaxis = list(title = 'Hamming Distance', showgrid = FALSE, range = c(0, max_hamming)),
+      yaxis2 = list(title = 'GCD', overlaying = 'y',
+                    side = 'right',
+                    showgrid = FALSE,
+                    range = c(0, max_gcd)),
+      legend = list(
+          x = 0,  # Position the legend to the right of the plot
+          y = -0.15,   # Center the legend vertically
+          orientation = 'h',  # Vertical orientation of the legend
+          font = list(size = 10) 
+      ),
+      plot_bgcolor = 'rgba(0,0,0,0)',
+      margin = list(l = 50, r = 50, t = 50, b = 50)
+  )
+  
+  return(p)
 }
    
 # Function to extract data
 extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   
   lambda_path <- config_results[[config]][["Lambda_Path"]][["Mean"]]
+  
+  # Extracting StARS data
+  stars_mean <- config_results[[config]][["Summary_Path"]][["stars"]][["Mean"]]
+  stars_ci <- config_results[[config]][["Summary_Path"]][["stars"]][["CI"]]
   
   # Extracting Hamming data
   hamming_mean <- config_results[[config]][["Hamming_Path"]][["Mean"]]
@@ -385,7 +392,8 @@ extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
 
   list(lambda_path = lambda_path, hamming_mean = hamming_mean, hamming_ci = hamming_ci, gcd_mean = gcd_mean, gcd_ci = gcd_ci, 
        gcd_mean_psd = gcd_mean_psd, gcd_ci_psd = gcd_ci_psd, lambda_opt_gcd = lambda_opt_gcd, 
-       lambda_opt_gcd_psd = lambda_opt_gcd_psd, lambda_opt_hamming = lambda_opt_hamming)
+       lambda_opt_gcd_psd = lambda_opt_gcd_psd, lambda_opt_hamming = lambda_opt_hamming, 
+       stars_mean = stars_mean, stars_ci = stars_ci)
 }
 
 
@@ -416,6 +424,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
     gcd_criteria <- grep("^gcd_\\w+$", criteria, value = TRUE)
     gcd_prior_criteria <- grep("^gcd_prior_\\w+$", criteria, value = TRUE)
 
+    ## GCD Criteria
     for (crit in gcd_criteria) {
       gcd_pseudo_crit <- paste0("gcd_pseudo_", gsub("^gcd_", "", crit))
 
@@ -425,6 +434,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_pseudo_crit)
+        print(plot)
 
         # Save plot
         plot_filename <- sprintf("%s_%s.pdf", config, crit)
@@ -438,6 +448,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
       }
     }
     
+    ## Prior GCD Criteria
     for (crit in gcd_prior_criteria) {
       gcd_prior_pseudo_crit <- paste0("gcd_prior_pseudo_", gsub("^gcd_prior_", "", crit))
 
@@ -448,6 +459,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
         
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_prior_pseudo_crit)
+        print(plot)
 
         # Save plot using orca
         plot_filename <- sprintf("%s_%s.pdf", config, crit)

@@ -190,11 +190,7 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
         # Prepare arguments for reducing results in the subsequent batch jobs
         reduceargs <- list(init = lb.starspremerge[ub.index:lb.est$opt.index])
         
-        #######
-        est$reduceargs <- reduceargs
-        ########
-       
-  
+
         # If lb.stars was set to TRUE, create now the reduction arguments for gcd
         if ('gcd' %in% criterion || 'gcd_prior' %in% criterion) { 
         
@@ -353,23 +349,13 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
       stars_lambda <- round(lambda_full[est$stars$opt.index], 3)
       est$additional$gap_b <- abs(est$additional$ub.lambda - est$additional$lb.lambda)
       est$additional$gap_beta <- abs(stars_lambda - est$additional$lb.lambda)
-      est$additional$lambda_bound <- fargs$lambda
-      
-      ## stitch back together init and full GCD summaries
-      # for (crit in criterion) {
-      #   if (startsWith(crit, "gcd")) {
-      #     tmpsumm <- vector('numeric', length(lb.est[[crit]]$summary))
-      #     tmpsumm[pinv] <- lb.est[[crit]]$summary[pinv]
-      #     tmpsumm[pind] <- est[[crit]]$summary
-      #     est[[crit]]$summary <- tmpsumm
-      #   }
-      # }
     }
     
-    ## Full lambda path
+    ## Full and bounded lambda path
     est$additional$lambda_full <- lambda_full
+    est$additional$lambda_bound <- fargs$lambda
     
-
+    
     ## Update criterion vector 
     criterion <- unique(c(criterion, updated_criteria))
     criterion <- setdiff(criterion, c("gcd", "gcd_prior"))
@@ -715,7 +701,7 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
   n <- length(orbind)
   if (ncol(nx2) < 1 || nrow(nx2) < 1) {
-      return(rep(0, n*(n-1)/2)) # Return empty vector
+      return(rep(0, n*(n-1)/2)) # Return empty vector # Failsafe for empty graphs
   }
 
   p <- ncol(graph)
