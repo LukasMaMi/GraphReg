@@ -308,11 +308,7 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
                 fillcolor = 'rgba(0, 0, 255, 0.2)', showlegend = FALSE)
   
   
-  print(data$hamming_mean)
-  print(data$gcd_mean)
-  print((data$gcd_mean_psd))
   max_value <- max(c(unlist(list(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), na.rm = TRUE)
-  print(max_value)
 
   # Adding vertical lines for lambda oracle Index
   p <- p %>%
