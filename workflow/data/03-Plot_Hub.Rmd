@@ -383,10 +383,13 @@ extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   index_opt_gcd_psd <- round(config_results[[config]][["Aggregated"]][[gcd_crit_psd]][["Index"]][["Mean"]])
   lambda_opt_gcd_psd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd_psd]]
   
-  index_opt_hamming <- round(config_results[[config]][["Aggregated"]][["oracle_hamming"]][["Index"]][["Mean"]])
+  index_opt_hamming <- which.min(config_results[[config]][["Hamming_Path"]][["Mean"]])
+  #index_opt_hamming <- round(config_results[[config]][["Aggregated"]][["oracle_hamming"]][["Index"]][["Mean"]])
   lambda_opt_hamming <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_hamming]]
   
-  index_opt_stars <- round(config_results[[config]][["Aggregated"]][["stars"]][["Index"]][["Mean"]])
+  threshold <- out.p[["stars"]][["thresh"]]
+  index_opt_stars <- max(which(config_results[[config]][["Summary_Path"]][["stars"]][["Mean"]] < threshold))
+  #index_opt_stars <- round(config_results[[config]][["Aggregated"]][["stars"]][["Index"]][["Mean"]])
   lambda_opt_stars <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_stars]]
 
   list(lambda_path = lambda_path, hamming_mean = hamming_mean, hamming_ci = hamming_ci, gcd_mean = gcd_mean, gcd_ci = gcd_ci, 
