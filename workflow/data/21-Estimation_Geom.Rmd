@@ -1,190 +1,213 @@
 ---
 title: "21-Estimation_Geom"
-output: gitGeom_document
+output: github_document
 ---
 
-# Run StARS, G-StARS and Oracle
+## Estimation Functions
 ```{r}
 
+## Function to get filename
+get_filename <- function(config, rep, prefix = "Geom") {
+  sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
+}
+
+## Using QUIC
+quicr <- function(data, lambda) {
+    p <- ncol(data)
+    est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+    est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+    path <-  lapply(seq(length(lambda)), function(i) {
+                tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                diag(tmp) <- 0
+                as(tmp!=0, "lMatrix")
+    })
+    est$path <- path
+    est
+}
+
+## Extraction Function
+extract_categorized_optimal_info <- function(output) {
+  # Initialize lists to store the categorized results
+  optimal_indices <- list()
+  optimal_lambdas <- list()
+  selected_graphs <- list()
+  act_sparsity <- list()
+
+  # Extract the criteria from the output object
+  criteria <- output[["criterion"]]
+
+  # Loop through each criterion
+  for (crit in criteria) {
+    # Extract the criterion name
+    crit_name <- crit[[1]]
+  
+    # Store the optimal index, lambda, and refit graph for the current criterion
+    optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
+    optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
+    selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
+    act_sparsity[[crit_name]] <- output[[crit_name]][["sparsity"]]
+  }
+
+  # Create a list to store all categorized results
+  categorized_results <- list(
+    "optimal_indices" = optimal_indices,
+    "optimal_lambdas" = optimal_lambdas,
+    "selected_graphs" = selected_graphs,
+    "act_sparsity" = act_sparsity,
+    "additional_metrics" = output$additional
+  )
+
+  return(categorized_results)
+}
+
+# Lambda path plots
+plot_lambda_path <- function(config, rep, prefix, dir_path, show) {
+  plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
+  pdf(file.path(dir_path, plot_filename), width = 8, height = 6)
+  plot(out.p, legends = TRUE, show = show)
+  dev.off()
+}
+
+```
+
+
+## Run StARS, G-StARS, PG-StARS and Oracle with additional criteria
+```{r}
+# Required packages
 #install.packages("htmltools")
 #install.packages("devtools")
-#install.packages("batchtools)
-#install_gitGeom("zdk123/pulsar")
+#install.packages("batchtools")
+#devtools::install_github("zdk123/pulsar")
 #install.packages("BigQuic")
+#install.packages("corrplot")
 
+library(corrplot)
+library(BigQuic)
+library(batchtools)
+library(devtools)
+library(htmltools)
 
+# Define main directory paths
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom/"
+#dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_Geom"
+dir_path_results <- file.path(dir_path2, "Results")
 
-#Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
+# Load settings
 Geom_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
 Geom_settings_file <- file.path(Geom_setting_path, "Geom_settings.RData")
 load(Geom_settings_file)
 
-
-get_filename <- function(config, rep, prefix = "Geom") {
-  return(sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p))
+# Create Results directory if it doesn't exist
+if (!dir.exists(dir_path_results)) {
+  dir.create(dir_path_results)
 }
 
-  # 2. Loop over each file, load dataset, and compute adjacency matrices
-  for(rep in 1:num_repetitions) {
-    for(i in seq_along(configs)) {
-      # Get filename for the current configuration and repetition
-      filename <- get_filename(configs[[i]], rep)
-      
-      # Load the dataset
-      load(paste0(dir_path, "/", filename))
+# Main loop over each configuration and repetition
+for (rep in 1:num_repetitions) {
+  for (i in seq_along(configs)) {
+    
+    # Reinitialize or clear relevant variables
+    out.p <- NULL
+    out.esti <- list()
+    
+    config <- configs[[i]]
+    
+    # Prepare directories for storing results
+    config_dir <- file.path(dir_path2, sprintf("config_n_%d_p_%d", config$n, config$p))
+    rep_dir <- file.path(config_dir, sprintf("rep_%d", rep))
+    lambda_dir <- file.path(rep_dir, "lambda_path_plots")
 
+    # Create directories if they don't exist
+    dir.create(config_dir, recursive = TRUE, showWarnings = FALSE)
+    dir.create(lambda_dir, recursive = TRUE, showWarnings = FALSE)
 
-    # Using QUIC
-    library(BigQuic)
-    quicr <- function(data, lambda) {
-        p <- ncol(data)
-        est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
-        est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
-        path <-  lapply(seq(length(lambda)), function(i) {
-                    tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
-                    diag(tmp) <- 0
-                    as(tmp!=0, "lMatrix")
-        })
-        est$path <- path
-        est
+    # Load the dataset for the current configuration and repetition
+    filename <- get_filename(config, rep)
+    print(paste("Loading data from:", filename))
+    load(paste0(dir_path, "/", filename))
+    
+    quicargs <- list(lambda = lambda_path)  
+
+    # Run batch pulsar
+    options(mc.cores = 2) #Speed up by setting number of cores available
+    options(batchtools.progress=TRUE, batchtools.verbose=FALSE)
+    #resources <- list(mem="1GB", nodes="1", walltime="00:30:00") # number of computers or servers you are requesting for your job
+    
+    out.p <- Graphreg(
+      data = Geom_data, 
+      fun = quicr, 
+      fargs = quicargs, 
+      rep.num = N,
+      thresh = 0.05,
+      subsample.ratio = b,
+      criterion=c('stars', 'gcd', 'gcd_prior'), 
+      lb.stars = FALSE, 
+      ub.stars = FALSE, 
+      seed = FALSE,
+      refit = TRUE,
+      prior_graph = true_graph,
+      method = c("spearman", "kendall", "latentcor"),
+      five_node = FALSE,
+      use_pseudo_count = TRUE
+      #job.res = resources
+    )
+  
+    out.esti <- extract_categorized_optimal_info(out.p)
+    
+    ## Adding Results lambda path and GCMs
+    for (crit in out.p$criterion) {
+      out.esti$raw_summary[[crit]] <- out.p[[crit]]$summary
+      # Check if GCM is available for the current criterion and assign it if available
+      if (!is.null(out.p[[crit]][["gcm"]])) {
+        out.esti$GCM[[crit]] <- out.p[[crit]][["gcm"]]
+      }
     }
     
-    # Using Huge GLASSO
-    #library(huge)
-    #huger <- function(data, lambda) {
-      #est  <- huge::huge(data, lambda = lambda, method = "glasso")
-      #path <- lapply(seq(length(lambda)), function(i) {
-        ## convert precision array to adj list
-        #tmp <- est$path[[i]]
-        #tmp <- as(as(as(tmp, "lMatrix"), "generalMatrix"), "CsparseMatrix")
-        #return(tmp)
-      #})
-      #est$path <- path
-      #est
-    #}
-      
-  
-  quicargs <- list(lambda = lambda_path)
-  #hugeargs <- list(lambda = lambda_path, method = "glasso", verbose = FALSE)
+    ## Adding gcm for true_graph 
+    for (meth in c("spearman", "kendall", "latentcor")) {
+      gcm_true <- my.gcvec(true_graph, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1), method = meth, return_gcm = TRUE)
+      gcm_true_pseudo <- my.gcvec(true_graph, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1), method = meth,
+                                  return_gcm = TRUE, pseudo_count = TRUE)
+      out.esti$GCM[[paste("true_graph", meth, sep = "_")]] <- gcm_true
+      out.esti$GCM[[paste("true_graph_pseudo", meth, sep = "_")]] <- gcm_true_pseudo
+    }
     
-  library(batchtools)
-  library(pulsar)
-  out.p <- batch.pulsar(
-    Geom_data, 
-    fun = quicr, 
-    fargs = quicargs, 
-    rep.num = N,
-    thresh = 0.05,
-    subsample.ratio = b,
-    criterion=c('stars', 'gcd'), 
-    lb.stars = TRUE, 
-    ub.stars = TRUE, 
-    seed = NULL,
-    refit = FALSE)
-  
-  
-  # Optimal Index Stars
-  stars_index <-  opt.index(out.p, 'stars')
-  # Optimal Lambda
-  best_lambda_stars <- round(lambda_path[stars_index], 3)
-  # Lower Bound
-  stars_lb <- out.p[["stars"]][["lb.index"]]
-  lambda_lb <- round(lambda_path[stars_lb], 3)
-  # Upper Bound
-  stars_ub <- out.p[["stars"]][["ub.index"]]
-  lambda_ub <- round(lambda_path[stars_ub], 3)
-  
-  # Optimal Index Gstars
-  opt.index(out.p, criterion = "gcd") <- get.opt.index(out.p, criterion = "gcd")
-  gstars_index <- my.opt.index(out.p, 'gcd')[[1]]
-  # Optimal Lambda
-  best_lambda_gstars <- round(lambda_path[gstars_index], 3)
-  
-  
-  fit  <- refit(out.p, criterion = c("stars", "gcd"))
-  ## Stars
-  stars_graph <- fit[["refit"]][["stars"]]
-  ## GStars
-  gstars_graph <- fit[["refit"]][["gcd"]]
-  
-  get_plot_filename <- function(config, rep, prefix = "Plot") {
-  sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
-  }
+    out.esti$selected_graphs[["null_graph"]] <- null_graph
+    out.esti$selected_graphs[["true_graph"]] <- true_graph
+    out.esti$act_sparsity[["null_graph"]] <- sum(null_graph) / (config$p * (config$p - 1))
+    out.esti$act_sparsity[["true_graph"]] <- sum(true_graph) / (config$p * (config$p - 1))
+    criterion <- unique(c(out.p$criterion, "null_graph"))
+    out.esti$criterion <- criterion
+    out.esti$additional_metrics$lb.index <- out.p[["stars"]][["lb.index"]]
+    out.esti$additional_metrics$ub.index <- out.p[["stars"]][["ub.index"]]
+    out.esti$premerge <- out.p$premerge
+    out.esti$fullmodel <- out.p$est$path
+    
+    # Bounding down again Stars
+    if (!is.null(out.esti$additional_metrics$lb.index)) {
+      stars_bound <- out.esti[["additional_metrics"]][["ind_bound"]]
+      out.esti$raw_summary$stars <- out.esti$raw_summary$stars[stars_bound]
+    }
 
-  plot_filename <- get_plot_filename(configs[[i]], rep)
-  # Save the plot as a PDF
-  pdf(file.path(dir_path2, plot_filename), width = 8, height = 6)
-  plot(out.p, legends = F)
-  dev.off()
-
-  
-  ## Oracle procedure
-  oracle_results <- quicr(Geom_data, lambda_path)
-  
-  #F1-Score as criterium for Oracle
-  f1_score <- function(actual, predicted) {
-  if (!inherits(actual, "lgCMatrix") || !inherits(predicted, "lgCMatrix")) {
-    stop("Matrices should be of class lgCMatrix")
-  }
-
-  # Calculating TP, FP, and FN using sparse matrix operations
-  TP <- sum(predicted & actual)
-  FP <- sum(predicted & !actual)
-  FN <- sum(!predicted & actual)
-
-  # Calculate Precision and Recall
-  Precision <- ifelse(TP + FP > 0, TP / (TP + FP), 0)
-  Recall <- ifelse(TP + FN > 0, TP / (TP + FN), 0)
-
-  # Calculate F1 Score
-  f1 <- ifelse(Precision + Recall > 0, 2 * (Precision * Recall) / (Precision + Recall), 0)
-
-  return(f1)
-  }
-  
-  # Hamming distance as criterium for Oracle
-  hamming_distance <- function(actual, predicted) {
-    sum(tril(predicted) != tril(actual))
-  }
-  
-  # F1 score - best lambda Oracle
-  oracle_index_f1 <- which.max(sapply(1:length(lambda_path), function(j) {
-    estimated_graph <- oracle_results$path[[j]]
-    f1_score(true_graph, estimated_graph)
-  }))
-  
-  # Hamming distance - best lambda Oracle
-    oracle_index_hamming <- which.min(sapply(1:length(lambda_path), function(j) {
-    estimated_graph <- oracle_results$path[[j]]
-    hamming_distance(true_graph, estimated_graph)
-  }))
-  
-  best_lambda_oracle_f1 <- round(lambda_path[oracle_index_f1], 3)
-  best_lambda_oracle_hamming <- round(lambda_path[oracle_index_hamming], 3)
-  
-  oracle_graph_f1 <- oracle_results$path[[oracle_index_f1]]
-  oracle_graph_hamming <- oracle_results$path[[oracle_index_hamming]]
-  
-  act_sparsity_stars = sum(stars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_gstars = sum(gstars_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_oracle_f1 = sum(oracle_graph_f1) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_oracle_hamming = sum(oracle_graph_hamming) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  act_sparsity_null = sum(null_graph) / (configs[[i]]$p * (configs[[i]]$p - 1))
-  
-  ## Calculation of Gap statistics
-  gap_b <- abs(lambda_ub - lambda_lb)
-  gap_beta <- abs(best_lambda_stars - lambda_lb)
-  
-
-save(num_repetitions, configs, dir_path, dir_path2, file = Geom_settings_file)
-result_filename <- get_filename(configs[[i]], rep, prefix="estimation")
-save(true_graph, stars_graph, gstars_graph, oracle_graph_f1, oracle_graph_hamming, null_graph, act_sparsity, act_sparsity_stars, act_sparsity_gstars, act_sparsity_oracle_f1, act_sparsity_oracle_hamming, best_lambda_oracle_f1, best_lambda_oracle_hamming, best_lambda_stars, best_lambda_gstars, stars_index, gstars_index, oracle_index_f1, oracle_index_hamming, stars_lb, stars_ub, gap_b, gap_beta, out.p, file=paste0(dir_path2, "/", ... = result_filename))
-
+    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir, show = c("stars", "gcd_spearman", "gcd_kendall", "gcd_latentcor",
+                                                                   "gcd_pseudo_spearman", "gcd_pseudo_kendall",
+                                                                   "gcd_pseudo_latentcor"))
+    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir, show = c("stars", "gcd_prior_spearman", "gcd_prior_kendall", 
+                                                                         "gcd_prior_latentcor", "gcd_prior_pseudo_spearman",
+                                                                         "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor"))
+    
+    # Save the results in the Results directory
+    save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, file = Geom_settings_file)
+    result_filename <- get_filename(config, rep, "estimation")
+    save(out.p, out.esti, true_graph, file = file.path(dir_path_results, result_filename))
   }
 }
 
-print("Adjacency matrices for Geom generated and saved!")
+print("Estimation completed and plots saved!")
+
+
+
 ```
 
 

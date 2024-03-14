@@ -3,18 +3,18 @@ title: "30-my_batch_pulsar"
 output: github_document
 ---
 
-## my.batch.pulsar function
+## GraphReg function
 ```{r}
 
 ## To Do List:
-# Die N mal lambda_k graphs existieren nicht, wenn lb and ub == TRUE. Was existiert ist eine Liste mit N = 2 subsample dann N subsample für den regulierten Pfad und dann wieder N subsample.
+# Die N mal lambda_k graphs existieren nicht, wenn lb and ub == TRUE. Was existiert ist eine Liste mit N = 2 subsample dann N subsample für den regulierten Pfad und dann wieder N = 2 subsample.
 
 Graphreg <- function(data, fun = huge::huge, fargs=list(),
                     criterion = c("stars"), thresh = 0.05, subsample.ratio = NULL,
                     lb.stars=FALSE, ub.stars=FALSE, rep.num = 20, seed=NULL,
                     wkdir=getwd(), regdir=NA, init="init", conffile='',
                     job.res=list(), cleanup=FALSE, refit = TRUE, 
-                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11),
+                    prior_graph = NULL, method = c("spearman"), orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1),
                     use_pseudo_count = FALSE, five_node = FALSE) {
 
     if (!requireNamespace('batchtools', quietly=TRUE)) {
@@ -238,7 +238,7 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
             
             #est$stars <- stars.stability(premerge = NULL, thresh, rep.num, p, merge = starsmerge)
             est$stars <- stars.stability(premerge = starspremerge, thresh, rep.num, p, merge = NULL)
-            est$starspremerge <- starspremerge
+            est$premerge <- starspremerge
         }
         
         # Actual calculation of N-2 graphlet correlation distance (gcd)
@@ -696,7 +696,7 @@ my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FA
   
   orbind <- orbind + 1
   if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
-  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  if (five_node == FALSE && any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
   if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
   nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
   n <- length(orbind)

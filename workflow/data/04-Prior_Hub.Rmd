@@ -3,6 +3,269 @@ title: "04-Prior_Hub"
 output: github_document
 ---
 
+```{r}
+
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
+  
+  orbind <- orbind + 1
+  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
+  if (any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
+  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
+  n <- length(orbind)
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(0, n*(n-1)/2)) # Return empty vector # Failsafe for empty graphs
+  }
+
+  p <- ncol(graph)
+  if (five_node == TRUE) { gdm <- orca::count5(nx2)
+    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
+  } 
+  
+  ## expand missing nodes
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
+  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
+  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
+  ## or completely empty graph and can be safely suppressed.
+  
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
+  gdm <- rbind(gdm[,orbind],1) 
+  
+  if (pseudo_count == TRUE) {
+    ## Add pseudo_count to orb_count
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
+  } 
+
+  if (method %in% c("kendall", "spearman")){
+  #Then calculate the graphlet correlation matrix with method
+  gcm <- suppressWarnings(cor(gdm, method = method))
+  }
+  
+  else if (method == "latentcor") {
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
+  gcm <- gcm$R
+  }
+  
+  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
+  
+  if (return_gcm == TRUE) {
+    return(gcm)
+  } else return(gcv)
+}
+
+#' @keywords internal
+.adj2elist <- function(G) {
+    if (inherits(G, "sparseMatrix")) {
+        G <- Matrix::triu(G, k=1)
+        index_i_j <- Matrix::mat2triplet(G)[1:2]
+        return(as.data.frame(index_i_j))
+    } else {
+        p <- ncol(G)
+        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
+    }
+}
+
+#' @keywords internal
+my.hamming <- function(estimated, actual) {
+    hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
+    return(hamming_distance)
+}
+```
+
+
+```{r}
+
+dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Geom/Results/"
+performance <- file.path(dir_path, "estimation_rep_1_n_800_p_40.RData")
+load(performance)
+
+true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
+oracle_graph <- categorized_info[["selected_graphs"]][["oracle_hamming"]]
+oracle_ind <- categorized_info[["optimal_indices"]][["oracle_hamming"]]
+sub1 <- out.p[["starspremerge"]][[oracle_ind]][[1]]
+sub2 <- out.p[["starspremerge"]][[oracle_ind]][[3]]
+sub3 <- out.p[["starspremerge"]][[oracle_ind]][[5]]
+
+as.heatmap <- function(graph) {
+  graph <- as.matrix(graph)
+  graph[graph == TRUE] = 1
+  graph[graph == FALSE] = 0
+  
+  return(graph)
+}
+
+true_graph <- as.heatmap(true_graph)
+oracle_graph <- as.heatmap(oracle_graph)
+sub1 <- as.heatmap(sub1)
+sub2 <- as.heatmap(sub2)
+sub3 <- as.heatmap(sub3)
+
+## Heatmap
+#install.packages("pheatmap")
+library(pheatmap)
+pheatmap(true_graph, cluster_rows = FALSE, cluster_cols = FALSE)
+pheatmap(oracle_graph, cluster_rows = FALSE, cluster_cols = FALSE)
+pheatmap(sub1, cluster_rows = FALSE, cluster_cols = FALSE)
+pheatmap(sub2, cluster_rows = FALSE, cluster_cols = FALSE)
+pheatmap(sub3, cluster_rows = FALSE, cluster_cols = FALSE)
+
+## GCMs
+orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)
+GCM_true <- my.gcvec(graph = true_graph, method = "spearman", orbind = orbind, return_gcm = TRUE)
+GCM_oracle <- my.gcvec(graph = oracle_graph, method = "spearman", orbind = orbind, return_gcm = TRUE)
+GCM_sub1 <- my.gcvec(graph = sub1, method = "spearman", orbind = orbind, return_gcm = TRUE)
+GCM_sub2 <- my.gcvec(graph = sub2, method = "spearman", orbind = orbind, return_gcm = TRUE)
+GCM_sub3 <- my.gcvec(graph = sub3, method = "spearman", orbind = orbind, return_gcm = TRUE)
+corrplot(GCM_true)
+
+## Hamming distance
+ham_oracle <- my.hamming(oracle_graph, true_graph)
+ham_sub1 <- my.hamming(sub1, true_graph)
+ham_sub2 <- my.hamming(sub2, true_graph)
+ham_sub3 <- my.hamming(sub3, true_graph)
+
+## GCD true_graph and oracle
+GCV_true <- my.gcvec(graph = true_graph, method = "spearman", orbind = orbind)
+GCV_oracle <- my.gcvec(graph = oracle_graph, method = "spearman", orbind = orbind)
+GCD <- dist(rbind(GCV_true, GCV_oracle))[[1]]
+
+```
+
+```{r}
+
+library(pheatmap)
+library(gridExtra)
+library(grid)
+
+# Names for each heatmap
+names <- c("True Graph", "Oracle", "Sub1", "Sub2", "Sub3")
+
+# Prepare the heatmaps and their titles as separate grobs
+heatmap_grobs <- list(p_true_graph$gtable, p_oracle_graph$gtable, p_sub1$gtable, p_sub2$gtable, p_sub3$gtable)
+title_grobs <- lapply(names, function(name) {
+    textGrob(name, x = 0.5, y = 0.5, just = "center", gp = gpar(col = "black", fontsize = 14, fontface = "bold"))
+})
+
+# Pair each heatmap with its title
+plots_and_titles <- mapply(function(heatmap, title) {
+    arrangeGrob(title, heatmap, ncol = 1, heights = c(0.1, 1))
+}, heatmap_grobs, title_grobs, SIMPLIFY = FALSE)
+
+# Arrange all in a grid
+do.call(grid.arrange, c(plots_and_titles, ncol = 2))
+
+
+
+## Separate GCMs
+library(grid)
+library(gridExtra)
+library(ggplotify)
+
+# Update to include all hamming distances and names correctly
+hamming_distances <- c("N/A", ham_oracle, ham_sub1, ham_sub2, ham_sub3)  # N/A for true graph as a placeholder
+names <- c("True Graph", "Oracle", "Sub1", "Sub2", "Sub3")
+
+# Correctly prepare all GCM plots and annotations
+plots_and_annotations <- lapply(1:length(names), function(i) {
+  gcm_grob <- list(gcm_true_grob, gcm_oracle_grob, gcm_sub1_grob, gcm_sub2_grob, gcm_sub3_grob)[[i]]
+  # Adjust for the true graph having no direct Hamming distance comparison
+  hamming_text <- ifelse(i > 1, paste0("\nHamming Distance: ", hamming_distances[i]), "")
+  text_grob <- textGrob(paste0(names[i], hamming_text), 
+                        x = 0.5, y = 0.1, 
+                        just = "bottom", 
+                        gp = gpar(col = "black", fontsize = 12))
+  arranged <- arrangeGrob(gcm_grob, text_grob, heights = c(1, 0.1))
+  return(arranged)
+})
+
+do.call(grid.arrange, c(plots_and_annotations, ncol = 2))
+
+
+```
+
+```{r}
+# Specify the directory path where you want to save the PDFs
+output_directory <- "/Users/bropc/Downloads"  # Update this to your desired path
+
+# Full path for the heatmaps PDF
+heatmap_pdf_path <- file.path(output_directory, "heatmaps_with_titles.pdf")
+
+# Open a PDF file for the heatmaps at the specified path
+pdf(heatmap_pdf_path, width = 11, height = 8.5)
+
+# Your code to arrange and generate the heatmap plots goes here
+do.call(grid.arrange, c(plots_and_titles, ncol = 2))
+
+# Close the PDF device
+dev.off()
+
+# Full path for the GCM PDF
+gcm_pdf_path <- file.path(output_directory, "gcm_with_annotations.pdf")
+
+# Open a PDF file for the GCMs at the specified path
+pdf(gcm_pdf_path, width = 11, height = 8.5)
+
+# Your code to arrange and generate the GCM plots goes here
+do.call(grid.arrange, c(plots_and_annotations, ncol = 2))
+
+# Close the PDF device
+dev.off()
+
+```
+
+
+
+##############################
+
+
+
+
+
+
+
+
+```{r}
+
+# You might need to install these packages if you haven't already
+# install.packages("pheatmap")
+# install.packages("gridExtra")
+#install.packages("ggplotify")
+
+library(pheatmap)
+library(gridExtra)
+library(ggplotify)
+
+# Assuming your GCM and heatmap generation code is defined above this point
+
+# Capture the plots without displaying them
+# For pheatmap, this is straightforward as it returns a plot object
+p_true_graph <- pheatmap(true_graph, cluster_rows = FALSE, cluster_cols = FALSE, silent = TRUE)
+p_oracle_graph <- pheatmap(oracle_graph, cluster_rows = FALSE, cluster_cols = FALSE, silent = TRUE)
+p_sub1 <- pheatmap(sub1, cluster_rows = FALSE, cluster_cols = FALSE, silent = TRUE)
+p_sub2 <- pheatmap(sub2, cluster_rows = FALSE, cluster_cols = FALSE, silent = TRUE)
+p_sub3 <- pheatmap(sub3, cluster_rows = FALSE, cluster_cols = FALSE, silent = TRUE)
+
+# For GCM plots, use as.grob to capture the corrplot output
+gcm_true_grob <- as.grob(~corrplot(GCM_true, method="color"))
+gcm_oracle_grob <- as.grob(~corrplot(GCM_oracle, method="color"))
+gcm_sub1_grob <- as.grob(~corrplot(GCM_sub1, method="color"))
+gcm_sub2_grob <- as.grob(~corrplot(GCM_sub2, method="color"))
+gcm_sub3_grob <- as.grob(~corrplot(GCM_sub3, method="color"))
+
+# Now, arrange them using grid.arrange for comparison
+# Adjust the layout as needed, here's an example with two columns
+grid.arrange(
+  grobs = list(p_true_graph$gtable, gcm_true_grob,
+               p_oracle_graph$gtable, gcm_oracle_grob,
+               p_sub1$gtable, gcm_sub1_grob,
+               p_sub2$gtable, gcm_sub2_grob,
+               p_sub3$gtable, gcm_sub3_grob),
+  ncol = 2
+)
+
+
+```
+
 
 ```{r}
 library(MASS)
