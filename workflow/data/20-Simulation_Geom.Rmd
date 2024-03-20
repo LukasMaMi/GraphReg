@@ -114,14 +114,14 @@ generator_geom <- function (n, p, rho, vis, verbose) {
 dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_Geom"
 
 # Manually set the number of repetitions
-num_repetitions <- 5
+num_repetitions <- 3
 
 # Specify configurations
 configs <- list(
-  list(n=800, p=40)
-  #list(n=800, p=100),
-  #list(n=800, p=200),
-  #list(n=800, p=400)
+  list(n=800, p=40),
+  list(n=800, p=100),
+  list(n=800, p=200),
+  list(n=800, p=400)
 )
 
 #Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 

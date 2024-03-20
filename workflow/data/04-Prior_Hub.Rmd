@@ -81,6 +81,8 @@ load(performance)
 
 true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
 oracle_graph <- categorized_info[["selected_graphs"]][["oracle_hamming"]]
+
+
 oracle_ind <- categorized_info[["optimal_indices"]][["oracle_hamming"]]
 sub1 <- out.p[["starspremerge"]][[oracle_ind]][[1]]
 sub2 <- out.p[["starspremerge"]][[oracle_ind]][[3]]
