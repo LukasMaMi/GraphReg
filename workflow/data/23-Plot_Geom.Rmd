@@ -488,7 +488,9 @@ create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
 ```
 
 
-## Extended Lambda Path Plots
+################################################# Extended Lambda Path Plots ###########################################################
+
+## Helper Functions
 ```{r}
 
 my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
@@ -578,6 +580,11 @@ modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
   return(modified_orb_count_matrix)
 }
 
+#' @keywords internal
+my.hamming <- function(estimated, actual) {
+    hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
+    return(hamming_distance)
+}
 
 ```
 
@@ -590,12 +597,14 @@ orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
 
 # Initialize a list to store the GCM results
 GCM <- list()
+GCV <- list()
 
 # Iterate over configurations using indices since configs does not have names
 for (i in seq_along(configs)) {
   config <- configs[[i]]
   config_key <- paste("n", config$n, "p", config$p, sep = "_")
   GCM[[config_key]] <- list()
+  GCV[[config_key]] <- list()
   
   aggregated <- config_results[[config_key]][["Aggregated"]]
   aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
@@ -608,6 +617,8 @@ for (i in seq_along(configs)) {
       crit_name <- paste("oracle_hamming_subsample", subsample_index, meth, sep = "_")
       GCM[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
                                                  method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+      GCV[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
+                                                 method = meth, pseudo_count = FALSE, orbind = orbind)
     }
   }
   
@@ -629,9 +640,12 @@ for (i in seq_along(configs)) {
         # Compute the GCM and store it
         GCM[[config_key]][[crit]] <- my.gcvec(graph = graph, 
                                               method = meth, pseudo_count = count, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[crit]] <- my.gcvec(graph = graph, 
+                                              method = meth, pseudo_count = count, orbind = orbind)
       } else {
         # Placeholder in case the index is out of bounds
         GCM[[config_key]][[crit]] <- NA
+        GCV[[config_key]][[crit]] <- NA
       }
     }
     
@@ -641,9 +655,13 @@ for (i in seq_along(configs)) {
       
       for (meth in c("kendall", "latentcor", "spearman")) {
         GCM[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
-                                                                  method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+                                                        method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = FALSE, orbind = orbind)
         GCM[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
                                                         method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = TRUE, orbind = orbind)
       }
     }
   }
@@ -652,9 +670,13 @@ for (i in seq_along(configs)) {
   graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
   for (meth in c("kendall", "latentcor", "spearman")) {
   GCM[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
-                                                            method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+                                                          method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+  GCV[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = FALSE, orbind = orbind)
   GCM[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
                                                           method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
+  GCV[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = TRUE, orbind = orbind)
   }
 }
 
@@ -795,7 +817,13 @@ for (i in seq_along(configs)) {
   Heatmaps[[config_key]][["true_graph"]] <- as.heatmap(config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]])
 }
 
+
+
+## Heatmap creation
 library(pheatmap)
+
+# Consider only the first two configurations
+configs <- configs[1:2]
 
 # Folders setup
 pseudo_folder_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo"
@@ -950,115 +978,84 @@ for (config in configs) {
 
 ```
 
-
-
-## Testlauf
+## Gather Hamming Distance and GCD
 ```{r}
 
-library(magick)
+# Configuration you want to specify
+n <- 800
+p <- 40
+config_key <- paste("n", n, "p", p, sep = "_")
 
-# Base directory paths
-dir_path_lam <- "path/to/lambda/path/plots"
-dir_GCM <- "path/to/GCM/nonpseudo"
-dir_GCM_psd <- "path/to/GCM/pseudo"
-dir_heatmaps <- "path/to/heatmaps"
-dir_subsamples <- "path/to/subsamples"
+# Initialize GCD list outside the loop
+GCD <- list()
+Ham_Dist <- list()
 
-# Example configuration and criteria
-config <- "n_800_p_40"
-criteria <- c("gcd_kendall", "gcd_pseudo_kendall", "oracle_hamming", "true_graph")
+aggregated <- config_results[[config_key]][["Aggregated"]]
+aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
+aggregatedPremerge <- config_results[[config_key]][["AggregatedPremerge"]]
+true_graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
+orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
 
-# Function to read and resize an image
-read_and_resize <- function(path, size = "200x200") {
-  image <- image_read(path, density = 300)
-  image_resized <- image_scale(image, size)
-  return(image_resized)
-}
-
-# Function to generate file paths based on config and criteria
-generate_file_paths <- function(config, criterion, dir_path) {
-  file_path <- file.path(dir_path, paste(config, criterion, "pdf", sep = "_"))
-  return(file_path)
-}
-
-# Generate and process images
-processed_images <- list()
-for (criterion in criteria) {
-  # Lambda path plot (for illustration, assuming it matches one of the criteria)
-  if (criterion == "oracle_hamming") {
-    lambda_path_plot <- read_and_resize(generate_file_paths(config, criterion, dir_path_lam))
-    processed_images[[criterion]] <- lambda_path_plot
+## Hamming Distances
+for (crit in names(aggregated)) {
+  if (startsWith(crit, "gcd")) {
+    cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
+    graph <- aggregatedFullmodel[[cind]]
+    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
   }
   
-  # GCM and heatmap plots (adjust as needed for your specific criteria and file organization)
-  gcm_plot <- read_and_resize(generate_file_paths(config, criterion, dir_GCM))
-  heatmap_plot <- read_and_resize(generate_file_paths(config, criterion, dir_heatmaps))
-  processed_images[[paste(criterion, "gcm", sep = "_")]] <- gcm_plot
-  processed_images[[paste(criterion, "heatmap", sep = "_")]] <- heatmap_plot
-  
-  # Subsample plots (assuming a naming convention and directory structure you need to specify)
-  for (subsample_index in 1:3) {
-    subsample_name <- paste("oracle_hamming_subsample", subsample_index)
-    subsample_gcm_plot <- read_and_resize(generate_file_paths(config, subsample_name, dir_subsamples))
-    subsample_heatmap_plot <- read_and_resize(generate_file_paths(config, subsample_name, dir_subsamples))
-    processed_images[[paste(subsample_name, "gcm", sep = "_")]] <- subsample_gcm_plot
-    processed_images[[paste(subsample_name, "heatmap", sep = "_")]] <- subsample_heatmap_plot
+  else if (crit == "oracle_hamming") {
+    cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+    graph <- aggregatedFullmodel[[cind]]
+
+    Sub1 <- aggregatedPremerge[[cind]][[1]]
+    Sub2 <- aggregatedPremerge[[cind]][[2]]
+    Sub3 <- aggregatedPremerge[[cind]][[3]]
+    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
+    Ham_Dist[[config_key]][["Sub1"]] <- my.hamming(Sub1, true_graph)
+    Ham_Dist[[config_key]][["Sub2"]] <- my.hamming(Sub2, true_graph)
+    Ham_Dist[[config_key]][["Sub3"]] <- my.hamming(Sub3, true_graph)
   }
 }
 
-# Example of compositing (you will need to adjust positions and possibly iterate over your images)
-composite_image <- image_composite(processed_images[[1]], processed_images[[2]], offset = "+50+50")
-for (i in 3:length(processed_images)) {
-  composite_image <- image_composite(composite_image, processed_images[[i]], offset = "+260+50")  # Adjust positioning
+## GCD 
+GCD[[config_key]] <- list() # Prepare for this configuration
+
+GCV_list <- GCV[[config_key]] # Simplify access
+
+for (meth in names(GCV_list)) {
+  # Determine if it's a GCD-related method
+  is_gcd_method <- startsWith(meth, "gcd_") || startsWith(meth, "gcd_prior_")
+  is_oracle_method <- startsWith(meth, "oracle_hamming")
+  
+  if (is_gcd_method || is_oracle_method) {
+    # Extract the base method type (e.g., "spearman", "pseudo_spearman")
+    # For oracle_hamming methods, remove any subsample and pseudo prefix as well
+    base_method_type <- gsub("^(gcd(_prior)?_|oracle_hamming(_subsample_[0-9]+)?_)(pseudo_)?", "", meth)
+    
+    # Determine if this is a pseudo method for gcd_ methods
+    is_pseudo <- grepl("pseudo", meth) && is_gcd_method
+    
+    # Construct the corresponding true_graph method name based on whether it's a pseudo method
+    true_graph_method <- if(is_pseudo) {
+      paste("true_graph_pseudo", base_method_type, sep = "_")
+    } else {
+      paste("true_graph", base_method_type, sep = "_")
+    }
+    
+    # Check if the true_graph method exists in the list
+    if (true_graph_method %in% names(GCV_list)) {
+      # Calculate the Euclidean distance and retain original naming
+      GCD[[config_key]][[meth]] <- dist(rbind(GCV_list[[meth]], GCV_list[[true_graph_method]]))[1]
+    }
+  }
 }
 
-# Save the composite image
-composite_file_path <- file.path(dir_path_lam, paste(config, "composite", "pdf", sep = "_"))
-image_write(composite_image, path = composite_file_path, format = "pdf")
-
+   
 ```
 
 
-
-```{r}
-
-#install.packages("magick")
-library(magick)
-
-dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Lam_path_plots"
-dir_GCM_psd <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/pseudo"
-dir_GCM <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/nonpseudo"
-
-## Convert PDFs to images
-image_lam_path <- image_read(file.path(dir_path_lam, "n_800_p_40_gcd_spearman.pdf"), density = 300)
-
-# GCMs
-GCM_gcd <- image_read(file.path(dir_GCM, "n_800_p_40_gcd_spearman.pdf"), density = 300)
-GCM_gcd_psd <- image_read(file.path(dir_GCM_psd, "n_800_p_40_true_graph_kendall.pdf"), density = 300)
-GCM_oracle <- image_read(file.path(dir_GCM, "n_800_p_40_true_graph_spearman.pdf"), density = 300)
-
-# Heatmaps
-Heat_gcd <- image_read(file.path(dir_path6, "n_800_p_40_true_graph_spearman.pdf"), density = 300)
-Heat_gcd_psd <- image_read(file.path(dir_path6, "n_800_p_40_true_graph_spearman.pdf"), density = 300)
-Heat_oracle <- image_read(file.path(dir_path6, "n_800_p_40_true_graph_spearman.pdf"), density = 300)
-
-# Resize images 1 to 3 to make them smaller, adjust dimensions as needed
-image1_resized <- image_scale(image1, "200x200")
-image2_resized <- image_scale(image2, "200x200")
-image3_resized <- image_scale(image3, "200x200")
-
-# Composite images over image0 at specified positions, adjust geometry as needed
-composite_image <- image_composite(image0, image1_resized, offset = "+50+50")   # Adjust "+50+50" as needed
-composite_image <- image_composite(composite_image, image2_resized, offset = "+260+50") # Adjust for positioning
-composite_image <- image_composite(composite_image, image3_resized, offset = "+50+260") # Adjust for positioning
-
-# Save the composite image
-image_write(composite_image, path = file.path(dir_path_lam, "composite_image.pdf"), format = "pdf")
-
-```
-
-
-## Playground ## Lambda path plots
+## Shorten Lambda path plots
 ```{r}
 
 # install.packages('reticulate')
@@ -1174,7 +1171,7 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
           font = list(size = 10) 
       ),
       plot_bgcolor = 'rgba(0,0,0,0)',
-      margin = list(l = 150, r = 50, t = 150, b = 150)
+      margin = list(l = 210, r = 50, t = 150, b = 180)
   )
   
   return(p)
@@ -1206,11 +1203,6 @@ extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   
   index_opt_hamming <- which.min(config_results[[config]][["Hamming_Path"]][["Mean"]])
   lambda_opt_hamming <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_hamming]]
-  
-  ## subsample graphs
-  sub1 <- config_results[[config]][["AggregatedPremerge"]][[index_opt_hamming]][[1]]
-  sub2 <- config_results[[config]][["AggregatedPremerge"]][[index_opt_hamming]][[2]]
-  sub3 <- config_results[[config]][["AggregatedPremerge"]][[index_opt_hamming]][[3]]
   
   threshold <- out.p[["stars"]][["thresh"]]
   index_opt_stars <- max(which(config_results[[config]][["Summary_Path"]][["stars"]][["Mean"]] < threshold))
@@ -1245,56 +1237,56 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
   for (config in configs) {
     criteria <- extract_criteria(config_results, config)
     
-    # Filter out the criteria to only include 'gcd_' and 'gcd_prior_'
-    gcd_criteria <- grep("^gcd_\\w+$", criteria, value = TRUE)
-    gcd_prior_criteria <- grep("^gcd_prior_\\w+$", criteria, value = TRUE)
+    # Now we focus on pairing gcd_ with gcd_prior_ and gcd_pseudo_ with gcd_prior_pseudo_
+    gcd_criteria <- grep("^gcd_[^p]", criteria, value = TRUE)  # gcd_ but not starting with pseudo
+    gcd_prior_criteria <- grep("^gcd_prior_[^p]", criteria, value = TRUE)  # gcd_prior_ but not starting with pseudo
+    
+    gcd_pseudo_criteria <- grep("^gcd_pseudo_", criteria, value = TRUE)
+    gcd_prior_pseudo_criteria <- grep("^gcd_prior_pseudo_", criteria, value = TRUE)
 
-    ## GCD Criteria
+    # Pairing gcd_ with gcd_prior_
     for (crit in gcd_criteria) {
-      gcd_pseudo_crit <- paste0("gcd_pseudo_", gsub("^gcd_", "", crit))
-
-      if (gcd_pseudo_crit %in% criteria) {
+      # For each gcd_ criterion, find its gcd_prior_ counterpart
+      gcd_prior_crit <- paste0("gcd_prior_", gsub("^gcd_", "", crit))
+      
+      if (gcd_prior_crit %in% criteria) {
         # Extract data
-        data_extracted <- extract_data(config_results, config, crit, gcd_pseudo_crit)
+        data_extracted <- extract_data(config_results, config, crit, gcd_prior_crit)
 
         # Create plot
-        plot <- create_plot(data_extracted, crit, gcd_pseudo_crit)
+        plot <- create_plot(data_extracted, crit, gcd_prior_crit)
         print(plot)
 
         # Save plot
         plot_filename <- sprintf("%s_%s.pdf", config, crit)
+        #plot_filename <- sprintf("%s_%s_with_%s.pdf", config, crit, gcd_prior_crit)
         scope <- kaleido()
         for (i in 1:5) {
           scope$transform(plot, file.path(dir_path, plot_filename))
         }
-        # Remove and garbage collect to remove 
-        # R/Python objects and shutdown subprocesses
         rm(scope); gc()
       }
     }
     
-    ## Prior GCD Criteria
-    for (crit in gcd_prior_criteria) {
-      gcd_prior_pseudo_crit <- paste0("gcd_prior_pseudo_", gsub("^gcd_prior_", "", crit))
-
+    # Pairing gcd_pseudo_ with gcd_prior_pseudo_
+    for (crit in gcd_pseudo_criteria) {
+      # Correctly generate the gcd_prior_pseudo_ counterpart
+      gcd_prior_pseudo_crit <- gsub("^gcd_pseudo_", "gcd_prior_pseudo_", crit)
+      
       if (gcd_prior_pseudo_crit %in% criteria) {
-        
         # Extract data
         data_extracted <- extract_data(config_results, config, crit, gcd_prior_pseudo_crit)
-        
+
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_prior_pseudo_crit)
-        print(plot)
+        #print(plot)
 
-        # Save plot using orca
-        plot_filename <- sprintf("%s_%s.pdf", config, crit)
-        #plotly::save_image(plot, file.path(dir_path, plot_filename))
+        # Save plot
+        plot_filename <- sprintf("%s_%s_with_%s.pdf", config, crit, gcd_prior_pseudo_crit)
         scope <- kaleido()
         for (i in 1:5) {
           scope$transform(plot, file.path(dir_path, plot_filename))
         }
-        # Remove and garbage collect to remove 
-        # R/Python objects and shutdown subprocesses
         rm(scope); gc()
       }
     }
@@ -1302,7 +1294,8 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 }
 
 # Extract configurations from the 'configs' object
-config_names <- extract_configs(configs)
+configs_cut <- configs[1:1]
+config_names <- extract_configs(configs_cut)
 
 # Set the directory path where plots will be saved
 dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Lam_path_plots"
@@ -1316,6 +1309,178 @@ create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
 
 
 
+## Final Composition Plot
+```{r}
+
+#install.packages("magick")
+library(magick)
+
+# Configuration you want to specify
+n <- 800
+p <- 40
+meth <- "spearman"
+config_key <- paste("n", n, "p", p, sep = "_")
+
+# Base paths
+dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Lam_path_plots"
+dir_GCM_psd_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/pseudo"
+dir_GCM_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/nonpseudo"
+dir_Heat_psd_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo"
+dir_Heat_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo"
+dir_Heat_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples"
+dir_GCM_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/subsamples"
+
+# Adjust paths to include specific configuration
+dir_GCM_psd <- file.path(dir_GCM_psd_base, config_key)
+dir_GCM <- file.path(dir_GCM_base, config_key)
+dir_Heat_psd <- file.path(dir_Heat_psd_base, config_key)
+dir_Heat <- file.path(dir_Heat_base, config_key)
+dir_Heat_Sub <- file.path(dir_Heat_Sub_base, config_key)
+dir_GCM_Sub <- file.path(dir_GCM_Sub_base, config_key)
+
+## Convert PDFs to images
+image_lam_path <- image_read(file.path(dir_path_lam, "n_800_p_40_gcd_spearman.pdf"), density = 300)
+
+# GCMs
+GCM_gcd <- image_read(file.path(dir_GCM, "gcd_spearman.pdf"), density = 300)
+GCM_gcd_prior <- image_read(file.path(dir_GCM, "gcd_prior_spearman.pdf"), density = 300)
+GCM_oracle <- image_read(file.path(dir_GCM, "oracle_hamming_spearman.pdf"), density = 300)
+
+# # Pseudo GCMs
+# GCM_gcd_psd <- image_read(file.path(dir_GCM_psd, "gcd_pseudo_spearman.pdf"), density = 300)
+# GCM_gcd_prior_psd <- image_read(file.path(dir_GCM_psd, "gcd_prior_pseudo_spearman.pdf"), density = 300)
+# GCM_oracle_psd <- image_read(file.path(dir_GCM_psd, "oracle_hamming_spearman.pdf"), density = 300)
+
+# GCM Subsamples
+GCM_Sub1 <- image_read(file.path(dir_GCM_Sub, "oracle_hamming_subsample_1_spearman.pdf"), density = 300)
+GCM_Sub2 <- image_read(file.path(dir_GCM_Sub, "oracle_hamming_subsample_2_spearman.pdf"), density = 300)
+GCM_Sub3 <- image_read(file.path(dir_GCM_Sub, "oracle_hamming_subsample_3_spearman.pdf"), density = 300)
+
+# Heatmaps Subsamples
+Heat_Sub1 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 1.pdf"), density = 300)
+Heat_Sub2 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 2.pdf"), density = 300)
+Heat_Sub3 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 3.pdf"), density = 300)
+
+# Heatmaps
+Heat_gcd <- image_read(file.path(dir_Heat, "gcd_spearman.pdf"), density = 300)
+Heat_gcd_prior <- image_read(file.path(dir_Heat, "gcd_prior_spearman.pdf"), density = 300)
+Heat_oracle <- image_read(file.path(dir_Heat, "oracle_hamming.pdf"), density = 300)
+
+# True Graph
+GCM_True <- image_read(file.path(dir_GCM, "true_graph_spearman.pdf"), density = 300)
+Heat_True <- image_read(file.path(dir_Heat, "true_graph.pdf"), density = 300)
+
+# # Pseudo Heatmaps
+# Heat_gcd_psd <- image_read(file.path(dir_Heat_psd, "gcd_pseudo_spearman.pdf"), density = 300)
+# Heat_gcd_prior_psd <- image_read(file.path(dir_Heat_psd, "gcd_prior_pseudo_spearman.pdf"), density = 300)
+# Heat_oracle_psd <- image_read(file.path(dir_Heat_psd, "oracle_hamming_spearman.pdf"), density = 300)
+
+# Resize images 1 to 3 to make them smaller, adjust dimensions as needed
+GCM_gcd_resized <- image_scale(GCM_gcd, "250x250")
+GCM_gcd_prior_resized <- image_scale(GCM_gcd_prior, "250x250")
+GCM_oracle_resized <- image_scale(GCM_oracle, "250x250")
+
+Heat_gcd_resized <- image_scale(Heat_gcd, "250x250")
+Heat_gcd_prior_resized <- image_scale(Heat_gcd_prior, "250x250")
+Heat_oracle_resized <- image_scale(Heat_oracle, "250x250")
+
+GCM_Sub1_resized <- image_scale(GCM_Sub1, "250x250")
+GCM_Sub2_resized <- image_scale(GCM_Sub2, "250x250")
+GCM_Sub3_resized <- image_scale(GCM_Sub3, "250x250")
+
+Heat_Sub1_resized <- image_scale(Heat_Sub1, "250x250")
+Heat_Sub2_resized <- image_scale(Heat_Sub2, "250x250")
+Heat_Sub3_resized <- image_scale(Heat_Sub3, "250x250")
+
+GCM_True_resized <- image_scale(GCM_True, "250x250")
+Heat_True_resized <- image_scale(Heat_True, "250x250")
+
+# Composite images over image0 at specified positions, adjust geometry as needed
+composite_image <- image_composite(image_lam_path, GCM_gcd_resized, offset = "+100+130")   # Adjust "+50+50" as needed
+composite_image <- image_composite(composite_image, GCM_gcd_prior_resized, offset = "+800+130") # Adjust for positioning
+composite_image <- image_composite(composite_image, GCM_oracle_resized, offset = "+1500+130") # Adjust for positioning
+
+# Adding Heatmap
+composite_image <- image_composite(composite_image, Heat_gcd_resized, offset = "+350+130")
+composite_image <- image_composite(composite_image, Heat_gcd_prior_resized, offset = "+1050+130")
+composite_image <- image_composite(composite_image, Heat_oracle_resized, offset = "+1750+130")
+
+# Adding GCM subsamples
+composite_image <- image_composite(composite_image, GCM_Sub1_resized, offset = "+100+1100")
+composite_image <- image_composite(composite_image, GCM_Sub2_resized, offset = "+800+1100")
+composite_image <- image_composite(composite_image, GCM_Sub3_resized, offset = "+1500+1100")
+
+# Adding heatmap subsamples
+composite_image <- image_composite(composite_image, Heat_Sub1_resized, offset = "+350+1300")
+composite_image <- image_composite(composite_image, Heat_Sub2_resized, offset = "+1050+1300")
+composite_image <- image_composite(composite_image, Heat_Sub3_resized, offset = "+1750+1300")
+
+# Adding true graph
+composite_image <- image_composite(composite_image, Heat_True_resized, offset = "+50+700")
+composite_image <- image_composite(composite_image, GCM_True_resized, offset = "+50+950")
+
+# Extracting the GCD value for the specific method
+GCD_value1 <- GCD[[config_key]][["gcd_spearman"]]
+GCD_value2 <- GCD[[config_key]][["gcd_prior_spearman"]]
+GCD_value3 <- GCD[[config_key]][["oracle_hamming_spearman"]]
+
+GCD_value4 <- GCD[[config_key]][["oracle_hamming_subsample_1_spearman"]]
+GCD_value5 <- GCD[[config_key]][["oracle_hamming_subsample_2_spearman"]]
+GCD_value6 <- GCD[[config_key]][["oracle_hamming_subsample_3_spearman"]]
+
+# Converting the GCD value to a string with formatting
+GCD_text1 <- sprintf("%s: %.3f", meth, GCD_value1)
+GCD_text2 <- sprintf("%s: %.3f", meth, GCD_value2)
+GCD_text3 <- sprintf("%s: %.3f", meth, GCD_value3)
+
+# Converting the GCD value to a string with formatting
+GCD_text4 <- sprintf("%s: %.3f", meth, GCD_value4)
+GCD_text5 <- sprintf("%s: %.3f", meth, GCD_value5)
+GCD_text6 <- sprintf("%s: %.3f", meth, GCD_value6)
+
+
+# Extracting the Ham_Dist value for the specific method
+Ham_Dist_value1 <- Ham_Dist[[config_key]][["gcd_spearman"]]
+Ham_Dist_value2 <- Ham_Dist[[config_key]][["gcd_prior_spearman"]]
+Ham_Dist_value3 <- Ham_Dist[[config_key]][["oracle_hamming_spearman"]]
+
+Ham_Dist_value4 <- Ham_Dist[[config_key]][["Sub1"]]
+Ham_Dist_value5 <- Ham_Dist[[config_key]][["Sub2"]]
+Ham_Dist_value6 <- Ham_Dist[[config_key]][["Sub3"]]
+
+# Converting the Ham_Dist value to a string with formatting
+Ham_Dist_text1 <- sprintf("%s: %.3f", meth, Ham_Dist_value1)
+Ham_Dist_text2 <- sprintf("%s: %.3f", meth, Ham_Dist_value2)
+Ham_Dist_text3 <- sprintf("%s: %.3f", meth, Ham_Dist_value3)
+
+# Converting the Ham_Dist value to a string with formatting
+Ham_Dist_text4 <- sprintf("%s: %.3f", meth, Ham_Dist_value4)
+Ham_Dist_text5 <- sprintf("%s: %.3f", meth, Ham_Dist_value5)
+Ham_Dist_text6 <- sprintf("%s: %.3f", meth, Ham_Dist_value6)
+
+# Choose where you want to place the annotation on your image
+# Adjust the "+x+y" values to place the text where you prefer
+location_offset <- "+100+400" # Example position, adjust as needed
+
+# # Annotate the composite image with the method name and GCD value
+# composite_image <- image_annotate(
+#   composite_image, 
+#   text = GCD_text, 
+#   size = 20, 
+#   color = "red", 
+#   location = location_offset
+# )
+
+
+
+
+# Save the composite image, adjusting the filename as needed
+image_write(composite_image, path = "composite_image.pdf", format = "pdf")
+
+# Save the composite image
+image_write(composite_image, path = file.path(dir_path_lam, "composite_image.pdf"), format = "pdf")
+
+```
 
 
 

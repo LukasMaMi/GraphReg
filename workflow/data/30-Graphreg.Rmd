@@ -442,8 +442,8 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
                   est$additional$hamming_dist[[i]] <- my.hamming(estimated = estim, actual = prior_graph)
                   est$additional$f1_score[[i]] <- my.f1_score(predicted = estim, actual = prior_graph)
               } else {
-                  est$additional$hamming_dist[[i]] <- NULL
-                  est$additional$f1_score[[i]] <- NULL
+                  est$additional$hamming_dist[[i]] <- NA ### !
+                  est$additional$f1_score[[i]] <- NA
               }
           }
 
