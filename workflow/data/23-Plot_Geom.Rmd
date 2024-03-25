@@ -330,6 +330,18 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
   p <- p %>%
     add_annotations(x = data$lambda_opt_stars, y = 0, text =  'λ<sub>stars</sub>', 
                     showarrow = FALSE, xshift = 5, yshift = -20)
+  
+  # Adding vertical lines for GCD lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(255, 0, 0, 1)', dash = "dot"), showlegend = FALSE)
+  
+  # Adding vertical lines for GCD Pseudo lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(0, 0, 255, 1)', dash = "dot"), showlegend = FALSE)
 
   
   # Calculate the range for y2-axis (GCD values)
@@ -376,10 +388,10 @@ extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   gcd_ci_psd <- config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["CI"]]
   
   # Extracting optimal lambda Index
-  index_opt_gcd <- round(config_results[[config]][["Aggregated"]][[gcd_crit]][["Index"]][["Mean"]])
+  index_opt_gcd <- which.min(config_results[[config]][["Summary_Path"]][[gcd_crit]][["Mean"]])
   lambda_opt_gcd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd]]
   
-  index_opt_gcd_psd <- round(config_results[[config]][["Aggregated"]][[gcd_crit_psd]][["Index"]][["Mean"]])
+  index_opt_gcd_psd <- which.min(config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["Mean"]])
   lambda_opt_gcd_psd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd_psd]]
   
   index_opt_hamming <- which.min(config_results[[config]][["Hamming_Path"]][["Mean"]])
@@ -432,7 +444,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_pseudo_crit)
-        print(plot)
+        #print(plot)
 
         # Save plot
         plot_filename <- sprintf("%s_%s.pdf", config, crit)
@@ -457,7 +469,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
         
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_prior_pseudo_crit)
-        print(plot)
+        #print(plot)
 
         # Save plot using orca
         plot_filename <- sprintf("%s_%s.pdf", config, crit)
@@ -595,11 +607,11 @@ my.hamming <- function(estimated, actual) {
 ## GCM Plots
 orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
 
-# Initialize a list to store the GCM results
+# Initialize
 GCM <- list()
 GCV <- list()
 
-# Iterate over configurations using indices since configs does not have names
+# Iterate over configurations 
 for (i in seq_along(configs)) {
   config <- configs[[i]]
   config_key <- paste("n", config$n, "p", config$p, sep = "_")
@@ -1255,7 +1267,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_prior_crit)
-        print(plot)
+        #print(plot)
 
         # Save plot
         plot_filename <- sprintf("%s_%s.pdf", config, crit)
@@ -1396,28 +1408,28 @@ GCM_True_resized <- image_scale(GCM_True, "250x250")
 Heat_True_resized <- image_scale(Heat_True, "250x250")
 
 # Composite images over image0 at specified positions, adjust geometry as needed
-composite_image <- image_composite(image_lam_path, GCM_gcd_resized, offset = "+100+130")   # Adjust "+50+50" as needed
-composite_image <- image_composite(composite_image, GCM_gcd_prior_resized, offset = "+800+130") # Adjust for positioning
-composite_image <- image_composite(composite_image, GCM_oracle_resized, offset = "+1500+130") # Adjust for positioning
+composite_image <- image_composite(image_lam_path, GCM_gcd_resized, offset = "+400+130")   
+composite_image <- image_composite(composite_image, GCM_gcd_prior_resized, offset = "+1000+130")
+composite_image <- image_composite(composite_image, GCM_oracle_resized, offset = "+1600+130") 
 
 # Adding Heatmap
-composite_image <- image_composite(composite_image, Heat_gcd_resized, offset = "+350+130")
-composite_image <- image_composite(composite_image, Heat_gcd_prior_resized, offset = "+1050+130")
-composite_image <- image_composite(composite_image, Heat_oracle_resized, offset = "+1750+130")
+composite_image <- image_composite(composite_image, Heat_gcd_resized, offset = "+650+130")
+composite_image <- image_composite(composite_image, Heat_gcd_prior_resized, offset = "+1250+130")
+composite_image <- image_composite(composite_image, Heat_oracle_resized, offset = "+1850+130")
 
 # Adding GCM subsamples
-composite_image <- image_composite(composite_image, GCM_Sub1_resized, offset = "+100+1100")
-composite_image <- image_composite(composite_image, GCM_Sub2_resized, offset = "+800+1100")
-composite_image <- image_composite(composite_image, GCM_Sub3_resized, offset = "+1500+1100")
+composite_image <- image_composite(composite_image, GCM_Sub1_resized, offset = "+400+1250")
+composite_image <- image_composite(composite_image, GCM_Sub2_resized, offset = "+1000+1250")
+composite_image <- image_composite(composite_image, GCM_Sub3_resized, offset = "+1600+1250")
 
 # Adding heatmap subsamples
-composite_image <- image_composite(composite_image, Heat_Sub1_resized, offset = "+350+1300")
-composite_image <- image_composite(composite_image, Heat_Sub2_resized, offset = "+1050+1300")
-composite_image <- image_composite(composite_image, Heat_Sub3_resized, offset = "+1750+1300")
+composite_image <- image_composite(composite_image, Heat_Sub1_resized, offset = "+650+1250")
+composite_image <- image_composite(composite_image, Heat_Sub2_resized, offset = "+1250+1250")
+composite_image <- image_composite(composite_image, Heat_Sub3_resized, offset = "+1850+1250")
 
 # Adding true graph
-composite_image <- image_composite(composite_image, Heat_True_resized, offset = "+50+700")
-composite_image <- image_composite(composite_image, GCM_True_resized, offset = "+50+950")
+composite_image <- image_composite(composite_image, Heat_True_resized, offset = "+100+800")
+composite_image <- image_composite(composite_image, GCM_True_resized, offset = "+100+550")
 
 # Extracting the GCD value for the specific method
 GCD_value1 <- GCD[[config_key]][["gcd_spearman"]]
@@ -1428,50 +1440,89 @@ GCD_value4 <- GCD[[config_key]][["oracle_hamming_subsample_1_spearman"]]
 GCD_value5 <- GCD[[config_key]][["oracle_hamming_subsample_2_spearman"]]
 GCD_value6 <- GCD[[config_key]][["oracle_hamming_subsample_3_spearman"]]
 
-# Converting the GCD value to a string with formatting
-GCD_text1 <- sprintf("%s: %.3f", meth, GCD_value1)
-GCD_text2 <- sprintf("%s: %.3f", meth, GCD_value2)
-GCD_text3 <- sprintf("%s: %.3f", meth, GCD_value3)
-
-# Converting the GCD value to a string with formatting
-GCD_text4 <- sprintf("%s: %.3f", meth, GCD_value4)
-GCD_text5 <- sprintf("%s: %.3f", meth, GCD_value5)
-GCD_text6 <- sprintf("%s: %.3f", meth, GCD_value6)
-
-
 # Extracting the Ham_Dist value for the specific method
 Ham_Dist_value1 <- Ham_Dist[[config_key]][["gcd_spearman"]]
 Ham_Dist_value2 <- Ham_Dist[[config_key]][["gcd_prior_spearman"]]
-Ham_Dist_value3 <- Ham_Dist[[config_key]][["oracle_hamming_spearman"]]
+Ham_Dist_value3 <- Ham_Dist[[config_key]][["oracle_hamming"]]
 
 Ham_Dist_value4 <- Ham_Dist[[config_key]][["Sub1"]]
 Ham_Dist_value5 <- Ham_Dist[[config_key]][["Sub2"]]
 Ham_Dist_value6 <- Ham_Dist[[config_key]][["Sub3"]]
 
-# Converting the Ham_Dist value to a string with formatting
-Ham_Dist_text1 <- sprintf("%s: %.3f", meth, Ham_Dist_value1)
-Ham_Dist_text2 <- sprintf("%s: %.3f", meth, Ham_Dist_value2)
-Ham_Dist_text3 <- sprintf("%s: %.3f", meth, Ham_Dist_value3)
+# Converting the GCD value to a string with formatting
+GCD_text1 <- sprintf("Spearman\nGCD to True Graph: %.3f   Ham_Dist: %.3f", GCD_value1, Ham_Dist_value1)
+GCD_text2 <- sprintf("Prior Spearman\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value2, Ham_Dist_value2)
+GCD_text3 <- sprintf("Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value3, Ham_Dist_value3)
 
-# Converting the Ham_Dist value to a string with formatting
-Ham_Dist_text4 <- sprintf("%s: %.3f", meth, Ham_Dist_value4)
-Ham_Dist_text5 <- sprintf("%s: %.3f", meth, Ham_Dist_value5)
-Ham_Dist_text6 <- sprintf("%s: %.3f", meth, Ham_Dist_value6)
+# Converting the GCD value to a string with formatting
+GCD_text4 <- sprintf("Sub1 Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value4, Ham_Dist_value4)
+GCD_text5 <- sprintf("Sub2 Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value5, Ham_Dist_value5)
+GCD_text6 <- sprintf("Sub3 Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value6, Ham_Dist_value6)
 
-# Choose where you want to place the annotation on your image
-# Adjust the "+x+y" values to place the text where you prefer
-location_offset <- "+100+400" # Example position, adjust as needed
+GCD_text7 <- sprintf("True Graph")
 
-# # Annotate the composite image with the method name and GCD value
-# composite_image <- image_annotate(
-#   composite_image, 
-#   text = GCD_text, 
-#   size = 20, 
-#   color = "red", 
-#   location = location_offset
-# )
+# Annotating for GCD_text1
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text1,
+  size = 20,
+  color = "red",
+  location = "+410+80"  # Adjust this location as needed
+)
 
+# Annotating for GCD_text2
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text2,
+  size = 20,
+  color = "blue",
+  location = "+1010+80"  # Adjust this location as needed
+)
 
+# Annotating for GCD_text3
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text3,
+  size = 20,
+  color = "orange",
+  location = "+1610+80"  # Adjust this location as needed
+)
+
+#GCD_text4
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text4,
+  size = 20,
+  #color = "lightblue",
+  location = "+410+1200"  
+)
+
+# Example for GCD_text5
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text5,
+  size = 20,
+  #color = "red",
+  location = "+1010+1200"  # Adjust this location as needed
+)
+
+# Example for GCD_text6
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text6,
+  size = 20,
+  #color = "red",
+  location = "+1610+1200"  # Adjust this location as needed
+)
+
+#GCD_text7
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text7,
+  size = 20,
+  #color = "red",
+  location = "+110+520"  
+)
 
 
 # Save the composite image, adjusting the filename as needed

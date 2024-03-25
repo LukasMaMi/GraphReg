@@ -8,6 +8,8 @@ output: github_document
 
 ## To Do List:
 # Die N mal lambda_k graphs existieren nicht, wenn lb and ub == TRUE. Was existiert ist eine Liste mit N = 2 subsample dann N subsample für den regulierten Pfad und dann wieder N = 2 subsample.
+# Es macht keinen Sinn bei den lambda path plots die Ergebnisse mehrer Repetitionen zu betrachten. Weil wenn man den seed nicht setzt, erzeugt man unterschiedliche Graphen über die man nicht den Mittelwert nehmen kann! Und wenn man den Seed setzt erzeugt man wiederholt den gleichen Graphen, und die Varianz ist gleich null.
+# Das ist auch der Grund, warum die Pseudo Graphen auf den Lambda path plots (besonders bei prior Information) besser performten, als ihre nicht pseudo counterparts. Es wurden jedes mal unterschiedliche Graphen erzeugt und die pseudo methoden weisen weniger Varianz auf deshalb waren sie über mehrere Repetitionen verschiedener Graphen präziser. 
 
 Graphreg <- function(data, fun = huge::huge, fargs=list(),
                     criterion = c("stars"), thresh = 0.05, subsample.ratio = NULL,
@@ -30,6 +32,11 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
     knowncrits <- c("stars", "gcd", "gcd_prior")
     .lamcheck(fargs$lambda)
     .critcheck0(criterion, knowncrits)
+    
+    if ("gcd_prior" %in% criterion && is.null(prior_graph)) {
+      stop("Please provide prior graph structure!")
+    }
+    
     subsample.ratio <- .ratcheck(subsample.ratio, n)
     nlams <- length(fargs$lambda)
     conffile <- findConfFile(conffile)

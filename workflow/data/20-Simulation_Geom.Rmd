@@ -142,7 +142,7 @@ for(rep in 1:num_repetitions) {
   N = 5 # Number of Repetitions
   rho <- 0.245 # Strength off-diagonal elements
 
-  ## Important to set.seed
+  ## Important to set.seed !!!
   set.seed(123)
   Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
   Geom_data <- Geom$data

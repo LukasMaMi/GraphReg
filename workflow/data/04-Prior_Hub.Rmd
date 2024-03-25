@@ -4,6 +4,19 @@ output: github_document
 ---
 
 ```{r}
+Graph1 <- true_graph
+method <- "spearman"
+
+
+
+```
+
+
+
+
+
+
+```{r}
 
 my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
   
@@ -341,9 +354,10 @@ p <- 40 # Dimensions
 s <- 20    # Size Hub Group
 J <- floor(p/s) # Number of Hubs
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-N = 5 # Number of Repetitions
+N = 20 # Number of Repetitions
 rho <- 0.20 # Off-Diagonal Effect Strength
 
+set.seed(123)
 Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
 Hub_data <- Hub$data
 true_graph <- Hub$theta
@@ -352,7 +366,11 @@ act_sparsity <- Hub$act_sparsity
 maxCov <- getMaxCov(Hub_data)
 lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
 lambda <- list(lambda=lambda_path)
+```
 
+
+
+```{r}
 
 # Using QUIC
 library(BigQuic)
@@ -384,15 +402,15 @@ out.p <- Graphreg(
   rep.num = N,
   thresh = 0.05,
   subsample.ratio = b,
-  criterion=c('stars', 'gcd', 'gcd_prior'), 
+  criterion=c('stars', 'gcd'), 
   lb.stars = TRUE, 
   ub.stars = TRUE, 
   seed = FALSE,
-  refit = TRUE,
-  prior_graph = true_graph,
+  refit = FALSE,
+  #prior_graph = true_graph,
   method = c("spearman", "latentcor", "kendall"),
   five_node = FALSE,
-  use_pseudo_count = TRUE
+  use_pseudo_count = FALSE
 ))
 
 out.p
