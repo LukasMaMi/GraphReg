@@ -1441,13 +1441,13 @@ GCD_value5 <- GCD[[config_key]][["oracle_hamming_subsample_2_spearman"]]
 GCD_value6 <- GCD[[config_key]][["oracle_hamming_subsample_3_spearman"]]
 
 # Extracting the Ham_Dist value for the specific method
-Ham_Dist_value1 <- Ham_Dist[[config_key]][["gcd_spearman"]]
-Ham_Dist_value2 <- Ham_Dist[[config_key]][["gcd_prior_spearman"]]
-Ham_Dist_value3 <- Ham_Dist[[config_key]][["oracle_hamming"]]
+Ham_Dist_value1 <- round(Ham_Dist[[config_key]][["gcd_spearman"]])
+Ham_Dist_value2 <- round(Ham_Dist[[config_key]][["gcd_prior_spearman"]])
+Ham_Dist_value3 <- round(Ham_Dist[[config_key]][["oracle_hamming"]])
 
-Ham_Dist_value4 <- Ham_Dist[[config_key]][["Sub1"]]
-Ham_Dist_value5 <- Ham_Dist[[config_key]][["Sub2"]]
-Ham_Dist_value6 <- Ham_Dist[[config_key]][["Sub3"]]
+Ham_Dist_value4 <- round(Ham_Dist[[config_key]][["Sub1"]])
+Ham_Dist_value5 <- round(Ham_Dist[[config_key]][["Sub2"]])
+Ham_Dist_value6 <- round(Ham_Dist[[config_key]][["Sub3"]])
 
 # Converting the GCD value to a string with formatting
 GCD_text1 <- sprintf("Spearman\nGCD to True Graph: %.3f   Ham_Dist: %.3f", GCD_value1, Ham_Dist_value1)
