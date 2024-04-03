@@ -57,7 +57,7 @@ count_distinct_strings <- function(g, intermediate_nodes) {
 
 ```{r}
 
-calculate_12_dimensions <- function(adj_matrix) {
+ggvec <- function(adj_matrix) { #graphlet ghust vector
   # Convert the adjacency matrix to an igraph graph object
   graph <- igraph::graph_from_adjacency_matrix(adj_matrix, mode = "undirected", diag = FALSE)
 
@@ -89,17 +89,56 @@ calculate_12_dimensions <- function(adj_matrix) {
     rho_11 = {numerator_rho_11 = sum(Pt[, "O3"] * U2); numerator_rho_11 / sum(Pt[, "O3"])},
     rho_12 = (sum(gdm[, "O0"] * Pt[, "O3"]) / sum(Pt[, "O3"])) / max(gdm[, "O0"])
   )
+  
+  ggv <- matrix(rho_values, nrow = 1, dimnames = list(NULL, names(rho_values)))
 
-  return(rho_values)
+  return(ggv)
+}
+
+```
+
+```{r}
+
+ggd.stability <- function(premerge, prior_graph, rep.num, p, nlams, use_prior = FALSE, ...) { 
+  
+    est <- list()
+
+    if (use_prior) {
+        ggv_true = my.ggvec(prior_graph, ...) # ggv for true_graph
+
+        est$merge <- vector("list", nlams)
+        for (i in 1:nlams) {
+            lambda_distances <- numeric(rep.num)
+            for (j in 1:rep.num) {
+                ggv_sub <- premerge[[j]][[i]] # ggv of subsample j and lambda i
+                lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]] # calculate gcd
+            }
+            est$merge[[i]] <- lambda_distances 
+        }
+    } else { 
+        est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]])))) 
+    }
+
+    est$summary <- vector('numeric', nlams)
+    for (i in 1:nlams) {
+        est$summary[i] <- mean(est$merge[[i]]) # Fill summary: ith lambda = mean over all j subsamples 
+    }
+
+    return(est)
 }
 
 ```
 
 
+
 ```{r}
 
-dim_12  <- calculate_12_dimensions(true_graph)
-dim_12 
+ggv  <- ggvec(true_graph)
+ggv 
+
+gcm <- suppressWarnings(cor(dim_12, method = "spearman"))
+gcm
+
 
 ```
 
@@ -458,9 +497,9 @@ generator_geom <- function (n, p, rho, vis, verbose) {
 }
 
 n <- 800 # Samples
-p <- 400 # Dimensions
+p <- 100 # Dimensions
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-N = 5 # Number of Repetitions
+N = 20 # Number of Repetitions
 rho <- 0.245 # Strength off-diagonal elements
 
 ## Important to set.seed !!!
@@ -473,7 +512,7 @@ null_graph <- Geom$theta_null
 null_data <- Geom$null_data
 
 maxCov <- getMaxCov(Geom_data)
-lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 10) #,log = TRUE
+lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
 lambda <- list(lambda=lambda_path)
 
 cat("Condition number:", kappa(Geom$omega), "\n")
@@ -510,21 +549,20 @@ library(pulsar)
 
 time1    <- system.time(    
 out.p <- Graphreg(
-  data = Hub_data, 
+  data = Geom_data, 
   fun = quicr, 
   fargs = quicargs, 
   rep.num = N,
   thresh = 0.05,
   subsample.ratio = b,
-  criterion=c('stars', 'gcd'), 
+  criterion=c('stars', 'ghust', 'gcd_prior'), 
   lb.stars = TRUE, 
   ub.stars = TRUE, 
-  seed = FALSE,
-  refit = FALSE,
-  #prior_graph = true_graph,
+  seed = 123,
+  refit = TRUE,
+  prior_graph = true_graph,
   method = c("spearman", "latentcor", "kendall"),
-  five_node = FALSE,
-  use_pseudo_count = FALSE
+  use_pseudo_count = TRUE
 ))
 
 out.p
