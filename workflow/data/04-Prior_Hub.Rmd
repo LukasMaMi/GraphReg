@@ -497,7 +497,7 @@ generator_geom <- function (n, p, rho, vis, verbose) {
 }
 
 n <- 800 # Samples
-p <- 100 # Dimensions
+p <- 40 # Dimensions
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
 N = 20 # Number of Repetitions
 rho <- 0.245 # Strength off-diagonal elements
@@ -555,7 +555,7 @@ out.p <- Graphreg(
   rep.num = N,
   thresh = 0.05,
   subsample.ratio = b,
-  criterion=c('stars', 'ghust', 'gcd_prior'), 
+  criterion=c('stars', 'ghust', 'gcd_prior', 'gcd', 'ghust_prior'), 
   lb.stars = TRUE, 
   ub.stars = TRUE, 
   seed = 123,
@@ -570,7 +570,7 @@ out.p
 stop()
 
 for (crit in out.p$criterion) {
-  if (startsWith(crit, "gcd_")) {
+  if (startsWith(crit, "gcd_") || startsWith(crit, "ghust")) {
     opt.index(out.p, criterion = crit) <- get.opt.index(out.p, criterion = crit)
   }
 }
@@ -581,11 +581,32 @@ refit <- refit.pulsar(out.p)
 
 stop()
 
-plot(out.p, legends = T, show = c("stars", "gcd_pseudo_kendall", "gcd_prior_pseudo_kendall", "gcd_kendall", "gcd_prior_kendall"))
+plot(out.p, legends = T, show = c("stars", "gcd_pseudo_kendall", "gcd_prior_pseudo_kendall", "ghust", "gcd_prior_kendall", "ghust_prior"))
 
 
 ```
 
+```{r}
+    # Filter out the criteria to only include 'gcd_' and 'gcd_prior_'
+    gcd_criteria <- grep("^gcd_\\w+$|^ghust$", criteria, value = TRUE)
+    gcd_prior_criteria <- grep("^gcd_prior_\\w+$|^ghust_prior$", criteria, value = TRUE)
+    
+          if (startsWith(crit, "gcd")) {
+        gcd_prior_pseudo_crit <- paste0("gcd_prior_pseudo_", gsub("^gcd_prior_", "", crit))
+      }
+      
+      else if (startsWith(crit, "ghust")) {
+        gcd_prior_pseudo_crit <- paste0("ghust_prior")
+      }
+    
+          if (startsWith(crit, "gcd")) {
+        gcd_pseudo_crit <- paste0("gcd_pseudo_", gsub("^gcd_", "", crit))
+      }
+      
+      else if (startsWith(crit, "ghust")) {
+        gcd_pseudo_crit <- paste0("ghust")
+      }
+```
 
 
 

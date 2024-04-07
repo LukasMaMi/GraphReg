@@ -141,14 +141,13 @@ for (rep in 1:num_repetitions) {
       rep.num = N,
       thresh = 0.05,
       subsample.ratio = b,
-      criterion=c('stars', 'gcd', 'gcd_prior'), 
-      lb.stars = FALSE, 
-      ub.stars = FALSE, 
+      criterion=c('stars', 'gcd', 'gcd_prior', 'ghust', 'ghust_prior'), 
+      lb.stars = TRUE, 
+      ub.stars = TRUE, 
       seed = FALSE,
       refit = TRUE,
       prior_graph = true_graph,
       method = c("spearman", "kendall", "latentcor"),
-      five_node = FALSE,
       use_pseudo_count = TRUE
       #job.res = resources
     )

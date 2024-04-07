@@ -190,6 +190,8 @@ for(cfg in configs) {
     fullmodel <- list()
     
     stars <- list()
+    ghust <- list()
+    ghust_prior <- list()
     gcd_spearman <- list()
     gcd_pseudo_spearman <- list()
     gcd_prior_spearman <- list()
@@ -253,6 +255,8 @@ for(cfg in configs) {
       lambda_bound[[rep]] <- out.esti[["additional_metrics"]][["lambda_bound"]]
       f1_score[[rep]] <- out.esti[["additional_metrics"]][["f1_score"]]
       stars[[rep]] <- out.esti[["raw_summary"]][["stars"]]
+      ghust[[rep]] <- out.esti[["raw_summary"]][["ghust"]]
+      ghust_prior[[rep]] <- out.esti[["raw_summary"]][["ghust_prior"]]
       
       gcd_spearman[[rep]] <- out.esti[["raw_summary"]][["gcd_spearman"]]
       gcd_pseudo_spearman[[rep]] <- out.esti[["raw_summary"]][["gcd_pseudo_spearman"]]
@@ -303,6 +307,8 @@ for(cfg in configs) {
     config_results[[cfg_key]]$Lambda_Path <- enforce_monotonic_decrease(Lambda_Path$Mean, Lambda_Path$CI)
 
     config_results[[cfg_key]]$Summary_Path[["stars"]] <- calc_mean_ci_summary(stars)
+    config_results[[cfg_key]]$Summary_Path[["ghust"]] <- calc_mean_ci_summary(ghust)
+    config_results[[cfg_key]]$Summary_Path[["ghust_prior"]] <- calc_mean_ci_summary(ghust_prior)
     
     config_results[[cfg_key]]$Summary_Path[["gcd_spearman"]] <- calc_mean_ci_summary(gcd_spearman)
     config_results[[cfg_key]]$Summary_Path[["gcd_pseudo_spearman"]] <- calc_mean_ci_summary(gcd_pseudo_spearman)
