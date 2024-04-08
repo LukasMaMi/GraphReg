@@ -3,8 +3,6 @@ title: "22-Performance_Geom"
 output: github_document
 ---
 
-Überarbeite aggregated measures: Nicht mehr die e.g. die Index aus einzelnen repetiti meanen, sondern mean summary und dann min!
-
 ```{r}
 
 # Function to generate file names

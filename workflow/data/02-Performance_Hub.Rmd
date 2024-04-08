@@ -4,19 +4,8 @@ output: github_document
 ---
 
 
-## Step 3: Performance + Prior + additional criteria
+
 ```{r}
-
-# Step 3: Performance
-
-# Load session settings
-Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
-hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
-load(hub_settings_file)
-
-dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
-#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 # Function to generate file names
 get_filename <- function(config, rep, prefix = "Hub") {
@@ -107,6 +96,80 @@ enforce_monotonic_decrease <- function(mean_vector, ci_matrix) {
   list(Mean = mean_vector, CI = ci_matrix)
 }
 
+# Assuming fullmodel is a list of sparse matrices
+aggregate_fullmodel <- function(fullmodel_list) {
+  # Determine the maximum lambda index to ensure alignment
+  max_lambda_index <- max(sapply(fullmodel_list, length))
+  
+  aggregated_fullmodel <- list()
+
+  for (lambda_index in 1:max_lambda_index) {
+    # Collect all matrices for this lambda across all repetitions, if available
+    lambda_matrices <- lapply(fullmodel_list, function(x) if (length(x) >= lambda_index) x[[lambda_index]] else Matrix(0, 40, 40))
+
+    # Check that we are operating on matrices and not further nested structures
+    if (all(sapply(lambda_matrices, function(m) inherits(m, "Matrix")))) {
+      # Aggregate the matrices by summing and then dividing to get the mean
+      aggregated_matrix <- Reduce(`+`, lambda_matrices) / length(lambda_matrices)
+      aggregated_fullmodel[[lambda_index]] <- aggregated_matrix
+    }
+  }
+  
+  return(aggregated_fullmodel)
+}
+
+
+## Premerge
+aggregate_premerge <- function(premerge_list) {
+  # Determine the maximum lambda and subsample indexes to ensure alignment
+  max_lambda_index <- max(sapply(premerge_list, function(x) length(x)))
+  
+  aggregated_premerge <- list()
+
+  for (lambda_index in 1:max_lambda_index) {
+    # Collect all matrices for this lambda across all repetitions, if available
+    lambda_matrices_list <- lapply(premerge_list, function(x) if (length(x) >= lambda_index) x[[lambda_index]] else list())
+    
+    # Determine the max subsample index for this lambda
+    max_subsample_index <- max(sapply(lambda_matrices_list, function(x) length(x)))
+
+    aggregated_lambda_matrices <- list()
+    
+    for (subsample_index in 1:max_subsample_index) {
+      # Collect the specific subsample matrix from each repetition's lambda list, if available
+      subsample_matrices <- lapply(lambda_matrices_list, 
+                                   function(x) if (length(x) >= subsample_index) x[[subsample_index]] else Matrix(0, 40, 40))
+      
+      # Check that we are operating on matrices and not further nested structures
+      if (all(sapply(subsample_matrices, function(m) inherits(m, "Matrix")))) {
+        # Sum up the i-th matrices across all repetitions
+        aggregated_matrix <- Reduce(`+`, subsample_matrices)
+        aggregated_lambda_matrices[[subsample_index]] <- aggregated_matrix / length(subsample_matrices)
+      }
+    }
+
+    aggregated_premerge[[lambda_index]] <- aggregated_lambda_matrices
+  }
+  
+  return(aggregated_premerge)
+}
+
+
+```
+
+
+## Step 3: Performance + Prior + additional criteria
+```{r}
+
+# Load session settings
+Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
+#Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
+Hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
+load(Hub_settings_file)
+
+dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
+#dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
+
 
 # Initialize list to store results for each configuration
 config_results <- list()
@@ -123,9 +186,12 @@ for(cfg in configs) {
     hamming_dists <- list()
     lambda_bound <- list()
     f1_score <- list()
+    premerge <- list()
+    fullmodel <- list()
     
     stars <- list()
-    
+    ghust <- list()
+    ghust_prior <- list()
     gcd_spearman <- list()
     gcd_pseudo_spearman <- list()
     gcd_prior_spearman <- list()
@@ -148,59 +214,69 @@ for(cfg in configs) {
       print(paste("Loading data from:", filename))
       load(paste0(dir_path_results, "/", get_filename(cfg, rep, "estimation")))
       
-      # Compute metrics for each method in categorized_info
+      # Compute metrics for each method in out.esti
       method_metrics <- list()
       
-      true_graph <- categorized_info[["selected_graphs"]][["true_graph"]]
+      true_graph <- out.esti[["selected_graphs"]][["true_graph"]]
       
-      for(method_name in categorized_info[["criterion"]]) {
-          method_graph <- categorized_info[["selected_graphs"]][[method_name]]
+      for(method_name in out.esti[["criterion"]]) {
+          method_graph <- out.esti[["selected_graphs"]][[method_name]]
           method_metrics[[method_name]] <- compute_metrics(method_graph, true_graph)
-          method_metrics[[method_name]]$Sparsity <- categorized_info[["act_sparsity"]][[method_name]]
-          method_metrics[[method_name]]$Lambda <- categorized_info[["optimal_lambdas"]][[method_name]]
+          method_metrics[[method_name]]$Sparsity <- out.esti[["act_sparsity"]][[method_name]]
+          method_metrics[[method_name]]$Lambda <- out.esti[["optimal_lambdas"]][[method_name]]
+          #method_metrics[[method_name]]$GCM <- out.esti[["GCM"]][[method_name]]
           
           #Opt Index on regularized lambda path
-          if (method_name %in% names(categorized_info[["optimal_indices"]])) {
-            if (!is.null(categorized_info$additional_metrics$lb.index)) {
-              corrected_ind <- ((categorized_info[["optimal_indices"]][[method_name]] -
-                              categorized_info[["additional_metrics"]][["ub.index"]]) + 1)
-            } else corrected_ind <- categorized_info[["optimal_indices"]][[method_name]]
+          if (method_name %in% names(out.esti[["optimal_indices"]])) {
+            if (!is.null(out.esti$additional_metrics$lb.index)) {
+              corrected_ind <- ((out.esti[["optimal_indices"]][[method_name]] -
+                              out.esti[["additional_metrics"]][["ub.index"]]) + 1)
+            } else corrected_ind <- out.esti[["optimal_indices"]][[method_name]]
             method_metrics[[method_name]]$Index <- as.numeric(corrected_ind)
           }
       }
 
       # Accumulate gap values
-      gap_values_b <- c(gap_values_b, categorized_info[["additional_metrics"]][["gap_b"]])
-      gap_values_beta <- c(gap_values_beta, categorized_info[["additional_metrics"]][["gap_beta"]])
+      gap_values_b <- c(gap_values_b, out.esti[["additional_metrics"]][["gap_b"]])
+      gap_values_beta <- c(gap_values_beta, out.esti[["additional_metrics"]][["gap_beta"]])
 
       # Store individual results
       individual_results[[paste("Rep", rep)]] <- method_metrics
+      ## Add individual premerge and fullmodel
+      individual_results[[paste("Rep", rep)]]$fullmodel <- out.esti[["fullmodel"]]
+      individual_results[[paste("Rep", rep)]]$premerge <- out.esti[["premerge"]]
+      individual_results[[paste("Rep", rep)]]$true_graph <- out.esti[["selected_graphs"]][["true_graph"]]
 
     # Extract the specific metrics for each repetition
-      hamming_dists[[rep]] <- categorized_info[["additional_metrics"]][["hamming_dist"]]
-      lambda_bound[[rep]] <- categorized_info[["additional_metrics"]][["lambda_bound"]]
-      f1_score[[rep]] <- categorized_info[["additional_metrics"]][["f1_score"]]
-      stars[[rep]] <- categorized_info[["raw_summary"]][["stars"]]
+      fullmodel[[rep]] <- out.esti[["fullmodel"]]
+      premerge[[rep]] <- out.esti[["premerge"]]
       
-      gcd_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_spearman"]]
-      gcd_pseudo_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_pseudo_spearman"]]
-      gcd_prior_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_spearman"]]
-      gcd_prior_pseudo_spearman[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_pseudo_spearman"]]
+      hamming_dists[[rep]] <- out.esti[["additional_metrics"]][["hamming_dist"]]
+      lambda_bound[[rep]] <- out.esti[["additional_metrics"]][["lambda_bound"]]
+      f1_score[[rep]] <- out.esti[["additional_metrics"]][["f1_score"]]
+      stars[[rep]] <- out.esti[["raw_summary"]][["stars"]]
+      ghust[[rep]] <- out.esti[["raw_summary"]][["ghust"]]
+      ghust_prior[[rep]] <- out.esti[["raw_summary"]][["ghust_prior"]]
       
-      gcd_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_kendall"]]
-      gcd_pseudo_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_pseudo_kendall"]]
-      gcd_prior_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_kendall"]]
-      gcd_prior_pseudo_kendall[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_pseudo_kendall"]]
+      gcd_spearman[[rep]] <- out.esti[["raw_summary"]][["gcd_spearman"]]
+      gcd_pseudo_spearman[[rep]] <- out.esti[["raw_summary"]][["gcd_pseudo_spearman"]]
+      gcd_prior_spearman[[rep]] <- out.esti[["raw_summary"]][["gcd_prior_spearman"]]
+      gcd_prior_pseudo_spearman[[rep]] <- out.esti[["raw_summary"]][["gcd_prior_pseudo_spearman"]]
       
-      gcd_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_latentcor"]]
-      gcd_pseudo_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_pseudo_latentcor"]]
-      gcd_prior_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_latentcor"]]
-      gcd_prior_pseudo_latentcor[[rep]] <- categorized_info[["raw_summary"]][["gcd_prior_pseudo_latentcor"]]
+      gcd_kendall[[rep]] <- out.esti[["raw_summary"]][["gcd_kendall"]]
+      gcd_pseudo_kendall[[rep]] <- out.esti[["raw_summary"]][["gcd_pseudo_kendall"]]
+      gcd_prior_kendall[[rep]] <- out.esti[["raw_summary"]][["gcd_prior_kendall"]]
+      gcd_prior_pseudo_kendall[[rep]] <- out.esti[["raw_summary"]][["gcd_prior_pseudo_kendall"]]
+      
+      gcd_latentcor[[rep]] <- out.esti[["raw_summary"]][["gcd_latentcor"]]
+      gcd_pseudo_latentcor[[rep]] <- out.esti[["raw_summary"]][["gcd_pseudo_latentcor"]]
+      gcd_prior_latentcor[[rep]] <- out.esti[["raw_summary"]][["gcd_prior_latentcor"]]
+      gcd_prior_pseudo_latentcor[[rep]] <- out.esti[["raw_summary"]][["gcd_prior_pseudo_latentcor"]]
 
     }
     
     # Aggregated metrics (mean and CI) for each method
-    for (method_name in categorized_info[["criterion"]]) {
+    for (method_name in out.esti[["criterion"]]) {
         # Calculate mean and CI for F1, Hamming, Lambda, Sparsity, and Index for each method
         aggregated_metrics[[method_name]] <- list(
             F1 = calc_mean_ci(sapply(individual_results, function(x) x[[method_name]]$F1)),
@@ -220,7 +296,9 @@ for(cfg in configs) {
     config_results[[cfg_key]]$Individual = individual_results
     config_results[[cfg_key]]$Aggregated = aggregated_metrics
     config_results[[cfg_key]]$Gap_Values = aggregated_gap_values
-  
+    config_results[[cfg_key]]$AggregatedFullmodel <- aggregate_fullmodel(fullmodel)
+    config_results[[cfg_key]]$AggregatedPremerge <- aggregate_premerge(premerge)
+
 
     # Corrected assignments to config_results[[cfg_key]]
     config_results[[cfg_key]]$F1_Path <- calc_mean_ci_summary(f1_score)
@@ -229,6 +307,8 @@ for(cfg in configs) {
     config_results[[cfg_key]]$Lambda_Path <- enforce_monotonic_decrease(Lambda_Path$Mean, Lambda_Path$CI)
 
     config_results[[cfg_key]]$Summary_Path[["stars"]] <- calc_mean_ci_summary(stars)
+    config_results[[cfg_key]]$Summary_Path[["ghust"]] <- calc_mean_ci_summary(ghust)
+    config_results[[cfg_key]]$Summary_Path[["ghust_prior"]] <- calc_mean_ci_summary(ghust_prior)
     
     config_results[[cfg_key]]$Summary_Path[["gcd_spearman"]] <- calc_mean_ci_summary(gcd_spearman)
     config_results[[cfg_key]]$Summary_Path[["gcd_pseudo_spearman"]] <- calc_mean_ci_summary(gcd_pseudo_spearman)
@@ -248,7 +328,7 @@ for(cfg in configs) {
 }
 
 # Save the results to a file
-save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, dir_path3, config_results, file = hub_settings_file)
+save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, dir_path3, config_results, file = Hub_settings_file)
 performance_filename <- "all_performance_results.RData"
 save(config_results, file = file.path(dir_path3, performance_filename))
 

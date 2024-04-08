@@ -4,6 +4,74 @@ output: github_document
 ---
 
 
+## Estimation Functions
+```{r}
+
+## Function to get filename
+get_filename <- function(config, rep, prefix = "ER") {
+  sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
+}
+
+## Using QUIC
+quicr <- function(data, lambda) {
+    p <- ncol(data)
+    est  <- BigQuic(X = data, lambda=lambda, epsilon=1e-2, use_ram=TRUE, seed = NULL)
+    est <- setNames(lapply(ls(envir=est), mget, envir=attr(unclass(est), '.xData')), ls(envir=est))
+    path <-  lapply(seq(length(lambda)), function(i) {
+                tmp <- est$precision_matrices[[1]][[i]][1:p,1:p]
+                diag(tmp) <- 0
+                as(tmp!=0, "lMatrix")
+    })
+    est$path <- path
+    est
+}
+
+## Extraction Function
+extract_categorized_optimal_info <- function(output) {
+  # Initialize lists to store the categorized results
+  optimal_indices <- list()
+  optimal_lambdas <- list()
+  selected_graphs <- list()
+  act_sparsity <- list()
+
+  # Extract the criteria from the output object
+  criteria <- output[["criterion"]]
+
+  # Loop through each criterion
+  for (crit in criteria) {
+    # Extract the criterion name
+    crit_name <- crit[[1]]
+  
+    # Store the optimal index, lambda, and refit graph for the current criterion
+    optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
+    optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
+    selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
+    act_sparsity[[crit_name]] <- output[[crit_name]][["sparsity"]]
+  }
+
+  # Create a list to store all categorized results
+  categorized_results <- list(
+    "optimal_indices" = optimal_indices,
+    "optimal_lambdas" = optimal_lambdas,
+    "selected_graphs" = selected_graphs,
+    "act_sparsity" = act_sparsity,
+    "additional_metrics" = output$additional
+  )
+
+  return(categorized_results)
+}
+
+# Lambda path plots
+plot_lambda_path <- function(config, rep, prefix, dir_path, show) {
+  plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
+  pdf(file.path(dir_path, plot_filename), width = 8, height = 6)
+  plot(out.p, legends = TRUE, show = show)
+  dev.off()
+}
+
+```
+
+
 ## Run StARS, G-StARS, PG-StARS and Oracle with additional criteria
 ```{r}
 # Required packages
@@ -36,171 +104,103 @@ if (!dir.exists(dir_path_results)) {
   dir.create(dir_path_results)
 }
 
-# Function to get filename
-get_filename <- function(config, rep, prefix = "ER") {
-  sprintf("%s_rep_%d_n_%d_p_%d.RData", prefix, rep, config$n, config$p)
-}
-
-# GCM plots function
-plot_and_save_gcm <- function(output, criterion, config, rep, dir_path) {
-  if ("gcm" %in% names(output[[criterion]])) {
-    gcm <- output[[criterion]][["gcm"]]
-    
-    # Check if values are within the range [-1, 1] for this GCM
-    if(min(gcm) >= -1 && max(gcm) <= 1) {
-      plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d_gcm_plot.pdf", criterion, rep, config$n, config$p)
-      plot_path <- file.path(dir_path, plot_filename)
-      pdf(plot_path, width = 8, height = 6)
-      corrplot::corrplot(gcm, method = "circle")
-      dev.off()
-    } else {
-      # Handle the case where GCM is not within the range
-      cat(sprintf("Skipping plot for %s: GCM values are not in [-1, 1]\n", criterion))
-    }
-  }
-}
-
-
 # Main loop over each configuration and repetition
 for (rep in 1:num_repetitions) {
   for (i in seq_along(configs)) {
     
     # Reinitialize or clear relevant variables
     out.p <- NULL
-    categorized_info <- list()
+    out.esti <- list()
     
     config <- configs[[i]]
     
     # Prepare directories for storing results
     config_dir <- file.path(dir_path2, sprintf("config_n_%d_p_%d", config$n, config$p))
     rep_dir <- file.path(config_dir, sprintf("rep_%d", rep))
-    gcd_dir <- file.path(rep_dir, "gcd_results")
-    gcd_prior_dir <- file.path(rep_dir, "gcd_prior_results")
     lambda_dir <- file.path(rep_dir, "lambda_path_plots")
 
     # Create directories if they don't exist
     dir.create(config_dir, recursive = TRUE, showWarnings = FALSE)
-    dir.create(gcd_dir, recursive = TRUE, showWarnings = FALSE)
-    dir.create(gcd_prior_dir, recursive = TRUE, showWarnings = FALSE)
     dir.create(lambda_dir, recursive = TRUE, showWarnings = FALSE)
 
     # Load the dataset for the current configuration and repetition
     filename <- get_filename(config, rep)
     print(paste("Loading data from:", filename))
     load(paste0(dir_path, "/", filename))
+    
+    quicargs <- list(lambda = lambda_path)  
 
     # Run batch pulsar
-    library(batchtools)
     options(mc.cores = 2) #Speed up by setting number of cores available
     options(batchtools.progress=TRUE, batchtools.verbose=FALSE)
     #resources <- list(mem="1GB", nodes="1", walltime="00:30:00") # number of computers or servers you are requesting for your job
     
-    out.p <- my.batch.pulsar(
+    out.p <- Graphreg(
       data = ER_data, 
-      fun = "QUIC", 
-      fargs = lambda, 
+      fun = quicr, 
+      fargs = quicargs, 
       rep.num = N,
       thresh = 0.05,
       subsample.ratio = b,
-      criterion=c('stars', 'gcd', 'gcd_prior'), 
+      criterion=c('stars', 'gcd', 'gcd_prior', 'ghust', 'ghust_prior'), 
       lb.stars = TRUE, 
-      ub.stars = FALSE, 
+      ub.stars = TRUE, 
       seed = FALSE,
       refit = TRUE,
       prior_graph = true_graph,
       method = c("spearman", "kendall", "latentcor"),
-      five_node = FALSE,
-      use_pseudo_count = TRUE, 
-      pseudo_count_range = c(0, 0.1),
-      cleanup = TRUE
+      use_pseudo_count = TRUE
       #job.res = resources
     )
   
-    extract_categorized_optimal_info <- function(output) {
-      # Initialize lists to store the categorized results
-      optimal_indices <- list()
-      optimal_lambdas <- list()
-      selected_graphs <- list()
-      act_sparsity <- list()
+    out.esti <- extract_categorized_optimal_info(out.p)
     
-      # Extract the criteria from the output object
-      criteria <- output[["criterion"]]
-    
-      # Loop through each criterion
-      for (crit in criteria) {
-        # Extract the criterion name
-        crit_name <- crit[[1]]
-    
-        # Store the optimal index, lambda, and refit graph for the current criterion
-        optimal_indices[[crit_name]] <- output[[crit_name]][["opt.index"]]
-        optimal_lambdas[[crit_name]] <- output[[crit_name]][["opt.lambda"]]
-        selected_graphs[[crit_name]] <- output[[crit_name]][["refit"]]
-        act_sparsity[[crit_name]] <- output[[crit_name]][["sparsity"]]
-      }
-    
-      # Create a list to store all categorized results
-      categorized_results <- list(
-        "optimal_indices" = optimal_indices,
-        "optimal_lambdas" = optimal_lambdas,
-        "selected_graphs" = selected_graphs,
-        "act_sparsity" = act_sparsity,
-        "additional_metrics" = output$additional
-      )
-    
-      return(categorized_results)
-    }
-    
-    categorized_info <- extract_categorized_optimal_info(out.p)
-    
+    ## Adding Results lambda path and GCMs
     for (crit in out.p$criterion) {
-      categorized_info$raw_summary[[crit]] <- out.p[[crit]]$summary
-    }
-    
-    categorized_info$selected_graphs[["null_graph"]] <- null_graph
-    categorized_info$selected_graphs[["true_graph"]] <- true_graph
-    categorized_info$act_sparsity[["null_graph"]] <- sum(null_graph) / (config$p * (config$p - 1))
-    categorized_info$act_sparsity[["true_graph"]] <- sum(true_graph) / (config$p * (config$p - 1))
-    criterion <- unique(c(out.p$criterion, "null_graph"))
-    categorized_info$criterion <- criterion
-    
-
-    # Lambda path plots
-    plot_lambda_path <- function(config, rep, prefix, dir_path, show) {
-      plot_filename <- sprintf("%s_rep_%d_n_%d_p_%d.pdf", prefix, rep, config$n, config$p)
-      pdf(file.path(dir_path, plot_filename), width = 8, height = 6)
-      plot(out.p, legends = TRUE, show = show)
-      dev.off()
-    }
-
-    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir, show = c("stars", "gcd"))
-    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir, show = c("stars", "gcd_prior"))
-    
-    
-    # Adding gcm for true_graph 
-    for (meth in c("spearman", "kendall", "latentcor")) {
-      gcm_true <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1, method = meth, return_gcm = TRUE)
-      gcm_true_pseudo <- my.gcvec(true_graph, orbind = c(0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)+1, method = meth,
-                                  return_gcm = TRUE, pseudo_count = TRUE, pseudo_count_range = c(0, 0.1))
-      out.p[[paste("true_graph", meth, sep = "_")]]$gcm <- gcm_true
-      out.p[[paste("true_graph_pseudo", meth, sep = "_")]]$gcm <- gcm_true_pseudo
-    }
-
-    # Plot and save GCMs
-    for (crit_name in names(out.p)) {
-      if (startsWith(crit_name, "gcd_") && !grepl("prior", crit_name)) {
-        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_dir)
-      } else if (startsWith(crit_name, "gcd_prior_")) {
-        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_prior_dir)
-      } else if (startsWith(crit_name, "true_graph")) {
-        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_dir)
-        plot_and_save_gcm(out.p, crit_name, config, rep, gcd_prior_dir)
+      out.esti$raw_summary[[crit]] <- out.p[[crit]]$summary
+      # Check if GCM is available for the current criterion and assign it if available
+      if (!is.null(out.p[[crit]][["gcm"]])) {
+        out.esti$GCM[[crit]] <- out.p[[crit]][["gcm"]]
       }
     }
+    
+    ## Adding gcm for true_graph 
+    for (meth in c("spearman", "kendall", "latentcor")) {
+      gcm_true <- my.gcvec(true_graph, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1), method = meth, return_gcm = TRUE)
+      gcm_true_pseudo <- my.gcvec(true_graph, orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1), method = meth,
+                                  return_gcm = TRUE, pseudo_count = TRUE)
+      out.esti$GCM[[paste("true_graph", meth, sep = "_")]] <- gcm_true
+      out.esti$GCM[[paste("true_graph_pseudo", meth, sep = "_")]] <- gcm_true_pseudo
+    }
+    
+    out.esti$selected_graphs[["null_graph"]] <- null_graph
+    out.esti$selected_graphs[["true_graph"]] <- true_graph
+    out.esti$act_sparsity[["null_graph"]] <- sum(null_graph) / (config$p * (config$p - 1))
+    out.esti$act_sparsity[["true_graph"]] <- sum(true_graph) / (config$p * (config$p - 1))
+    criterion <- unique(c(out.p$criterion, "null_graph"))
+    out.esti$criterion <- criterion
+    out.esti$additional_metrics$lb.index <- out.p[["stars"]][["lb.index"]]
+    out.esti$additional_metrics$ub.index <- out.p[["stars"]][["ub.index"]]
+    out.esti$premerge <- out.p$premerge
+    out.esti$fullmodel <- out.p$est$path
+    
+    # Bounding down again Stars
+    if (!is.null(out.esti$additional_metrics$lb.index)) {
+      stars_bound <- out.esti[["additional_metrics"]][["ind_bound"]]
+      out.esti$raw_summary$stars <- out.esti$raw_summary$stars[stars_bound]
+    }
 
+    plot_lambda_path(config, rep, "Plot_gcd", lambda_dir, show = c("stars", "gcd_spearman", "gcd_kendall", "gcd_latentcor",
+                                                                   "gcd_pseudo_spearman", "gcd_pseudo_kendall",
+                                                                   "gcd_pseudo_latentcor"))
+    plot_lambda_path(config, rep, "Plot_gcd_prior", lambda_dir, show = c("stars", "gcd_prior_spearman", "gcd_prior_kendall", 
+                                                                         "gcd_prior_latentcor", "gcd_prior_pseudo_spearman",
+                                                                         "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor"))
+    
     # Save the results in the Results directory
     save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, file = ER_settings_file)
     result_filename <- get_filename(config, rep, "estimation")
-    save(out.p, categorized_info, file = file.path(dir_path_results, result_filename))
+    save(out.p, out.esti, true_graph, file = file.path(dir_path_results, result_filename))
   }
 }
 
@@ -209,6 +209,7 @@ print("Estimation completed and plots saved!")
 
 
 ```
+
 
 
 ## Session info
