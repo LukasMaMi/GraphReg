@@ -507,7 +507,7 @@ generator_geom <- function (n, p, rho, vis, verbose) {
 }
 
 n <- 800 # Samples
-p <- 40 # Dimensions
+p <- 400 # Dimensions
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
 N = 20 # Number of Repetitions
 rho <- 0.245 # Strength off-diagonal elements
@@ -566,9 +566,9 @@ out.p <- Graphreg(
   thresh = 0.05,
   subsample.ratio = b,
   criterion=c('stars', 'ghust', 'gcd_prior', 'gcd', 'ghust_prior'), 
-  lb.stars = TRUE, 
-  ub.stars = TRUE, 
-  seed = 123,
+  lb.stars = FALSE, 
+  ub.stars = FALSE, 
+  seed = FALSE,
   refit = TRUE,
   prior_graph = true_graph,
   method = c("spearman", "latentcor", "kendall"),
