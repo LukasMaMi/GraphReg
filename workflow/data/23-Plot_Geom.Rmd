@@ -867,6 +867,7 @@ my.hamming <- function(estimated, actual) {
     return(hamming_distance)
 }
 
+
 ggvec <- function(adj_matrix) { #graphlet ghust vector
   # Convert the adjacency matrix to an igraph graph object
   graph <- igraph::graph_from_adjacency_matrix(adj_matrix, mode = "undirected", diag = FALSE)
@@ -945,7 +946,7 @@ ggvec <- function(adj_matrix) { #graphlet ghust vector
 # Function to check connectivity and count distinct strings
 count_distinct_strings <- function(g, intermediate_nodes) {
   distinct_strings_count <- 0
-  visited <- rep(FALSE, vcount(g))
+  visited <- rep(FALSE, igraph::vcount(g))
   
   # Check connectivity for each intermediate node
   for (node in intermediate_nodes) {
@@ -960,7 +961,7 @@ count_distinct_strings <- function(g, intermediate_nodes) {
         to_explore <- to_explore[-1]
         
         # Get all unvisited neighbors that are also intermediate nodes
-        neighbors <- unlist(neighbors(g, current_node))
+        neighbors <- unlist(igraph::neighbors(g, current_node))
         unvisited_intermediate_neighbors <- neighbors[visited[neighbors] == FALSE & neighbors %in% intermediate_nodes]
         
         # Mark them as visited and add to the exploration list
@@ -972,6 +973,7 @@ count_distinct_strings <- function(g, intermediate_nodes) {
   
   return(distinct_strings_count)
 }
+
 
 ```
 
