@@ -1293,6 +1293,10 @@ batchply <- function(data, estFun, fun, fargs, ind.sample, wkdir, regdir,
     }
 }
 
+#' @export
+getEnvir <- function(x) {
+    UseMethod("getEnvir")
+}
 
 ```
 
