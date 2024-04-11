@@ -593,6 +593,7 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
 # }
 
 ## Version 2
+# Only remove the subsample which contain NaN
 ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prior = FALSE, ...) {
   est <- list()
 
@@ -627,7 +628,7 @@ ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prio
 }
 
 # ## Version 3
-# # Removing all NaNs, lb and ub can be turned off
+# # If one NaN remove whole lambda, lb and ub can be turned off
 # ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prior = FALSE, ...) {
 #   est <- list()
 # 
@@ -1293,10 +1294,10 @@ batchply <- function(data, estFun, fun, fargs, ind.sample, wkdir, regdir,
     }
 }
 
-#' @export
-getEnvir <- function(x) {
-    UseMethod("getEnvir")
-}
+# #' @export
+# getEnvir <- function(x) {
+#     UseMethod("getEnvir")
+# }
 
 ```
 

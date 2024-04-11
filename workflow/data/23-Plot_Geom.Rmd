@@ -620,9 +620,9 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
       ),
       plot_bgcolor = 'rgba(0,0,0,0)',
       ## For Extended plot
-      margin = list(l = 210, r = 50, t = 150, b = 180)
+      #margin = list(l = 210, r = 50, t = 150, b = 180)
       ## Normal plot
-      #margin = list(l = 50, r = 50, t = 50, b = 50)
+      margin = list(l = 50, r = 50, t = 50, b = 50)
   )
   
   return(p)
@@ -752,7 +752,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 }
 
 # Extract configurations from the 'configs' object
-configs_cut <- configs[1:1]
+configs_cut <- configs[1:4]
 config_names <- extract_configs(configs_cut)
 
 # Set the directory path where plots will be saved
@@ -2037,7 +2037,8 @@ library(gridExtra)
 table_plot <- tableGrob(combined_df)
 
 library(ggplot2)
-ggsave("Geom_graph.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Geom")
+ggsave("Geom_graph.pdf", table_plot, width = 10, height = 6, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom")
+#ggsave("Geom_graph.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Geom")
 
 ```
 
