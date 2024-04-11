@@ -1496,7 +1496,7 @@ dir_Heat_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/
 dir_Heat_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples"
 dir_GCM_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/subsamples"
 
-# dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Lambda_path_plots/"
+# dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Lam_path_plots/"
 # dir_GCM_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/pseudo/"
 # dir_GCM_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/nonpseudo"
 # dir_Heat_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo/"
