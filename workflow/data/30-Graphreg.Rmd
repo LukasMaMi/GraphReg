@@ -28,7 +28,7 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
     .lamcheck(fargs$lambda)
     .critcheck0(criterion, knowncrits)
     
-    if ("gcd_prior" %in% criterion && is.null(prior_graph)) {
+    if (any(c("gcd_prior", "ghust_prior") %in% criterion) && is.null(prior_graph)) {
       stop("Please provide prior graph structure!")
     }
     
@@ -560,13 +560,14 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
 ####################################### GraphReg Functions ##############################################
 #########################################################################################################
 
+## Keeping NaNs, lb and ub needs to be turned on
 # ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prior = FALSE, ...) {
-# 
+#
 #   est <- list()
-#   
+#
 #   if (use_prior) {
 #     ggv_true = ggvec(prior_graph, ...) # gcv for true_graph
-#     
+#
 #     est$merge <- vector("list", nlams)
 #     for (i in 1:nlams) {
 #         lambda_distances <- numeric(rep.num)
@@ -574,46 +575,59 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
 #             ggv_sub <- premerge[[j]][[i]] # gcv of subsample j and lambda i
 #             lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]] # calculate ggd
 #         }
-#         est$merge[[i]] <- lambda_distances 
+#         est$merge[[i]] <- lambda_distances
 #     }
-#   } 
-#   
-#   else { 
-#     est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]])))) 
 #   }
-# 
+#
+#   else {
+#     est$merge <- lapply(1:nlams, function(i) dist(t(sapply(1:rep.num, function(j) premerge[[j]][[i]]))))
+#   }
+#
 #   est$summary <- vector('numeric', nlams)
 #   for (i in 1:nlams) {
 #       est$summary[i] <- mean(est$merge[[i]]) # Fill summary: ith lambda = mean over all j subsamples
 #   }
-# 
+#
 #   return(est)
 # }
 
+## Removing all NaNs, lb and ub can be turned off
 ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prior = FALSE, ...) {
   est <- list()
 
+  # Calculate euclidean distance between the 12 dim of each subsample for a specific lambda to the 12 dim of the true graph
   if (use_prior && !is.null(prior_graph)) {
     ggv_true <- ggvec(prior_graph, ...) # ggv for true_graph
     est$merge <- vector("list", nlams)
+
     for (i in 1:nlams) {
       lambda_distances <- numeric(rep.num)
+      valid_subs = TRUE
+
       for (j in 1:rep.num) {
-        ggv_sub <- premerge[[j]][[i]] # ggv of subsample j and lambda i
-        if (all(is.finite(c(ggv_sub, ggv_true)))) {
-          lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]] # calculate ggd
-        } else {
-          lambda_distances[j] <- NA  # Assign NA if any NaN present
+        ggv_sub <- premerge[[j]][[i]]
+        if (!all(is.finite(ggv_sub))) {
+          valid_subs = FALSE
+          break
         }
       }
-      est$merge[[i]] <- lambda_distances
+
+      if (valid_subs && all(is.finite(ggv_true))) {
+        for (j in 1:rep.num) {
+          ggv_sub <- premerge[[j]][[i]]
+          lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]] # calculate ggd
+        }
+        est$merge[[i]] <- lambda_distances
+      } else {
+        est$merge[[i]] <- rep(NA, rep.num) # Assign NA if any NaN present in subsamples or true graph
+      }
     }
   } else {
+    ## Internal consistency among subsamples
+    # Calculate the euclidean distance between the 12 dim of the subsamples for a specific lambda with each other
     est$merge <- lapply(1:nlams, function(i) {
       ggv_matrix <- sapply(1:rep.num, function(j) premerge[[j]][[i]])
-      print(ggv_matrix)
       if (any(!is.finite(ggv_matrix))) {
-        print("kicked")
         return(rep(NA, rep.num))  # Assign NA to all distances if any NaN present in a lambda set
       } else {
         return(dist(t(ggv_matrix)))
@@ -705,7 +719,7 @@ ggvec <- function(adj_matrix) { #graphlet ghust vector
 # Function to check connectivity and count distinct strings
 count_distinct_strings <- function(g, intermediate_nodes) {
   distinct_strings_count <- 0
-  visited <- rep(FALSE, vcount(g))
+  visited <- rep(FALSE, igraph::vcount(g))
   
   # Check connectivity for each intermediate node
   for (node in intermediate_nodes) {
@@ -720,7 +734,7 @@ count_distinct_strings <- function(g, intermediate_nodes) {
         to_explore <- to_explore[-1]
         
         # Get all unvisited neighbors that are also intermediate nodes
-        neighbors <- unlist(neighbors(g, current_node))
+        neighbors <- unlist(igraph::neighbors(g, current_node))
         unvisited_intermediate_neighbors <- neighbors[visited[neighbors] == FALSE & neighbors %in% intermediate_nodes]
         
         # Mark them as visited and add to the exploration list

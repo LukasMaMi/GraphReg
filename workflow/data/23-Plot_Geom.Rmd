@@ -264,7 +264,7 @@ lambda_plot_set_2
 ```
 
 
-## Lambda Path Plots
+## Lambda Path Plots Pseudo + Non-Pseudo
 ```{r}
 
 # install.packages('reticulate')
@@ -502,706 +502,8 @@ create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
 ```
 
 
-################################################ Extended Lambda Path Plots ######################################################
 
-## Helper Functions
-```{r}
-
-my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
-  
-  orbind <- orbind + 1
-  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
-  if (five_node == FALSE && any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
-  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
-  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
-  n <- length(orbind)
-  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
-      return(rep(0, n*(n-1)/2)) # Return empty vector # Failsafe for empty graphs
-  }
-
-  p <- ncol(graph)
-  if (five_node == TRUE) { gdm <- orca::count5(nx2)
-    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
-  } 
-  
-  ## expand missing nodes
-  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
-  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
-  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
-  ## or completely empty graph and can be safely suppressed.
-  
-  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
-  gdm <- rbind(gdm[,orbind],1) 
-  
-  if (pseudo_count == TRUE) {
-    ## Add pseudo_count to orb_count
-    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
-  } 
-
-  if (method %in% c("kendall", "spearman")){
-  #Then calculate the graphlet correlation matrix with method
-  gcm <- suppressWarnings(cor(gdm, method = method))
-  }
-  
-  else if (method == "latentcor") {
-  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
-  gcm <- gcm$R
-  }
-  
-  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
-  
-  if (return_gcm == TRUE) {
-    return(gcm)
-  } else return(gcv)
-}
-
-
-#' @keywords internal
-.adj2elist <- function(G) {
-    if (inherits(G, "sparseMatrix")) {
-        G <- Matrix::triu(G, k=1)
-        index_i_j <- Matrix::mat2triplet(G)[1:2]
-        return(as.data.frame(index_i_j))
-    } else {
-        p <- ncol(G)
-        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
-    }
-}
-
-modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
-  # Validate the orbit_count_range input
-  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
-    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
-         \n i.e. pseudo_count_range = c(0, 0.1)")
-  }
-
-  # Generate a random matrix with the same dimensions as orb_count
-  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
-                               min = pseudo_count_range[1], 
-                               max = pseudo_count_range[2]), 
-                          nrow = nrow(orb_count), 
-                          ncol = ncol(orb_count))
-  
-  # Apply conditional logic to add random noise only to the zero elements of orb_count
-  modified_orb_count <- mapply(function(orb_elem, random_elem) {
-                               if (orb_elem == 0) orb_elem + random_elem else orb_elem
-                             }, orb_count, random_matrix)
-  
-  # Convert the modified_orb_count to a matrix and set the column names
-  modified_orb_count_matrix <- matrix(modified_orb_count, nrow = nrow(orb_count), ncol = ncol(orb_count))
-  colnames(modified_orb_count_matrix) <- colnames(orb_count)
-
-  return(modified_orb_count_matrix)
-}
-
-#' @keywords internal
-my.hamming <- function(estimated, actual) {
-    hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
-    return(hamming_distance)
-}
-
-ggvec <- function(adj_matrix) { #graphlet ghust vector
-  # Convert the adjacency matrix to an igraph graph object
-  graph <- igraph::graph_from_adjacency_matrix(adj_matrix, mode = "undirected", diag = FALSE)
-
-  # Transform adjacency matrix to edge list if necessary for graphlet counting
-  nx2 <- .adj2elist(adj_matrix)
-  orbind <- c(0, 2, 1, 3) + 1 
-  n <- length(orbind)
-  p <- ncol(adj_matrix)
-  
-  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
-    return(rep(0, n*(n-1)/2)) # Return empty vector # Failsafe for empty graphs
-  }
-  
-  # Perform graphlet decomposition to get graphlet degree matrix (gdm)
-  gdm <- orca::count4(nx2)
-  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm))
-  gdm <- rbind(gdm, buffer)
-  #gdm <- rbind(gdm[,orbind],1) 
-  gdm <- gdm[,orbind] 
-  
-  # Binary indicator matrix for node-orbit participation
-  Pt <- gdm > 0
-  Pt <- 1 * Pt
-  
-  # # Small number to prevent division by zero
-  # epsilon <- 1e-6
-  # 
-  # # Calculate dimensions based on gdm and Pt
-  # rho_1 <- 1 - (2 * sum(Pt[, "O0"]) / (sum(gdm[, "O0"]) + epsilon))
-  # #rho_1 <- ifelse(rho_1 >= 0, r1, NA)
-  # rho_2 <- 1 - (sum(Pt[, "O2"] * (1 - Pt[, "O3"])) / (sum(Pt[, "O1"] * (1 - Pt[, "O3"])) + epsilon))
-  # 
-  # rho_3 = (sum(gdm[, "O1"] * Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) / 
-  #          (sum(Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) + epsilon)) / (max(gdm[, "O0"]) + epsilon)
-  # rho_4 = sum(gdm[, "O2"]) / ((sum(Pt[, "O2"]) + epsilon) * (max(gdm[, "O2"]) + epsilon))
-  # rho_5 = (0.5 * cov(rank(gdm[, "O1"]), rank(gdm[, "O2"])) / 
-  #         ((sd(rank(gdm[, "O1"])) + epsilon) * (sd(rank(gdm[, "O2"])) + epsilon))) + 0.5
-  # U2 <- ifelse(gdm[, "O2"] == 1, 1, 0)
-  # U3 <- ifelse(gdm[, "O3"] == 0, 1, 0)
-  # rho_6 = sum(U2 * U3) / (sum(Pt[, "O2"]) + epsilon)
-  # n_strings = count_distinct_strings(graph, which(U2 & U3))
-  # rho_7 = 1 - (n_strings / (sum(U2 * U3) + epsilon))
-  # rho_8 = sum(gdm[, "O3"]) / ((3 * sum(gdm[, "O2"]) + sum(gdm[, "O3"])) + epsilon)
-  # rho_9 = 1 - (sum(Pt[, "O3"]) / (sum(gdm[, "O3"]) + epsilon))
-  # rho_10 = sum(Pt[, "O3"]) / (sum(Pt[, "O0"]) + epsilon)
-  # rho_11 = { numerator_rho_11 = sum(Pt[, "O3"] * U2); numerator_rho_11 / (sum(Pt[, "O3"]) + epsilon) }
-  # rho_12 = (sum(gdm[, "O0"] * Pt[, "O3"]) / (sum(Pt[, "O3"]) + epsilon)) / (max(gdm[, "O0"]) + epsilon)
-  
-  r1 <- 1 - (2 * sum(Pt[, "O0"]) / sum(gdm[, "O0"]))
-  rho_1 <- ifelse(r1>= 0, r1, NA)
-  rho_2 <- 1 - (sum(Pt[, "O2"] * (1 - Pt[, "O3"])) / sum(Pt[, "O1"] * (1 - Pt[, "O3"])))
-  
-  rho_3 = (sum(gdm[, "O1"] * Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) / 
-             sum(Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"]))) / max(gdm[, "O0"])
-  rho_4 = sum(gdm[, "O2"]) / (sum(Pt[, "O2"]) * max(gdm[, "O2"]))
-  rho_5 = (0.5 * cov(rank(gdm[, "O1"]), rank(gdm[, "O2"])) / (sd(rank(gdm[, "O1"])) * sd(rank(gdm[, "O2"]))) + 0.5)
-  U2 <- ifelse(gdm[, "O2"] == 1, 1, 0)
-  U3 <- ifelse(gdm[, "O3"] == 0, 1, 0)
-  rho_6 = sum(U2 * U3) / sum(Pt[, "O2"])
-  n_strings = count_distinct_strings(graph, which(U2 & U3))
-  rho_7 = 1 - (n_strings / sum(U2 * U3))
-  rho_8 = sum(gdm[, "O3"]) / (3 * sum(gdm[, "O2"]) + sum(gdm[, "O3"]))
-  rho_9 = 1 - sum(Pt[, "O3"]) / sum(gdm[, "O3"])
-  rho_10 = sum(Pt[, "O3"]) / sum(Pt[, "O0"])
-  rho_11 = {numerator_rho_11 = sum(Pt[, "O3"] * U2); numerator_rho_11 / sum(Pt[, "O3"])}
-  rho_12 = (sum(gdm[, "O0"] * Pt[, "O3"]) / sum(Pt[, "O3"])) / max(gdm[, "O0"])
-  
-  ggv <- c(rho_1, rho_2, rho_3, rho_4, rho_5, rho_6, rho_7, rho_8, rho_9, rho_10, rho_11, rho_12)
-
-  return(ggv)
-}
-
-
-# Function to check connectivity and count distinct strings
-count_distinct_strings <- function(g, intermediate_nodes) {
-  distinct_strings_count <- 0
-  visited <- rep(FALSE, vcount(g))
-  
-  # Check connectivity for each intermediate node
-  for (node in intermediate_nodes) {
-    if (!visited[node]) {
-      visited[node] <- TRUE
-      distinct_strings_count <- distinct_strings_count + 1
-      
-      # Explore connected intermediate nodes
-      to_explore <- c(node)
-      while (length(to_explore) > 0) {
-        current_node <- to_explore[1]
-        to_explore <- to_explore[-1]
-        
-        # Get all unvisited neighbors that are also intermediate nodes
-        neighbors <- unlist(neighbors(g, current_node))
-        unvisited_intermediate_neighbors <- neighbors[visited[neighbors] == FALSE & neighbors %in% intermediate_nodes]
-        
-        # Mark them as visited and add to the exploration list
-        visited[unvisited_intermediate_neighbors] <- TRUE
-        to_explore <- c(to_explore, unvisited_intermediate_neighbors)
-      }
-    }
-  }
-  
-  return(distinct_strings_count)
-}
-
-```
-
-
-## GCM PLOTS
-```{r}
-
-## GCM Plots
-orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
-
-# Initialize
-GCM <- list()
-GCV <- list()
-
-# Iterate over configurations 
-for (i in seq_along(configs)) {
-  config <- configs[[i]]
-  config_key <- paste("n", config$n, "p", config$p, sep = "_")
-  GCM[[config_key]] <- list()
-  GCV[[config_key]] <- list()
-  
-  aggregated <- config_results[[config_key]][["Aggregated"]]
-  aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
-  optimal_index <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
-  
-  # Process oracle_hamming subsamples
-  for (subsample_index in 1:3) {
-    graph <- config_results[[config_key]][["AggregatedPremerge"]][[optimal_index]][[subsample_index]]
-    for (meth in c("kendall", "latentcor", "spearman")) {
-      crit_name <- paste("oracle_hamming_subsample", subsample_index, meth, sep = "_")
-      GCM[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
-                                                 method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
-      GCV[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
-                                                 method = meth, pseudo_count = FALSE, orbind = orbind)
-    }
-  }
-  
-  # Iterate over criteria in aggregated results to calculate GCM where applicable
-  for (crit in names(aggregated)) {
-    # Check if criteria is one of the gcd methods or oracle_hamming
-    if (startsWith(crit, "gcd")) {
-      # Extracting the mean index for the criteria
-      cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
-      
-      # Ensure index is within bounds for selecting a model
-      if (cind >= 1 && cind <= length(aggregatedFullmodel)) {
-        graph <- aggregatedFullmodel[[cind]]
-        
-        # Determine method and pseudo_count flag based on crit
-        count <- grepl("pseudo", crit)
-        meth <- if(grepl("kendall", crit)) "kendall" else if(grepl("latentcor", crit)) "latentcor" else "spearman"
-        
-        # Compute the GCM and store it
-        GCM[[config_key]][[crit]] <- my.gcvec(graph = graph, 
-                                              method = meth, pseudo_count = count, orbind = orbind, return_gcm = TRUE)
-        GCV[[config_key]][[crit]] <- my.gcvec(graph = graph, 
-                                              method = meth, pseudo_count = count, orbind = orbind)
-      } else {
-        # Placeholder in case the index is out of bounds
-        GCM[[config_key]][[crit]] <- NA
-        GCV[[config_key]][[crit]] <- NA
-      }
-    }
-    
-    else if (crit == "oracle_hamming") {
-      cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
-      graph <- aggregatedFullmodel[[cind]]
-      
-      for (meth in c("kendall", "latentcor", "spearman")) {
-        GCM[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
-                                                        method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
-        GCV[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
-                                                        method = meth, pseudo_count = FALSE, orbind = orbind)
-        GCM[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
-                                                        method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
-        GCV[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
-                                                        method = meth, pseudo_count = TRUE, orbind = orbind)
-      }
-    }
-  }
-  
-  ## Adding GCM true_graph
-  graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
-  for (meth in c("kendall", "latentcor", "spearman")) {
-  GCM[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
-                                                          method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
-  GCV[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
-                                                          method = meth, pseudo_count = FALSE, orbind = orbind)
-  GCM[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
-                                                          method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
-  GCV[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
-                                                          method = meth, pseudo_count = TRUE, orbind = orbind)
-  }
-}
-
-
-
-## GCM PLOTS
-library(corrplot) # Ensure corrplot is loaded
-
-# Define base directory path
-base_dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM"
-
-# Function to plot and save GCM for both individual and combined plots
-plot_and_save_gcm <- function(gcm_list, config_key, plot_together = FALSE) {
-    types <- c("pseudo", "nonpseudo", "subsamples")
-    criteria <- c("gcd", "gcd_prior", "true_graph", "oracle_hamming")
-    methods <- c("spearman", "kendall", "latentcor")
-
-    for (type in types) {
-        config_dir_path <- file.path(base_dir_path, type, config_key) # Path for each config within type
-        if (!dir.exists(config_dir_path)) {
-            dir.create(config_dir_path, recursive = TRUE) # Create directory if it doesn't exist
-        }
-
-        # When plotting together
-        if (plot_together) {
-            plot_filename <- "combined_gcm_plots.pdf"
-            plot_full_path <- file.path(config_dir_path, plot_filename)
-            pdf(plot_full_path, width = 13, height = 13)
-            par(mfrow = c(3, 3), mar = c(1.7, 1.7, 1.7, 1.7), oma = c(1, 1, 1, 1))
-
-            # Iterate through all criteria and methods for combined plot
-            for (criterion in criteria) {
-                for (method in methods) {
-                    crit_name <- ifelse(type == "pseudo" && criterion != "true_graph" && criterion != "oracle_hamming_subsample",
-                                        paste(criterion, "pseudo", method, sep = "_"), paste(criterion, method, sep = "_"))
-                    if (!is.null(gcm_list[[config_key]][[crit_name]])) {
-                        corrplot(gcm_list[[config_key]][[crit_name]], method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
-                        mtext(text = crit_name, side = 1, line = 1, cex = 0.9)
-                    } else {
-                        plot.new()
-                        mtext(text = sprintf("%s (N/A)", crit_name), side = 1, line = 3, cex = 0.8)
-                    }
-                }
-            }
-            dev.off()
-        } else {
-            # Plot individually within the same loop, adapted for 'subsamples' special handling
-            if (type == "subsamples") {
-                subsample_indices <- 1:3
-                for (subsample_index in subsample_indices) {
-                    for (method in methods) {
-                        crit_name <- paste("oracle_hamming_subsample", subsample_index, method, sep = "_")
-                        plot_individual_gcm(gcm_list, config_key, crit_name, config_dir_path)
-                    }
-                }
-            } else {
-                for (criterion in criteria) {
-                    for (method in methods) {
-                        crit_name <- ifelse(type == "pseudo", paste(criterion, "pseudo", method, sep = "_"), 
-                                            paste(criterion, method, sep = "_"))
-                        plot_individual_gcm(gcm_list, config_key, crit_name, config_dir_path)
-                    }
-                }
-            }
-        }
-    }
-}
-
-# Function to plot individual GCM
-plot_individual_gcm <- function(gcm_list, config_key, crit_name, config_dir_path) {
-    if (!is.null(gcm_list[[config_key]][[crit_name]])) {
-        plot_filename <- paste(crit_name, "pdf", sep = ".")
-        plot_full_path <- file.path(config_dir_path, plot_filename)
-        pdf(plot_full_path, width = 8, height = 8)
-        corrplot(gcm_list[[config_key]][[crit_name]], method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
-        dev.off()
-    }
-}
-
-# Iterate over all configurations and generate/save plots
-for (config in configs) {
-    config_key <- paste("n", config$n, "p", config$p, sep = "_")
-    plot_and_save_gcm(GCM, config_key, plot_together = TRUE)
-    plot_and_save_gcm(GCM, config_key, plot_together = FALSE)# Or set plot_together = FALSE as needed
-}
-
-
-```
-
-
-## Plot Heatmaps
-```{r}
-
-as.heatmap <- function(graph) {
-  graph <- as.matrix(graph)
-  graph[graph == TRUE] = 1
-  graph[graph == FALSE] = 0
-  
-  return(graph)
-}
-
-# Initialize a list to store the GCM results
-Heatmaps <- list()
-
-# Iterate over configurations using indices since configs does not have names
-for (i in seq_along(configs)) {
-  config <- configs[[i]]
-  # Construct the configuration name/key
-  config_key <- paste("n", config$n, "p", config$p, sep = "_")
-  
-  # Initialize storage for this configuration's GCM results
-  Heatmaps[[config_key]] <- list()
-
-  # Extract aggregated results and full models for the current configuration
-  aggregated <- config_results[[config_key]][["Aggregated"]]
-  aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
-  
-  # Iterate over criteria in aggregated results to calculate GCM where applicable
-  for (crit in names(aggregated)) {
-    # Check if criteria is one of the gcd methods or oracle_hamming
-    if (startsWith(crit, "gcd") || startsWith(crit, "ghust")) {
-      # Extracting the mean index for the criteria
-      cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
-      
-      # Ensure index is within bounds for selecting a model
-      if (cind >= 1 && cind <= length(aggregatedFullmodel)) {
-        Heatmaps[[config_key]][[crit]] <- as.heatmap(aggregatedFullmodel[[cind]])
-      }
-    }
-    
-    else if (crit == "oracle_hamming") {
-      cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
-      Heatmaps[[config_key]][[crit]] <- as.heatmap(aggregatedFullmodel[[cind]])
-      
-    }
-  }
-  ## Adding Heatmap true_graph
-  Heatmaps[[config_key]][["true_graph"]] <- as.heatmap(config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]])
-}
-
-
-
-## Heatmap creation
-library(pheatmap)
-
-# Consider only the first two configurations
-configs <- configs[1:2]
-
-# Folders setup
-pseudo_folder_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo"
-non_pseudo_folder_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo/"
-
-# Function to ensure directory exists
-ensure_dir_exists <- function(path) {
-  if (!dir.exists(path)) {
-    dir.create(path, recursive = TRUE)
-  }
-}
-
-# Function to save heatmap
-save_heatmap <- function(matrix, name, folder) {
-  ensure_dir_exists(folder) # Ensure the folder exists
-  pdf(file.path(folder, paste0(name, ".pdf")))
-  pheatmap(matrix, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE, show_colnames = FALSE)
-  dev.off()
-}
-
-# Iterate over configurations and heatmaps
-for (config in configs) {
-  config_key <- paste("n", config$n, "p", config$p, sep = "_")
-  
-  # Adjusted folders for each configuration
-  pseudo_folder <- file.path(pseudo_folder_base, config_key)
-  non_pseudo_folder <- file.path(non_pseudo_folder_base, config_key)
-  
-  for (name in names(Heatmaps[[config_key]])) {
-    matrix <- Heatmaps[[config_key]][[name]]
-    if (grepl("pseudo", name) || name %in% c("oracle_hamming", "true_graph")) {
-      save_heatmap(matrix, name, pseudo_folder)
-    }
-    if (!grepl("pseudo", name) || name %in% c("oracle_hamming", "true_graph")) {
-      save_heatmap(matrix, name, non_pseudo_folder)
-    }
-  }
-}
-
-# Function to plot multiple heatmaps next to each other
-library(gridExtra)
-library(grid)
-
-plot_arranged_heatmaps <- function(heatmaps_list, names_list, save_path, ncol_layout) {
-  # Calculate dimensions
-  pdf(save_path, width = 4 * ncol_layout, height = 12) # Adjust dimensions as needed
-  
-  # Create grobs for heatmaps and titles
-  grobs <- lapply(1:length(heatmaps_list), function(i) {
-    heatmap <- pheatmap(heatmaps_list[[i]], cluster_rows = FALSE, cluster_cols = FALSE,
-                        show_rownames = FALSE, show_colnames = FALSE, silent = TRUE)
-    title <- textGrob(names_list[i], x = 0.5, y = 0.5, just = "center", 
-                      gp = gpar(col = "black", fontsize = 10, fontface = "bold"))
-    arrangeGrob(title, heatmap$gtable, ncol = 1, heights = c(0.1, 0.9))
-  })
-  
-  # Arrange the grobs in the specified layout
-  do.call(grid.arrange, c(grobs, ncol = ncol_layout))
-  dev.off()
-}
-
-
-# Example usage within your existing workflow
-for (config in configs) {
-  config_key <- paste("n", config$n, "p", config$p, sep = "_")
-  
-  # Define the order and selection of methods explicitly
-  pseudo_methods_order <- c(
-    "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor",  # GCD methods
-    "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor",  # GCD Prior methods
-    "true_graph", "oracle_hamming"  # True Graph
-  )
-  
-  non_pseudo_methods_order <- c(
-    "gcd_spearman", "gcd_kendall", "gcd_latentcor",  # GCD methods
-    "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor",  # GCD Prior methods
-    "true_graph", "oracle_hamming"  # True Graph
-  )
-
-  # Prepare data for plotting
-  pseudo_heatmaps <- Heatmaps[[config_key]][pseudo_methods_order]
-  non_pseudo_heatmaps <- Heatmaps[[config_key]][non_pseudo_methods_order]
-
-  # Calculate the number of columns for layout based on method groups
-  ncol_layout_pseudo = 3
-    #length(pseudo_methods_order) # Adjust based on your actual groups
-  ncol_layout_non_pseudo = 3
-    #length(non_pseudo_methods_order) # Adjust based on your actual groups
-
-  # Save paths for pseudo and non-pseudo combined heatmaps
-  pseudo_save_path <- file.path(pseudo_folder_base, config_key, "arranged_pseudo_heatmap_with_titles.pdf")
-  non_pseudo_save_path <- file.path(non_pseudo_folder_base, config_key, "arranged_non_pseudo_heatmap_with_titles.pdf")
-  
-  # Plot and save pseudo and non-pseudo arranged heatmaps with titles
-  plot_arranged_heatmaps(pseudo_heatmaps, pseudo_methods_order, pseudo_save_path, ncol_layout_pseudo)
-  plot_arranged_heatmaps(non_pseudo_heatmaps, non_pseudo_methods_order, non_pseudo_save_path, ncol_layout_non_pseudo)
-}
-
-# Extend the Heatmaps calculation to include subsamples
-for (i in seq_along(configs)) {
-  config <- configs[[i]]
-  config_key <- paste("n", config$n, "p", config$p, sep = "_")
-  
-  # Determine the optimal index for oracle_hamming
-  optimal_index <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
-  
-  # Process oracle_hamming subsamples for heatmaps
-  for (subsample_index in 1:3) {
-    subsample_graph <- config_results[[config_key]][["AggregatedPremerge"]][[optimal_index]][[subsample_index]]
-    heatmap_matrix <- as.heatmap(subsample_graph)  # Convert graph to heatmap matrix
-    subsample_name <- paste("oracle_hamming_subsample", subsample_index)
-    Heatmaps[[config_key]][[subsample_name]] <- heatmap_matrix
-  }
-}
-
-# Save heatmaps, including those for subsamples
-save_heatmap_subsamples <- function(Heatmaps, config_key, base_dir_path) {
-  # Construct the configuration-specific directory path
-  dir_path_subsamples_specific <- file.path(base_dir_path, config_key)
-  
-  # Ensure the configuration-specific directory exists
-  ensure_dir_exists(dir_path_subsamples_specific)
-  
-  subsample_names <- grep("subsample", names(Heatmaps[[config_key]]), value = TRUE)
-  
-  for (name in subsample_names) {
-    matrix <- Heatmaps[[config_key]][[name]]
-    # Use the configuration-specific directory for saving
-    save_heatmap(matrix, name, dir_path_subsamples_specific)
-  }
-}
-
-# Adjust the save_heatmap function if necessary to include directory existence check
-save_heatmap <- function(matrix, name, folder) {
-  ensure_dir_exists(folder)  # Ensure the folder exists
-  pdf_file_path <- file.path(folder, paste0(name, ".pdf"))
-  pdf(pdf_file_path)
-  pheatmap(matrix, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE, show_colnames = FALSE)
-  dev.off()
-}
-
-# Directory paths
-dir_path_subsamples_heatmaps_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples"
-
-# Generate and save heatmaps for subsamples across all configurations
-for (config in configs) {
-  config_key <- paste("n", config$n, "p", config$p, sep = "_")
-  save_heatmap_subsamples(Heatmaps, config_key, dir_path_subsamples_heatmaps_base)
-}
-
-
-
-```
-
-## Gather Hamming Distance and GCD/GGD
-```{r}
-
-# Configuration you want to specify
-n <- 800
-p <- 40
-config_key <- paste("n", n, "p", p, sep = "_")
-
-# Initialize GCD list outside the loop
-GCD <- list()
-Ham_Dist <- list()
-
-aggregated <- config_results[[config_key]][["Aggregated"]]
-aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
-aggregatedPremerge <- config_results[[config_key]][["AggregatedPremerge"]]
-true_graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
-orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
-
-## Hamming Distances
-for (crit in names(aggregated)) {
-  if (startsWith(crit, "gcd") || startsWith(crit, "ghust")) {
-    cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
-    graph <- aggregatedFullmodel[[cind]]
-    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
-  }
-  
-  else if (crit == "oracle_hamming") {
-    cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
-    graph <- aggregatedFullmodel[[cind]]
-
-    Sub1 <- aggregatedPremerge[[cind]][[1]]
-    Sub2 <- aggregatedPremerge[[cind]][[2]]
-    Sub3 <- aggregatedPremerge[[cind]][[3]]
-    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
-    Ham_Dist[[config_key]][["Sub1"]] <- my.hamming(Sub1, true_graph)
-    Ham_Dist[[config_key]][["Sub2"]] <- my.hamming(Sub2, true_graph)
-    Ham_Dist[[config_key]][["Sub3"]] <- my.hamming(Sub3, true_graph)
-  }
-}
-
-## GCD 
-GCD[[config_key]] <- list() # Prepare for this configuration
-
-GCV_list <- GCV[[config_key]] # Simplify access
-
-for (meth in names(GCV_list)) {
-  # Determine if it's a GCD-related method
-  is_gcd_method <- startsWith(meth, "gcd_") || startsWith(meth, "gcd_prior_")
-  is_oracle_method <- startsWith(meth, "oracle_hamming")
-  
-  if (is_gcd_method || is_oracle_method) {
-    # Extract the base method type (e.g., "spearman", "pseudo_spearman")
-    # For oracle_hamming methods, remove any subsample and pseudo prefix as well
-    base_method_type <- gsub("^(gcd(_prior)?_|oracle_hamming(_subsample_[0-9]+)?_)(pseudo_)?", "", meth)
-    
-    # Determine if this is a pseudo method for gcd_ methods
-    is_pseudo <- grepl("pseudo", meth) && is_gcd_method
-    
-    # Construct the corresponding true_graph method name based on whether it's a pseudo method
-    true_graph_method <- if(is_pseudo) {
-      paste("true_graph_pseudo", base_method_type, sep = "_")
-    } else {
-      paste("true_graph", base_method_type, sep = "_")
-    }
-    
-    # Check if the true_graph method exists in the list
-    if (true_graph_method %in% names(GCV_list)) {
-      # Calculate the Euclidean distance and retain original naming
-      GCD[[config_key]][[meth]] <- dist(rbind(GCV_list[[meth]], GCV_list[[true_graph_method]]))[1]
-    }
-  }
-}
-
-## Add Ghust
-cind1 <- which.min(config_results[[config_key]][["Summary_Path"]][["ghust"]][["Mean"]])
-cind2 <- which.min(config_results[[config_key]][["Summary_Path"]][["ghust_prior"]][["Mean"]])
-ghust <- config_results[[config_key]][["AggregatedFullmodel"]][[cind1]]
-ghust_prior <- config_results[[config_key]][["AggregatedFullmodel"]][[cind2]]
-true_graph1 <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
-GGD_ghust <- ggvec(ghust)
-GGD_ghust_prior <- ggvec(ghust_prior)
-GGD_true <- ggvec(true_graph1)
-GCD[[config_key]][["ghust"]] <- dist(rbind(GGD_ghust, GGD_true))[1]
-GCD[[config_key]][["ghust_prior"]] <- dist(rbind(GGD_ghust_prior, GGD_true))[1]
-
-## Add Hamming Ghust Subsample
-cind3 <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
-ghust_oracle_hamming <- config_results[[config_key]][["AggregatedFullmodel"]][[cind3]]
-ghust_oracle_hamming_subsample1 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[1]]
-ghust_oracle_hamming_subsample2 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[2]]
-ghust_oracle_hamming_subsample3 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[3]]
-GGD_oracle_hamming_ghust <- ggvec(ghust_oracle_hamming)
-GGD_oracle_hamming_ghust_subsample1 <- ggvec(ghust_oracle_hamming_subsample1)
-GGD_oracle_hamming_ghust_subsample2 <- ggvec(ghust_oracle_hamming_subsample2)
-GGD_oracle_hamming_ghust_subsample3 <- ggvec(ghust_oracle_hamming_subsample3)
-
-GCD[[config_key]][["ghust_oracle_hamming"]] <- dist(rbind(GGD_oracle_hamming_ghust, GGD_true))[1]
-GCD[[config_key]][["ghust_oracle_hamming_subsample1"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample1, GGD_true))[1]
-GCD[[config_key]][["ghust_oracle_hamming_subsample2"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample2, GGD_true))[1]
-GCD[[config_key]][["ghust_oracle_hamming_subsample3"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample3, GGD_true))[1]
-   
-```
-
-
-## Shorten Lambda path plots
+## Lambda path plots Prior + Non-Prior
 ```{r}
 
 # install.packages('reticulate')
@@ -1465,6 +767,712 @@ create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
 
 
 
+
+
+################################################ Extended Lambda Path Plots ######################################################
+
+## Helper Functions
+```{r}
+
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
+  
+  orbind <- orbind + 1
+  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
+  if (five_node == FALSE && any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
+  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
+  n <- length(orbind)
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(0, n*(n-1)/2)) # Return empty vector # Failsafe for empty graphs
+  }
+
+  p <- ncol(graph)
+  if (five_node == TRUE) { gdm <- orca::count5(nx2)
+    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
+  } 
+  
+  ## expand missing nodes
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
+  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
+  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
+  ## or completely empty graph and can be safely suppressed.
+  
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
+  gdm <- rbind(gdm[,orbind],1) 
+  
+  if (pseudo_count == TRUE) {
+    ## Add pseudo_count to orb_count
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
+  } 
+
+  if (method %in% c("kendall", "spearman")){
+  #Then calculate the graphlet correlation matrix with method
+  gcm <- suppressWarnings(cor(gdm, method = method))
+  }
+  
+  else if (method == "latentcor") {
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
+  gcm <- gcm$R
+  }
+  
+  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
+  
+  if (return_gcm == TRUE) {
+    return(gcm)
+  } else return(gcv)
+}
+
+
+#' @keywords internal
+.adj2elist <- function(G) {
+    if (inherits(G, "sparseMatrix")) {
+        G <- Matrix::triu(G, k=1)
+        index_i_j <- Matrix::mat2triplet(G)[1:2]
+        return(as.data.frame(index_i_j))
+    } else {
+        p <- ncol(G)
+        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
+    }
+}
+
+modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
+  # Validate the orbit_count_range input
+  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+         \n i.e. pseudo_count_range = c(0, 0.1)")
+  }
+
+  # Generate a random matrix with the same dimensions as orb_count
+  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+                               min = pseudo_count_range[1], 
+                               max = pseudo_count_range[2]), 
+                          nrow = nrow(orb_count), 
+                          ncol = ncol(orb_count))
+  
+  # Apply conditional logic to add random noise only to the zero elements of orb_count
+  modified_orb_count <- mapply(function(orb_elem, random_elem) {
+                               if (orb_elem == 0) orb_elem + random_elem else orb_elem
+                             }, orb_count, random_matrix)
+  
+  # Convert the modified_orb_count to a matrix and set the column names
+  modified_orb_count_matrix <- matrix(modified_orb_count, nrow = nrow(orb_count), ncol = ncol(orb_count))
+  colnames(modified_orb_count_matrix) <- colnames(orb_count)
+
+  return(modified_orb_count_matrix)
+}
+
+#' @keywords internal
+my.hamming <- function(estimated, actual) {
+    hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
+    return(hamming_distance)
+}
+
+ggvec <- function(adj_matrix) { #graphlet ghust vector
+  # Convert the adjacency matrix to an igraph graph object
+  graph <- igraph::graph_from_adjacency_matrix(adj_matrix, mode = "undirected", diag = FALSE)
+
+  # Transform adjacency matrix to edge list if necessary for graphlet counting
+  nx2 <- .adj2elist(adj_matrix)
+  orbind <- c(0, 2, 1, 3) + 1 
+  n <- length(orbind)
+  p <- ncol(adj_matrix)
+  
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(NA, 12))  # Return NA vector of length 12 if the graph is empty
+  }
+  
+  # Perform graphlet decomposition to get graphlet degree matrix (gdm)
+  gdm <- orca::count4(nx2)
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm))
+  gdm <- rbind(gdm, buffer)
+  #gdm <- rbind(gdm[,orbind],1) 
+  gdm <- gdm[,orbind] 
+  
+  # Binary indicator matrix for node-orbit participation
+  Pt <- gdm > 0
+  Pt <- 1 * Pt
+  
+  # # Small number to prevent division by zero
+  # epsilon <- 1e-6
+  # 
+  # # Calculate dimensions based on gdm and Pt
+  # rho_1 <- 1 - (2 * sum(Pt[, "O0"]) / (sum(gdm[, "O0"]) + epsilon))
+  # #rho_1 <- ifelse(rho_1 >= 0, r1, NA)
+  # rho_2 <- 1 - (sum(Pt[, "O2"] * (1 - Pt[, "O3"])) / (sum(Pt[, "O1"] * (1 - Pt[, "O3"])) + epsilon))
+  # 
+  # rho_3 = (sum(gdm[, "O1"] * Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) /
+  #          (sum(Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) + epsilon)) / (max(gdm[, "O0"]) + epsilon)
+  # rho_4 = sum(gdm[, "O2"]) / ((sum(Pt[, "O2"]) + epsilon) * (max(gdm[, "O2"]) + epsilon))
+  # rho_5 = (0.5 * cov(rank(gdm[, "O1"]), rank(gdm[, "O2"])) /
+  #         ((sd(rank(gdm[, "O1"])) + epsilon) * (sd(rank(gdm[, "O2"])) + epsilon))) + 0.5
+  # U2 <- ifelse(gdm[, "O2"] == 1, 1, 0)
+  # U3 <- ifelse(gdm[, "O3"] == 0, 1, 0)
+  # rho_6 = sum(U2 * U3) / (sum(Pt[, "O2"]) + epsilon)
+  # n_strings = count_distinct_strings(graph, which(U2 & U3))
+  # rho_7 = 1 - (n_strings / (sum(U2 * U3) + epsilon))
+  # rho_8 = sum(gdm[, "O3"]) / ((3 * sum(gdm[, "O2"]) + sum(gdm[, "O3"])) + epsilon)
+  # rho_9 = 1 - (sum(Pt[, "O3"]) / (sum(gdm[, "O3"]) + epsilon))
+  # rho_10 = sum(Pt[, "O3"]) / (sum(Pt[, "O0"]) + epsilon)
+  # rho_11 = { numerator_rho_11 = sum(Pt[, "O3"] * U2); numerator_rho_11 / (sum(Pt[, "O3"]) + epsilon) }
+  # rho_12 = (sum(gdm[, "O0"] * Pt[, "O3"]) / (sum(Pt[, "O3"]) + epsilon)) / (max(gdm[, "O0"]) + epsilon)
+  
+  # r1 <- 1 - (2 * sum(Pt[, "O0"]) / sum(gdm[, "O0"]))
+  # rho_1 <- ifelse(r1>= 0, r1, NA)
+  rho_1 <- 1 - (2 * sum(Pt[, "O0"]) / (sum(gdm[, "O0"])))
+  rho_2 <- 1 - (sum(Pt[, "O2"] * (1 - Pt[, "O3"])) / sum(Pt[, "O1"] * (1 - Pt[, "O3"])))
+
+  rho_3 = (sum(gdm[, "O1"] * Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) /
+             sum(Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"]))) / max(gdm[, "O0"])
+  rho_4 = sum(gdm[, "O2"]) / (sum(Pt[, "O2"]) * max(gdm[, "O2"]))
+  rho_5 = (0.5 * cov(rank(gdm[, "O1"]), rank(gdm[, "O2"])) / (sd(rank(gdm[, "O1"])) * sd(rank(gdm[, "O2"]))) + 0.5)
+  U2 <- ifelse(gdm[, "O2"] == 1, 1, 0)
+  U3 <- ifelse(gdm[, "O3"] == 0, 1, 0)
+  rho_6 = sum(U2 * U3) / sum(Pt[, "O2"])
+  n_strings = count_distinct_strings(graph, which(U2 & U3))
+  rho_7 = 1 - (n_strings / sum(U2 * U3))
+  rho_8 = sum(gdm[, "O3"]) / (3 * sum(gdm[, "O2"]) + sum(gdm[, "O3"]))
+  rho_9 = 1 - sum(Pt[, "O3"]) / sum(gdm[, "O3"])
+  rho_10 = sum(Pt[, "O3"]) / sum(Pt[, "O0"])
+  rho_11 = {numerator_rho_11 = sum(Pt[, "O3"] * U2); numerator_rho_11 / sum(Pt[, "O3"])}
+  rho_12 = (sum(gdm[, "O0"] * Pt[, "O3"]) / sum(Pt[, "O3"])) / max(gdm[, "O0"])
+  
+  ggv <- c(rho_1, rho_2, rho_3, rho_4, rho_5, rho_6, rho_7, rho_8, rho_9, rho_10, rho_11, rho_12)
+
+  return(ggv)
+}
+
+
+# Function to check connectivity and count distinct strings
+count_distinct_strings <- function(g, intermediate_nodes) {
+  distinct_strings_count <- 0
+  visited <- rep(FALSE, vcount(g))
+  
+  # Check connectivity for each intermediate node
+  for (node in intermediate_nodes) {
+    if (!visited[node]) {
+      visited[node] <- TRUE
+      distinct_strings_count <- distinct_strings_count + 1
+      
+      # Explore connected intermediate nodes
+      to_explore <- c(node)
+      while (length(to_explore) > 0) {
+        current_node <- to_explore[1]
+        to_explore <- to_explore[-1]
+        
+        # Get all unvisited neighbors that are also intermediate nodes
+        neighbors <- unlist(neighbors(g, current_node))
+        unvisited_intermediate_neighbors <- neighbors[visited[neighbors] == FALSE & neighbors %in% intermediate_nodes]
+        
+        # Mark them as visited and add to the exploration list
+        visited[unvisited_intermediate_neighbors] <- TRUE
+        to_explore <- c(to_explore, unvisited_intermediate_neighbors)
+      }
+    }
+  }
+  
+  return(distinct_strings_count)
+}
+
+```
+
+
+## GCM PLOTS
+```{r}
+
+## GCM Plots
+orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
+
+# Initialize
+GCM <- list()
+GCV <- list()
+
+# Iterate over configurations 
+for (i in seq_along(configs)) {
+  config <- configs[[i]]
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  GCM[[config_key]] <- list()
+  GCV[[config_key]] <- list()
+  
+  aggregated <- config_results[[config_key]][["Aggregated"]]
+  aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
+  optimal_index <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+  
+  # Process oracle_hamming subsamples
+  for (subsample_index in 1:3) {
+    graph <- config_results[[config_key]][["AggregatedPremerge"]][[optimal_index]][[subsample_index]]
+    for (meth in c("kendall", "latentcor", "spearman")) {
+      crit_name <- paste("oracle_hamming_subsample", subsample_index, meth, sep = "_")
+      GCM[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
+                                                 method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+      GCV[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
+                                                 method = meth, pseudo_count = FALSE, orbind = orbind)
+    }
+  }
+  
+  # Iterate over criteria in aggregated results to calculate GCM where applicable
+  for (crit in names(aggregated)) {
+    # Check if criteria is one of the gcd methods or oracle_hamming
+    if (startsWith(crit, "gcd")) {
+      # Extracting the mean index for the criteria
+      cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
+      
+      # Ensure index is within bounds for selecting a model
+      if (cind >= 1 && cind <= length(aggregatedFullmodel)) {
+        graph <- aggregatedFullmodel[[cind]]
+        
+        # Determine method and pseudo_count flag based on crit
+        count <- grepl("pseudo", crit)
+        meth <- if(grepl("kendall", crit)) "kendall" else if(grepl("latentcor", crit)) "latentcor" else "spearman"
+        
+        # Compute the GCM and store it
+        GCM[[config_key]][[crit]] <- my.gcvec(graph = graph, 
+                                              method = meth, pseudo_count = count, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[crit]] <- my.gcvec(graph = graph, 
+                                              method = meth, pseudo_count = count, orbind = orbind)
+      } else {
+        # Placeholder in case the index is out of bounds
+        GCM[[config_key]][[crit]] <- NA
+        GCV[[config_key]][[crit]] <- NA
+      }
+    }
+    
+    else if (crit == "oracle_hamming") {
+      cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+      graph <- aggregatedFullmodel[[cind]]
+      
+      for (meth in c("kendall", "latentcor", "spearman")) {
+        GCM[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = FALSE, orbind = orbind)
+        GCM[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = TRUE, orbind = orbind)
+      }
+    }
+  }
+  
+  ## Adding GCM true_graph
+  graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
+  for (meth in c("kendall", "latentcor", "spearman")) {
+  GCM[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+  GCV[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = FALSE, orbind = orbind)
+  GCM[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
+  GCV[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = TRUE, orbind = orbind)
+  }
+}
+
+
+
+## GCM PLOTS
+library(corrplot) # Ensure corrplot is loaded
+
+# Define base directory path
+base_dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM"
+#base_dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/"
+
+# Function to plot and save GCM for both individual and combined plots
+plot_and_save_gcm <- function(gcm_list, config_key, plot_together = FALSE) {
+    types <- c("pseudo", "nonpseudo", "subsamples")
+    criteria <- c("gcd", "gcd_prior", "true_graph", "oracle_hamming")
+    methods <- c("spearman", "kendall", "latentcor")
+
+    for (type in types) {
+        config_dir_path <- file.path(base_dir_path, type, config_key) # Path for each config within type
+        if (!dir.exists(config_dir_path)) {
+            dir.create(config_dir_path, recursive = TRUE) # Create directory if it doesn't exist
+        }
+
+        # When plotting together
+        if (plot_together) {
+            plot_filename <- "combined_gcm_plots.pdf"
+            plot_full_path <- file.path(config_dir_path, plot_filename)
+            pdf(plot_full_path, width = 13, height = 13)
+            par(mfrow = c(3, 3), mar = c(1.7, 1.7, 1.7, 1.7), oma = c(1, 1, 1, 1))
+
+            # Iterate through all criteria and methods for combined plot
+            for (criterion in criteria) {
+                for (method in methods) {
+                    crit_name <- ifelse(type == "pseudo" && criterion != "true_graph" && criterion != "oracle_hamming_subsample",
+                                        paste(criterion, "pseudo", method, sep = "_"), paste(criterion, method, sep = "_"))
+                    if (!is.null(gcm_list[[config_key]][[crit_name]])) {
+                        corrplot(gcm_list[[config_key]][[crit_name]], method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+                        mtext(text = crit_name, side = 1, line = 1, cex = 0.9)
+                    } else {
+                        plot.new()
+                        mtext(text = sprintf("%s (N/A)", crit_name), side = 1, line = 3, cex = 0.8)
+                    }
+                }
+            }
+            dev.off()
+        } else {
+            # Plot individually within the same loop, adapted for 'subsamples' special handling
+            if (type == "subsamples") {
+                subsample_indices <- 1:3
+                for (subsample_index in subsample_indices) {
+                    for (method in methods) {
+                        crit_name <- paste("oracle_hamming_subsample", subsample_index, method, sep = "_")
+                        plot_individual_gcm(gcm_list, config_key, crit_name, config_dir_path)
+                    }
+                }
+            } else {
+                for (criterion in criteria) {
+                    for (method in methods) {
+                        crit_name <- ifelse(type == "pseudo", paste(criterion, "pseudo", method, sep = "_"), 
+                                            paste(criterion, method, sep = "_"))
+                        plot_individual_gcm(gcm_list, config_key, crit_name, config_dir_path)
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Function to plot individual GCM
+plot_individual_gcm <- function(gcm_list, config_key, crit_name, config_dir_path) {
+    if (!is.null(gcm_list[[config_key]][[crit_name]])) {
+        plot_filename <- paste(crit_name, "pdf", sep = ".")
+        plot_full_path <- file.path(config_dir_path, plot_filename)
+        pdf(plot_full_path, width = 8, height = 8)
+        corrplot(gcm_list[[config_key]][[crit_name]], method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+        dev.off()
+    }
+}
+
+# Iterate over all configurations and generate/save plots
+for (config in configs) {
+    config_key <- paste("n", config$n, "p", config$p, sep = "_")
+    plot_and_save_gcm(GCM, config_key, plot_together = TRUE)
+    plot_and_save_gcm(GCM, config_key, plot_together = FALSE)# Or set plot_together = FALSE as needed
+}
+
+
+```
+
+
+## Plot Heatmaps
+```{r}
+
+as.heatmap <- function(graph) {
+  graph <- as.matrix(graph)
+  graph[graph == TRUE] = 1
+  graph[graph == FALSE] = 0
+  
+  return(graph)
+}
+
+# Initialize a list to store the GCM results
+Heatmaps <- list()
+
+# Iterate over configurations using indices since configs does not have names
+for (i in seq_along(configs)) {
+  config <- configs[[i]]
+  # Construct the configuration name/key
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Initialize storage for this configuration's GCM results
+  Heatmaps[[config_key]] <- list()
+
+  # Extract aggregated results and full models for the current configuration
+  aggregated <- config_results[[config_key]][["Aggregated"]]
+  aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
+  
+  # Iterate over criteria in aggregated results to calculate GCM where applicable
+  for (crit in names(aggregated)) {
+    # Check if criteria is one of the gcd methods or oracle_hamming
+    if (startsWith(crit, "gcd") || startsWith(crit, "ghust")) {
+      # Extracting the mean index for the criteria
+      cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
+      
+      # Ensure index is within bounds for selecting a model
+      if (cind >= 1 && cind <= length(aggregatedFullmodel)) {
+        Heatmaps[[config_key]][[crit]] <- as.heatmap(aggregatedFullmodel[[cind]])
+      }
+    }
+    
+    else if (crit == "oracle_hamming") {
+      cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+      Heatmaps[[config_key]][[crit]] <- as.heatmap(aggregatedFullmodel[[cind]])
+      
+    }
+  }
+  ## Adding Heatmap true_graph
+  Heatmaps[[config_key]][["true_graph"]] <- as.heatmap(config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]])
+}
+
+
+
+## Heatmap creation
+library(pheatmap)
+
+# Consider only the first two configurations
+configs <- configs[1:2]
+
+# Folders setup
+pseudo_folder_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo"
+non_pseudo_folder_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo/"
+#pseudo_folder_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo/"
+#non_pseudo_folder_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo/"
+
+# Function to ensure directory exists
+ensure_dir_exists <- function(path) {
+  if (!dir.exists(path)) {
+    dir.create(path, recursive = TRUE)
+  }
+}
+
+# Function to save heatmap
+save_heatmap <- function(matrix, name, folder) {
+  ensure_dir_exists(folder) # Ensure the folder exists
+  pdf(file.path(folder, paste0(name, ".pdf")))
+  pheatmap(matrix, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE, show_colnames = FALSE)
+  dev.off()
+}
+
+# Iterate over configurations and heatmaps
+for (config in configs) {
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Adjusted folders for each configuration
+  pseudo_folder <- file.path(pseudo_folder_base, config_key)
+  non_pseudo_folder <- file.path(non_pseudo_folder_base, config_key)
+  
+  for (name in names(Heatmaps[[config_key]])) {
+    matrix <- Heatmaps[[config_key]][[name]]
+    if (grepl("pseudo", name) || name %in% c("oracle_hamming", "true_graph")) {
+      save_heatmap(matrix, name, pseudo_folder)
+    }
+    if (!grepl("pseudo", name) || name %in% c("oracle_hamming", "true_graph")) {
+      save_heatmap(matrix, name, non_pseudo_folder)
+    }
+  }
+}
+
+# Function to plot multiple heatmaps next to each other
+library(gridExtra)
+library(grid)
+
+plot_arranged_heatmaps <- function(heatmaps_list, names_list, save_path, ncol_layout) {
+  # Calculate dimensions
+  pdf(save_path, width = 4 * ncol_layout, height = 12) # Adjust dimensions as needed
+  
+  # Create grobs for heatmaps and titles
+  grobs <- lapply(1:length(heatmaps_list), function(i) {
+    heatmap <- pheatmap(heatmaps_list[[i]], cluster_rows = FALSE, cluster_cols = FALSE,
+                        show_rownames = FALSE, show_colnames = FALSE, silent = TRUE)
+    title <- textGrob(names_list[i], x = 0.5, y = 0.5, just = "center", 
+                      gp = gpar(col = "black", fontsize = 10, fontface = "bold"))
+    arrangeGrob(title, heatmap$gtable, ncol = 1, heights = c(0.1, 0.9))
+  })
+  
+  # Arrange the grobs in the specified layout
+  do.call(grid.arrange, c(grobs, ncol = ncol_layout))
+  dev.off()
+}
+
+
+# Example usage within your existing workflow
+for (config in configs) {
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Define the order and selection of methods explicitly
+  pseudo_methods_order <- c(
+    "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor",  # GCD methods
+    "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor",  # GCD Prior methods
+    "true_graph", "oracle_hamming"  # True Graph
+  )
+  
+  non_pseudo_methods_order <- c(
+    "gcd_spearman", "gcd_kendall", "gcd_latentcor",  # GCD methods
+    "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor",  # GCD Prior methods
+    "true_graph", "oracle_hamming"  # True Graph
+  )
+
+  # Prepare data for plotting
+  pseudo_heatmaps <- Heatmaps[[config_key]][pseudo_methods_order]
+  non_pseudo_heatmaps <- Heatmaps[[config_key]][non_pseudo_methods_order]
+
+  # Calculate the number of columns for layout based on method groups
+  ncol_layout_pseudo = 3
+    #length(pseudo_methods_order) # Adjust based on your actual groups
+  ncol_layout_non_pseudo = 3
+    #length(non_pseudo_methods_order) # Adjust based on your actual groups
+
+  # Save paths for pseudo and non-pseudo combined heatmaps
+  pseudo_save_path <- file.path(pseudo_folder_base, config_key, "arranged_pseudo_heatmap_with_titles.pdf")
+  non_pseudo_save_path <- file.path(non_pseudo_folder_base, config_key, "arranged_non_pseudo_heatmap_with_titles.pdf")
+  
+  # Plot and save pseudo and non-pseudo arranged heatmaps with titles
+  plot_arranged_heatmaps(pseudo_heatmaps, pseudo_methods_order, pseudo_save_path, ncol_layout_pseudo)
+  plot_arranged_heatmaps(non_pseudo_heatmaps, non_pseudo_methods_order, non_pseudo_save_path, ncol_layout_non_pseudo)
+}
+
+# Extend the Heatmaps calculation to include subsamples
+for (i in seq_along(configs)) {
+  config <- configs[[i]]
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Determine the optimal index for oracle_hamming
+  optimal_index <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+  
+  # Process oracle_hamming subsamples for heatmaps
+  for (subsample_index in 1:3) {
+    subsample_graph <- config_results[[config_key]][["AggregatedPremerge"]][[optimal_index]][[subsample_index]]
+    heatmap_matrix <- as.heatmap(subsample_graph)  # Convert graph to heatmap matrix
+    subsample_name <- paste("oracle_hamming_subsample", subsample_index)
+    Heatmaps[[config_key]][[subsample_name]] <- heatmap_matrix
+  }
+}
+
+# Save heatmaps, including those for subsamples
+save_heatmap_subsamples <- function(Heatmaps, config_key, base_dir_path) {
+  # Construct the configuration-specific directory path
+  dir_path_subsamples_specific <- file.path(base_dir_path, config_key)
+  
+  # Ensure the configuration-specific directory exists
+  ensure_dir_exists(dir_path_subsamples_specific)
+  
+  subsample_names <- grep("subsample", names(Heatmaps[[config_key]]), value = TRUE)
+  
+  for (name in subsample_names) {
+    matrix <- Heatmaps[[config_key]][[name]]
+    # Use the configuration-specific directory for saving
+    save_heatmap(matrix, name, dir_path_subsamples_specific)
+  }
+}
+
+# Adjust the save_heatmap function if necessary to include directory existence check
+save_heatmap <- function(matrix, name, folder) {
+  ensure_dir_exists(folder)  # Ensure the folder exists
+  pdf_file_path <- file.path(folder, paste0(name, ".pdf"))
+  pdf(pdf_file_path)
+  pheatmap(matrix, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE, show_colnames = FALSE)
+  dev.off()
+}
+
+# Directory paths
+dir_path_subsamples_heatmaps_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples"
+#dir_path_subsamples_heatmaps_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples"
+
+# Generate and save heatmaps for subsamples across all configurations
+for (config in configs) {
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  save_heatmap_subsamples(Heatmaps, config_key, dir_path_subsamples_heatmaps_base)
+}
+
+
+
+```
+
+## Gather Hamming Distance and GCD/GGD
+```{r}
+
+# Configuration you want to specify
+n <- 800
+p <- 40
+config_key <- paste("n", n, "p", p, sep = "_")
+
+# Initialize GCD list outside the loop
+GCD <- list()
+Ham_Dist <- list()
+
+aggregated <- config_results[[config_key]][["Aggregated"]]
+aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
+aggregatedPremerge <- config_results[[config_key]][["AggregatedPremerge"]]
+true_graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
+orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
+
+## Hamming Distances
+for (crit in names(aggregated)) {
+  if (startsWith(crit, "gcd") || startsWith(crit, "ghust")) {
+    cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
+    graph <- aggregatedFullmodel[[cind]]
+    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
+  }
+  
+  else if (crit == "oracle_hamming") {
+    cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+    graph <- aggregatedFullmodel[[cind]]
+
+    Sub1 <- aggregatedPremerge[[cind]][[1]]
+    Sub2 <- aggregatedPremerge[[cind]][[2]]
+    Sub3 <- aggregatedPremerge[[cind]][[3]]
+    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
+    Ham_Dist[[config_key]][["Sub1"]] <- my.hamming(Sub1, true_graph)
+    Ham_Dist[[config_key]][["Sub2"]] <- my.hamming(Sub2, true_graph)
+    Ham_Dist[[config_key]][["Sub3"]] <- my.hamming(Sub3, true_graph)
+  }
+}
+
+## GCD 
+GCD[[config_key]] <- list() # Prepare for this configuration
+
+GCV_list <- GCV[[config_key]] # Simplify access
+
+for (meth in names(GCV_list)) {
+  # Determine if it's a GCD-related method
+  is_gcd_method <- startsWith(meth, "gcd_") || startsWith(meth, "gcd_prior_")
+  is_oracle_method <- startsWith(meth, "oracle_hamming")
+  
+  if (is_gcd_method || is_oracle_method) {
+    # Extract the base method type (e.g., "spearman", "pseudo_spearman")
+    # For oracle_hamming methods, remove any subsample and pseudo prefix as well
+    base_method_type <- gsub("^(gcd(_prior)?_|oracle_hamming(_subsample_[0-9]+)?_)(pseudo_)?", "", meth)
+    
+    # Determine if this is a pseudo method for gcd_ methods
+    is_pseudo <- grepl("pseudo", meth) && is_gcd_method
+    
+    # Construct the corresponding true_graph method name based on whether it's a pseudo method
+    true_graph_method <- if(is_pseudo) {
+      paste("true_graph_pseudo", base_method_type, sep = "_")
+    } else {
+      paste("true_graph", base_method_type, sep = "_")
+    }
+    
+    # Check if the true_graph method exists in the list
+    if (true_graph_method %in% names(GCV_list)) {
+      # Calculate the Euclidean distance and retain original naming
+      GCD[[config_key]][[meth]] <- dist(rbind(GCV_list[[meth]], GCV_list[[true_graph_method]]))[1]
+    }
+  }
+}
+
+## Add Ghust
+cind1 <- which.min(config_results[[config_key]][["Summary_Path"]][["ghust"]][["Mean"]])
+cind2 <- which.min(config_results[[config_key]][["Summary_Path"]][["ghust_prior"]][["Mean"]])
+ghust <- config_results[[config_key]][["AggregatedFullmodel"]][[cind1]]
+ghust_prior <- config_results[[config_key]][["AggregatedFullmodel"]][[cind2]]
+true_graph1 <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
+GGD_ghust <- ggvec(ghust)
+GGD_ghust_prior <- ggvec(ghust_prior)
+GGD_true <- ggvec(true_graph1)
+GCD[[config_key]][["ghust"]] <- dist(rbind(GGD_ghust, GGD_true))[1]
+GCD[[config_key]][["ghust_prior"]] <- dist(rbind(GGD_ghust_prior, GGD_true))[1]
+
+## Add Hamming Ghust Subsample
+cind3 <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+ghust_oracle_hamming <- config_results[[config_key]][["AggregatedFullmodel"]][[cind3]]
+ghust_oracle_hamming_subsample1 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[1]]
+ghust_oracle_hamming_subsample2 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[2]]
+ghust_oracle_hamming_subsample3 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[3]]
+GGD_oracle_hamming_ghust <- ggvec(ghust_oracle_hamming)
+GGD_oracle_hamming_ghust_subsample1 <- ggvec(ghust_oracle_hamming_subsample1)
+GGD_oracle_hamming_ghust_subsample2 <- ggvec(ghust_oracle_hamming_subsample2)
+GGD_oracle_hamming_ghust_subsample3 <- ggvec(ghust_oracle_hamming_subsample3)
+
+GCD[[config_key]][["ghust_oracle_hamming"]] <- dist(rbind(GGD_oracle_hamming_ghust, GGD_true))[1]
+GCD[[config_key]][["ghust_oracle_hamming_subsample1"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample1, GGD_true))[1]
+GCD[[config_key]][["ghust_oracle_hamming_subsample2"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample2, GGD_true))[1]
+GCD[[config_key]][["ghust_oracle_hamming_subsample3"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample3, GGD_true))[1]
+   
+```
+
+
 ## Final Composition Plot
 ```{r}
 
@@ -1485,6 +1493,14 @@ dir_Heat_psd_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Scie
 dir_Heat_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo"
 dir_Heat_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples"
 dir_GCM_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/subsamples"
+
+# dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Lambda_path_plots/"
+# dir_GCM_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/pseudo/"
+# dir_GCM_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/nonpseudo"
+# dir_Heat_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo/"
+# dir_Heat_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo/"
+# dir_Heat_Sub_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples/"
+# dir_GCM_Sub_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/GCM/subsamples"
 
 # Adjust paths to include specific configuration
 dir_GCM_psd <- file.path(dir_GCM_psd_base, config_key)
@@ -1694,6 +1710,11 @@ dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/M
 dir_Heat_psd_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo"
 dir_Heat_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo"
 dir_Heat_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples"
+
+# dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Lambda_path_plots/"
+# dir_Heat_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/pseudo/"
+# dir_Heat_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/nonpseudo/"
+# dir_Heat_Sub_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Geom/Heatmaps/subsamples/"
 
 # Adjust paths to include specific configuration
 dir_Heat_psd <- file.path(dir_Heat_psd_base, config_key)

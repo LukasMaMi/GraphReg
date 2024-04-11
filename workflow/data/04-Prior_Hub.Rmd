@@ -507,9 +507,9 @@ generator_geom <- function (n, p, rho, vis, verbose) {
 }
 
 n <- 800 # Samples
-p <- 400 # Dimensions
+p <- 100 # Dimensions
 b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-N = 20 # Number of Repetitions
+N = 15 # Number of Repetitions
 rho <- 0.245 # Strength off-diagonal elements
 
 ## Important to set.seed !!!
@@ -522,7 +522,7 @@ null_graph <- Geom$theta_null
 null_data <- Geom$null_data
 
 maxCov <- getMaxCov(Geom_data)
-lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
+lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 20) #,log = TRUE
 lambda <- list(lambda=lambda_path)
 
 cat("Condition number:", kappa(Geom$omega), "\n")
@@ -565,13 +565,13 @@ out.p <- Graphreg(
   rep.num = N,
   thresh = 0.05,
   subsample.ratio = b,
-  criterion=c('stars', 'ghust', 'gcd_prior', 'gcd', 'ghust_prior'), 
+  criterion=c('stars', 'ghust', 'ghust_prior', 'gcd', 'gcd_prior'), 
   lb.stars = FALSE, 
   ub.stars = FALSE, 
   seed = FALSE,
   refit = TRUE,
   prior_graph = true_graph,
-  method = c("spearman", "latentcor", "kendall"),
+  method = c("spearman"),
   use_pseudo_count = TRUE
 ))
 
