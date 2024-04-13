@@ -424,7 +424,7 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
       # Refit each criterion with optimal index
       for (crit in criterion) {
         opt_ind <- est[[crit]]$opt.index
-        if (!is.null(opt_ind) && !is.na(opt_ind) && opt_ind >= 1 && opt_ind <= length(fullmodel$path)) {
+        if (!is.null(opt_ind) && is.numeric(opt_ind) && !is.na(opt_ind)) {
           est[[crit]]$refit <- fullmodel$path[[opt_ind]]
         } else {
           est[[crit]]$refit <- NULL
@@ -593,29 +593,31 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
 # }
 
 ## Version 2
-# Only remove the subsample which contain NaN
+# Only remove the subsample which contain NaN, lb and ub can be turned off
 ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prior = FALSE, ...) {
   est <- list()
 
-  # Calculate euclidean distance between the 12 dim of each subsample for a specific lambda to the 12 dim of the true graph
   if (use_prior && !is.null(prior_graph)) {
-    ggv_true <- ggvec(prior_graph, ...) # ggv for true_graph
+    ggv_true <- ggvec(prior_graph, ...)
     est$merge <- vector("list", nlams)
     for (i in 1:nlams) {
       lambda_distances <- numeric(rep.num)
       for (j in 1:rep.num) {
-        ggv_sub <- premerge[[j]][[i]] # ggv of subsample j and lambda i
+        ggv_sub <- premerge[[j]][[i]]
         if (all(is.finite(c(ggv_sub, ggv_true)))) {
-          lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]] # calculate ggd
+          lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]]
         } else {
-          lambda_distances[j] <- NA  # Assign NA if any NaN present
+          valid_indices <- which(is.finite(ggv_true) & is.finite(ggv_sub))
+          if (length(valid_indices) > 0) {
+            lambda_distances[j] <- dist(rbind(ggv_sub[valid_indices], ggv_true[valid_indices]))[[1]]
+          } else {
+            lambda_distances[j] <- NA  # Assign NA if no valid comparison can be made
+          }
         }
       }
       est$merge[[i]] <- lambda_distances
     }
   } else {
-    ## Internal consistency among subsamples
-    # Calculate the euclidean distance between the 12 dim of the subsamples for a specific lambda with each other
     est$merge <- lapply(1:nlams, function(i) {
       ggv_matrix <- sapply(1:rep.num, function(j) premerge[[j]][[i]])
       return(dist(t(ggv_matrix)))
@@ -635,29 +637,33 @@ ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prio
 #   # Calculate euclidean distance between the 12 dim of each subsample for a specific lambda to the 12 dim of the true graph
 #   if (use_prior && !is.null(prior_graph)) {
 #     ggv_true <- ggvec(prior_graph, ...) # ggv for true_graph
-#     est$merge <- vector("list", nlams)
+#     
+#     if (all(is.finite(ggv_true))) {
+#       est$merge <- vector("list", nlams)
+#       for (i in 1:nlams) {
+#         lambda_distances <- numeric(rep.num)
+#         valid_subs = TRUE
 # 
-#     for (i in 1:nlams) {
-#       lambda_distances <- numeric(rep.num)
-#       valid_subs = TRUE
-# 
-#       for (j in 1:rep.num) {
-#         ggv_sub <- premerge[[j]][[i]]
-#         if (!all(is.finite(ggv_sub))) {
-#           valid_subs = FALSE
-#           break
-#         }
-#       }
-# 
-#       if (valid_subs && all(is.finite(ggv_true))) {
 #         for (j in 1:rep.num) {
 #           ggv_sub <- premerge[[j]][[i]]
-#           lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]] # calculate ggd
+#           if (!all(is.finite(ggv_sub))) {
+#             valid_subs = FALSE
+#             break
+#           }
 #         }
-#         est$merge[[i]] <- lambda_distances
-#       } else {
-#         est$merge[[i]] <- rep(NA, rep.num) # Assign NA if any NaN present in subsamples or true graph
+# 
+#         if (valid_subs) {
+#           for (j in 1:rep.num) {
+#             ggv_sub <- premerge[[j]][[i]]
+#             lambda_distances[j] <- dist(rbind(ggv_sub, ggv_true))[[1]] # calculate ggd
+#           }
+#           est$merge[[i]] <- lambda_distances
+#         } else {
+#           est$merge[[i]] <- rep(NA, rep.num) # Assign NA if any NaN present in subsamples
+#         }
 #       }
+#     } else {
+#       print("GHuST vector of true graph contains NaN/NA value \n --> Skipping ghust_prior calculation!")
 #     }
 #   } else {
 #     ## Internal consistency among subsamples
@@ -676,7 +682,6 @@ ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prio
 # 
 #   return(est)
 # }
-
 
 ggvec <- function(adj_matrix) { #graphlet ghust vector
   # Convert the adjacency matrix to an igraph graph object
