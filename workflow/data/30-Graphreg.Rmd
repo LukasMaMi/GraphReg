@@ -424,7 +424,7 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
       # Refit each criterion with optimal index
       for (crit in criterion) {
         opt_ind <- est[[crit]]$opt.index
-        if (!is.null(opt_ind)) {
+        if (!is.null(opt_ind) && !is.na(opt_ind) && opt_ind >= 1 && opt_ind <= length(fullmodel$path)) {
           est[[crit]]$refit <- fullmodel$path[[opt_ind]]
         } else {
           est[[crit]]$refit <- NULL
