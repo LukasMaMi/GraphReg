@@ -125,11 +125,62 @@ add_sparsity_to_labels <- function(cfg_key, methods) {
 config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
 names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
 
-# Define sets of methods for each plot
-methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "ghust")
-methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "ghust_prior")
-methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph", "ghust")
-methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph", "ghust_prior")
+## Define sets of methods for each plot
+
+# ALL
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "ghust")
+
+# Only GCD
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+
+# GCD + Pseudo
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
+
+# GHuST
+methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior")
+
+######
+
+# Prior ALL
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "ghust_prior")
+
+# Prior GCD
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+
+# Prior GCD + Pseudo
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
+
+# Prior GCD + GCD
+methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+
+######
+
+# Hamming ALL
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph", "ghust")
+
+# Hamming GCD
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph")
+
+# Hamming GCD + Pseudo
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
+
+# Ghust
+methods_set_1_hamming <- c("stars", "oracle_hamming", "null_graph", "ghust", "ghust_prior")
+
+######
+
+# Hamming Prior ALL
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph", "ghust_prior")
+
+# Hamming Prior GCD
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "null_graph")
+
+# Hamming Prior GCD + Pseudo
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph")
+
+# Hamming GCD + Prior GCD
+methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+
 
 # Filter Data Frames for Plots
 mean_f1_df_set_1 <- mean_f1_df %>% filter(Method %in% methods_set_1_f1)
@@ -752,7 +803,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 }
 
 # Extract configurations from the 'configs' object
-configs_cut <- configs[1:4]
+configs_cut <- configs[1:2]
 config_names <- extract_configs(configs_cut)
 
 # Set the directory path where plots will be saved
@@ -1056,6 +1107,7 @@ for (i in seq_along(configs)) {
   }
   
   ## Adding GCM true_graph
+  # Important to set seed!
   graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
   for (meth in c("kendall", "latentcor", "spearman")) {
   GCM[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
@@ -1094,17 +1146,30 @@ plot_and_save_gcm <- function(gcm_list, config_key, plot_together = FALSE) {
         if (plot_together) {
             plot_filename <- "combined_gcm_plots.pdf"
             plot_full_path <- file.path(config_dir_path, plot_filename)
-            pdf(plot_full_path, width = 13, height = 13)
-            par(mfrow = c(3, 3), mar = c(1.7, 1.7, 1.7, 1.7), oma = c(1, 1, 1, 1))
+            
+            # Normal for 4 rows
+            #pdf(plot_full_path, width = 13, height = 13)
+            #par(mfrow = c(3, 3), mar = c(1.7, 1.7, 1.7, 1.7), oma = c(1, 1, 1, 1))
+            
+            # Adjusted for 2 rows
+            pdf(plot_full_path, width = 13, height = 10)
+            par(mfrow = c(2, 3), mar = c(1.7, 1.7, 3, 1.7), oma = c(0, 0, 2, 0))
 
             # Iterate through all criteria and methods for combined plot
-            for (criterion in criteria) {
+            for (criterion in criteria[criteria %in% c("gcd", "true_graph")]) { # Filter
+            #for (criterion in criteria) {
                 for (method in methods) {
                     crit_name <- ifelse(type == "pseudo" && criterion != "true_graph" && criterion != "oracle_hamming_subsample",
                                         paste(criterion, "pseudo", method, sep = "_"), paste(criterion, method, sep = "_"))
-                    if (!is.null(gcm_list[[config_key]][[crit_name]])) {
-                        corrplot(gcm_list[[config_key]][[crit_name]], method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
-                        mtext(text = crit_name, side = 1, line = 1, cex = 0.9)
+                    if (!is.null(gcm_list[[config_key]][[crit_name]]) &&
+                        is.matrix(gcm_list[[config_key]][[crit_name]])) {
+                        # Retrieve the GCM matrix
+                        gcm_matrix <- adjust_gcm_values(gcm_list[[config_key]][[crit_name]])
+                        corrplot(gcm_matrix, method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+                        # Normal for 4 rows
+                        #mtext(text = crit_name, side = 1, line = 1, cex = 0.9)
+                        # Adjusted for 2 rows
+                        mtext(text = crit_name, side = 3, line = 1.5, cex = 0.9, font = 2) # side=3 for top, line=1.5 for outside plot, font=2 for bold
                     } else {
                         plot.new()
                         mtext(text = sprintf("%s (N/A)", crit_name), side = 1, line = 3, cex = 0.8)
@@ -1135,16 +1200,34 @@ plot_and_save_gcm <- function(gcm_list, config_key, plot_together = FALSE) {
     }
 }
 
+# Function to ensure GCM values are within the correlation range [-1, 1]
+adjust_gcm_values <- function(matrix) {
+  matrix[matrix > 1] <- 1
+  matrix[matrix < -1] <- -1
+  return(matrix)
+}
+
 # Function to plot individual GCM
 plot_individual_gcm <- function(gcm_list, config_key, crit_name, config_dir_path) {
-    if (!is.null(gcm_list[[config_key]][[crit_name]])) {
+    if (!is.null(gcm_list[[config_key]][[crit_name]]) &&
+        is.matrix(gcm_list[[config_key]][[crit_name]])) {
+        # Retrieve the GCM matrix
+        gcm_matrix <- adjust_gcm_values(gcm_list[[config_key]][[crit_name]])
+
+        # Plotting setup
         plot_filename <- paste(crit_name, "pdf", sep = ".")
         plot_full_path <- file.path(config_dir_path, plot_filename)
+        # normal full
         pdf(plot_full_path, width = 8, height = 8)
-        corrplot(gcm_list[[config_key]][[crit_name]], method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+
+        # Plot the correlation matrix
+        corrplot(gcm_matrix, method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+        
+        # Close the PDF device
         dev.off()
     }
 }
+
 
 # Iterate over all configurations and generate/save plots
 for (config in configs) {
