@@ -3,8 +3,6 @@ title: "02-Performance_Hub"
 output: github_document
 ---
 
-
-
 ```{r}
 
 # Function to generate file names
@@ -251,6 +249,9 @@ for(cfg in configs) {
       fullmodel[[rep]] <- out.esti[["fullmodel"]]
       premerge[[rep]] <- out.esti[["premerge"]]
       
+      min_length <- min(sapply(premerge, length))
+      premerge <- lapply(premerge, function(x) x[1:min_length])
+      
       hamming_dists[[rep]] <- out.esti[["additional_metrics"]][["hamming_dist"]]
       lambda_bound[[rep]] <- out.esti[["additional_metrics"]][["lambda_bound"]]
       f1_score[[rep]] <- out.esti[["additional_metrics"]][["f1_score"]]
@@ -335,17 +336,3 @@ save(config_results, file = file.path(dir_path3, performance_filename))
 cat("Performance metrics for each configuration and repetition calculated and saved!\n")
 
 ```
-
-
-
-
-
-## Session info
-```{r}
-sessionInfo()
-```
-
-
-
-
-

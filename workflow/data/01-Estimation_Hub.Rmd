@@ -1,8 +1,7 @@
 ---
 title: "01-Estimation_Hub"
-output: gitHub_document
+output: github_document
 ---
-
 
 ## Estimation Functions
 ```{r}
@@ -87,6 +86,7 @@ library(BigQuic)
 library(batchtools)
 library(devtools)
 library(htmltools)
+library(pulsar)
 
 # Define main directory paths
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_Hub/"
@@ -209,6 +209,7 @@ print("Estimation completed and plots saved!")
 
 
 ```
+
 
 
 

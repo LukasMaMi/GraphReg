@@ -1,8 +1,7 @@
 ---
-title: "04-Plot_Hub"
+title: "03-Plot_Hub"
 output: github_document
 ---
-
 
 ## Step 4: Plotting
 ```{r}
@@ -10,8 +9,8 @@ output: github_document
 # Load session settings and performance results
 #Hub_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
 Hub_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Settings/"
-hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
-load(hub_settings_file)
+Hub_settings_file <- file.path(Hub_setting_path, "Hub_settings.RData")
+load(Hub_settings_file)
 
 #dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_Hub"
 dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
@@ -87,6 +86,8 @@ library(dplyr)
 # Custom color mapping for methods
 method_colors <- c(
   "stars" = "lightblue",
+  "ghust" = "violet",
+  "ghust_prior" = "darkviolet",
   "oracle_f1" = "black",
   "oracle_hamming" = "black",
   "null_graph" = "orange",
@@ -124,11 +125,62 @@ add_sparsity_to_labels <- function(cfg_key, methods) {
 config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
 names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg$p, sep = "_"))
 
-# Define sets of methods for each plot
-methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
-methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
-methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
-methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph")
+## Define sets of methods for each plot
+
+# ALL
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "ghust")
+
+# Only GCD
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+
+# GCD + Pseudo
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
+
+# GHuST
+methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior")
+
+######
+
+# Prior ALL
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "ghust_prior")
+
+# Prior GCD
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+
+# Prior GCD + Pseudo
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
+
+# Prior GCD + GCD
+methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+
+######
+
+# Hamming ALL
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph", "ghust")
+
+# Hamming GCD
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph")
+
+# Hamming GCD + Pseudo
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
+
+# Ghust
+methods_set_1_hamming <- c("stars", "oracle_hamming", "null_graph", "ghust", "ghust_prior")
+
+######
+
+# Hamming Prior ALL
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph", "ghust_prior")
+
+# Hamming Prior GCD
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "null_graph")
+
+# Hamming Prior GCD + Pseudo
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph")
+
+# Hamming GCD + Prior GCD
+methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+
 
 # Filter Data Frames for Plots
 mean_f1_df_set_1 <- mean_f1_df %>% filter(Method %in% methods_set_1_f1)
@@ -145,9 +197,9 @@ mean_hamming_df_set_2$Config <- factor(mean_hamming_df_set_2$Config, levels = na
 # Functions
 create_plot <- function(df, title, y_label) {
   ggplot(df, aes(x = Config, y = df[, 3], color = Method)) +
-    geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
-    geom_point(size = 1.5) +
-    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
+    Hub_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
+    Hub_point(size = 1.5) +
+    Hub_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
     labs(title = title, y = y_label, x = "") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
@@ -178,7 +230,7 @@ save_and_display(Hamming_Hub_Set_2, "Hamming_Hub_Set_2")
 ```
 
 
-## Mean lambda plots for additional criteria
+## Mean Lambda Plots
 ```{r}
 
 library(ggplot2)
@@ -190,8 +242,8 @@ mean_lambda_ci_df_set_1 <- data.frame(Config = character(), Method = character()
 mean_lambda_ci_df_set_2 <- data.frame(Config = character(), Method = character(), Mean_Lambda = numeric(), CI_Lower = numeric(), CI_Upper = numeric(), stringsAsFactors = FALSE)
 
 # Define sets of methods for each plot
-methods_set_1_lambda <- c("stars", "oracle_f1", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
-methods_set_2_lambda <- c("stars", "oracle_f1", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
+methods_set_1_lambda <- c("stars", "oracle_f1", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "ghust")
+methods_set_2_lambda <- c("stars", "oracle_f1", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "ghust_prior")
 
 # Loop over configurations
 for (cfg_key in names(config_results)) {
@@ -231,8 +283,8 @@ for (cfg_key in names(config_results)) {
 # Function to create lambda plots
 create_lambda_plot <- function(df, title) {
   ggplot(df, aes(x = Config, y = Mean_Lambda, color = Method, group = Method)) +
-    geom_point(position = position_dodge(width = 0.2)) +
-    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
+    Hub_point(position = position_dodge(width = 0.2)) +
+    Hub_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
                   width = 0.1, 
                   position = position_dodge(width = 0.2)) +
     labs(title = title, y = "Mean Lambda", x = "") +
@@ -263,7 +315,7 @@ lambda_plot_set_2
 ```
 
 
-## Lambda path plots
+## Lambda Path Plots Pseudo + Non-Pseudo
 ```{r}
 
 # install.packages('reticulate')
@@ -331,6 +383,18 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
   p <- p %>%
     add_annotations(x = data$lambda_opt_stars, y = 0, text =  'λ<sub>stars</sub>', 
                     showarrow = FALSE, xshift = 5, yshift = -20)
+  
+  # Adding vertical lines for GCD lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(255, 0, 0, 1)', dash = "dot"), showlegend = FALSE)
+  
+  # Adding vertical lines for GCD Pseudo lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(0, 0, 255, 1)', dash = "dot"), showlegend = FALSE)
 
   
   # Calculate the range for y2-axis (GCD values)
@@ -377,19 +441,17 @@ extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   gcd_ci_psd <- config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["CI"]]
   
   # Extracting optimal lambda Index
-  index_opt_gcd <- round(config_results[[config]][["Aggregated"]][[gcd_crit]][["Index"]][["Mean"]])
+  index_opt_gcd <- which.min(config_results[[config]][["Summary_Path"]][[gcd_crit]][["Mean"]])
   lambda_opt_gcd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd]]
   
-  index_opt_gcd_psd <- round(config_results[[config]][["Aggregated"]][[gcd_crit_psd]][["Index"]][["Mean"]])
+  index_opt_gcd_psd <- which.min(config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["Mean"]])
   lambda_opt_gcd_psd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd_psd]]
   
   index_opt_hamming <- which.min(config_results[[config]][["Hamming_Path"]][["Mean"]])
-  #index_opt_hamming <- round(config_results[[config]][["Aggregated"]][["oracle_hamming"]][["Index"]][["Mean"]])
   lambda_opt_hamming <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_hamming]]
   
   threshold <- out.p[["stars"]][["thresh"]]
   index_opt_stars <- max(which(config_results[[config]][["Summary_Path"]][["stars"]][["Mean"]] < threshold))
-  #index_opt_stars <- round(config_results[[config]][["Aggregated"]][["stars"]][["Index"]][["Mean"]])
   lambda_opt_stars <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_stars]]
 
   list(lambda_path = lambda_path, hamming_mean = hamming_mean, hamming_ci = hamming_ci, gcd_mean = gcd_mean, gcd_ci = gcd_ci, 
@@ -435,7 +497,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
 
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_pseudo_crit)
-        print(plot)
+        #print(plot)
 
         # Save plot
         plot_filename <- sprintf("%s_%s.pdf", config, crit)
@@ -460,7 +522,7 @@ create_and_save_plots <- function(config_results, configs, dir_path) {
         
         # Create plot
         plot <- create_plot(data_extracted, crit, gcd_prior_pseudo_crit)
-        print(plot)
+        #print(plot)
 
         # Save plot using orca
         plot_filename <- sprintf("%s_%s.pdf", config, crit)
@@ -492,6 +554,1409 @@ create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
 
 
 
+## Lambda path plots Prior + Non-Prior
+```{r}
+
+# install.packages('reticulate')
+# reticulate::install_miniconda()
+# reticulate::conda_install('r-reticulate', 'python-kaleido')
+# reticulate::conda_install('r-reticulate', 'plotly', channel = 'plotly')
+# reticulate::use_miniconda('r-reticulate')
+
+library(plotly)
+library(reticulate)
+
+# Function to create the plot
+create_plot <- function(data, gcd_crit, gcd_crit_psd) {
+  
+  p <- plot_ly() %>%
+    add_trace(x = data$lambda_path, y = data$hamming_mean, yaxis = 'y1', name = 'Hamming Distance', 
+              type = 'scatter', mode = 'lines', line = list(color = 'rgba(255, 165, 0, 1)'))
+
+  # Adding ribbons for Hamming CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$hamming_mean, yaxis = 'y1', ymin = data$hamming_ci[, 1], ymax = data$hamming_ci[, 2],
+                name = 'Hamming CI', line = list(color = 'transparent'), fillcolor = 'rgba(255, 165, 0, 0.2)', showlegend = FALSE)
+
+  # Adding mean GCD line
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_mean, name = gcd_crit,
+              type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = 'rgba(255, 0, 0, 1)'))
+  
+  p <- p %>%
+    add_trace(x = data$lambda_path, y = data$gcd_mean_psd, name = gcd_crit_psd,
+              type = 'scatter', mode = 'lines', yaxis = 'y2', line = list(color = 'rgba(0, 0, 255, 1)'))
+  
+  # Adding ribbons for GCD CI
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$gcd_mean, ymin = data$gcd_ci[, 1], ymax = data$gcd_ci[, 2],
+                name = paste('GCD', gcd_crit, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
+                fillcolor = 'rgba(255, 0, 0, 0.2)', showlegend = FALSE)
+  
+  p <- p %>%
+    add_ribbons(x = data$lambda_path, y = data$gcd_mean_psd, ymin = data$gcd_ci_psd[, 1], ymax = data$gcd_ci_psd[, 2],
+                name = paste('GCD', gcd_crit_psd, 'CI'), yaxis = 'y2', line = list(color = 'transparent'), 
+                fillcolor = 'rgba(0, 0, 255, 0.2)', showlegend = FALSE)
+  
+  
+  max_value <- max(c(unlist(list(data$hamming_mean, data$gcd_mean, data$gcd_mean_psd))), na.rm = TRUE)
+
+  # Adding vertical lines for lambda oracle Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+
+  p <- p %>%
+    add_annotations(x = data$lambda_opt_hamming, y = 0, text =  'λ<sub>oracle</sub>', 
+                    showarrow = FALSE, xshift = 5, yshift = -20)
+  
+  
+  # Adding vertical lines for stars lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_stars, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(173, 216, 230, 0.5)', dash = "dot"), showlegend = FALSE)
+
+  p <- p %>%
+    add_annotations(x = data$lambda_opt_stars, y = 0, text =  'λ<sub>stars</sub>', 
+                    showarrow = FALSE, xshift = 5, yshift = -20)
+  
+  # Adding vertical lines for GCD lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(255, 0, 0, 1)', dash = "dot"), showlegend = FALSE)
+  
+  # Adding vertical lines for GCD Pseudo lambda Index
+  p <- p %>%
+    add_trace(x = rep(data$lambda_opt_gcd_psd, 2), y = c(0, max_value), 
+              type = 'scatter', mode = "lines", 
+              line = list(color = 'rgba(0, 0, 255, 1)', dash = "dot"), showlegend = FALSE)
+  
+  
+  # # Adding annotations for lambda_opt_gcd, lambda_opt_gcd_psd, and lambda_opt_hamming
+  # p <- p %>%
+  #   add_annotations(
+  #     x = c(data$lambda_opt_gcd, data$lambda_opt_gcd_psd, data$lambda_opt_hamming),
+  #     y = c(0, 0, 0),  # Adjust y positions as needed
+  #     text = c('', '', ''),
+  #     showarrow = TRUE,
+  #     arrowhead = 1,
+  #     ax = c(0, 0, 0),
+  #     ay = c(60, 60, 60),  # Adjust for placement
+  #     xref = "x",
+  #     yref = "y"
+  #   )
+
+  
+  # Calculate the range for y2-axis (GCD values)
+  max_gcd <- max(c(data$gcd_mean, data$gcd_mean_psd), na.rm = TRUE)
+  max_hamming <- max(c(data$hamming_mean), na.rm = TRUE)
+  
+  # Set the range for y2-axis in the layout
+  p <- p %>% layout(
+      title = '',
+      xaxis = list(title = '', title_standoff = 0.5, showgrid = FALSE),
+      yaxis = list(title = 'Hamming Distance', showgrid = FALSE, range = c(0, max_hamming)),
+      yaxis2 = list(title = 'Graphlet Distance', overlaying = 'y',
+                    side = 'right',
+                    showgrid = FALSE,
+                    range = c(0, max_gcd)),
+      legend = list(
+          x = 0,  # Position the legend to the right of the plot
+          y = -0.15,   # Center the legend vertically
+          orientation = 'h',  # Vertical orientation of the legend
+          font = list(size = 10) 
+      ),
+      plot_bgcolor = 'rgba(0,0,0,0)',
+      ## For Extended plot
+      #margin = list(l = 210, r = 50, t = 150, b = 180)
+      ## Normal plot
+      margin = list(l = 50, r = 50, t = 50, b = 50)
+  )
+  
+  return(p)
+}
+   
+# Function to extract data
+extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
+  
+  lambda_path <- config_results[[config]][["Lambda_Path"]][["Mean"]]
+  
+  # Extracting Hamming data
+  hamming_mean <- config_results[[config]][["Hamming_Path"]][["Mean"]]
+  hamming_ci <- config_results[[config]][["Hamming_Path"]][["CI"]]
+  
+  # Extracting GCD data for the selected criterion
+  gcd_mean <- config_results[[config]][["Summary_Path"]][[gcd_crit]][["Mean"]]
+  gcd_ci <- config_results[[config]][["Summary_Path"]][[gcd_crit]][["CI"]]
+  
+  # Extracting GCD data for the selected pseudo criterion
+  gcd_mean_psd <- config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["Mean"]]
+  gcd_ci_psd <- config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["CI"]]
+  
+  # Extracting optimal lambda Index
+  index_opt_gcd <- which.min(config_results[[config]][["Summary_Path"]][[gcd_crit]][["Mean"]])
+  lambda_opt_gcd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd]]
+  
+  index_opt_gcd_psd <- which.min(config_results[[config]][["Summary_Path"]][[gcd_crit_psd]][["Mean"]])
+  lambda_opt_gcd_psd <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_gcd_psd]]
+  
+  index_opt_hamming <- which.min(config_results[[config]][["Hamming_Path"]][["Mean"]])
+  lambda_opt_hamming <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_hamming]]
+  
+  threshold <- out.p[["stars"]][["thresh"]]
+  index_opt_stars <- max(which(config_results[[config]][["Summary_Path"]][["stars"]][["Mean"]] < threshold))
+  lambda_opt_stars <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_stars]]
+
+  list(lambda_path = lambda_path, hamming_mean = hamming_mean, hamming_ci = hamming_ci, gcd_mean = gcd_mean, gcd_ci = gcd_ci, 
+       gcd_mean_psd = gcd_mean_psd, gcd_ci_psd = gcd_ci_psd, lambda_opt_gcd = lambda_opt_gcd, 
+       lambda_opt_gcd_psd = lambda_opt_gcd_psd, lambda_opt_hamming = lambda_opt_hamming, lambda_opt_stars = lambda_opt_stars)
+}
+
+
+# Function to automatically extract configurations
+extract_configs <- function(configs) {
+  lapply(configs, function(config) {
+    paste("n", config$n, "p", config$p, sep = "_")
+  })
+}
+
+
+# Function to identify available criteria from Summary_Stats
+extract_criteria <- function(config_results, config) {
+  names(config_results[[config]][["Summary_Path"]])
+}
+
+
+# Function to create and save plots for each configuration and criteria
+create_and_save_plots <- function(config_results, configs, dir_path) {
+  if (!dir.exists(dir_path)) {
+    dir.create(dir_path, recursive = TRUE)
+  }
+
+  for (config in configs) {
+    criteria <- extract_criteria(config_results, config)
+    
+    # Now we focus on pairing gcd_ with gcd_prior_ and gcd_pseudo_ with gcd_prior_pseudo_
+    gcd_criteria <- grep("^gcd_[^p]|^ghust$", criteria, value = TRUE)  # gcd_ but not starting with pseudo
+    gcd_prior_criteria <- grep("^gcd_prior_[^p]|^ghust_prior$", criteria, value = TRUE)  # gcd_prior_ but not starting with pseudo
+    
+    gcd_pseudo_criteria <- grep("^gcd_pseudo_", criteria, value = TRUE)
+    gcd_prior_pseudo_criteria <- grep("^gcd_prior_pseudo_", criteria, value = TRUE)
+
+    # Pairing gcd_ with gcd_prior_
+    for (crit in gcd_criteria) {
+      
+      if (startsWith(crit, "gcd")) {
+        # For each gcd_ criterion, find its gcd_prior_ counterpart
+        gcd_prior_crit <- paste0("gcd_prior_", gsub("^gcd_", "", crit))
+      }
+      
+      else if (crit == "ghust") {
+        gcd_prior_crit <- "ghust_prior"
+      }
+      
+      if (gcd_prior_crit %in% criteria) {
+        # Extract data
+        data_extracted <- extract_data(config_results, config, crit, gcd_prior_crit)
+
+        # Create plot
+        plot <- create_plot(data_extracted, crit, gcd_prior_crit)
+        #print(plot)
+
+        # Save plot
+        plot_filename <- sprintf("%s_%s.pdf", config, crit)
+        #plot_filename <- sprintf("%s_%s_with_%s.pdf", config, crit, gcd_prior_crit)
+        scope <- kaleido()
+        for (i in 1:5) {
+          scope$transform(plot, file.path(dir_path, plot_filename))
+        }
+        rm(scope); gc()
+      }
+    }
+    
+    # Pairing gcd_pseudo_ with gcd_prior_pseudo_
+    for (crit in gcd_pseudo_criteria) {
+      # Correctly generate the gcd_prior_pseudo_ counterpart
+      gcd_prior_pseudo_crit <- gsub("^gcd_pseudo_", "gcd_prior_pseudo_", crit)
+      
+      if (gcd_prior_pseudo_crit %in% criteria) {
+        # Extract data
+        data_extracted <- extract_data(config_results, config, crit, gcd_prior_pseudo_crit)
+
+        # Create plot
+        plot <- create_plot(data_extracted, crit, gcd_prior_pseudo_crit)
+        #print(plot)
+
+        # Save plot
+        plot_filename <- sprintf("%s_%s_with_%s.pdf", config, crit, gcd_prior_pseudo_crit)
+        scope <- kaleido()
+        for (i in 1:5) {
+          scope$transform(plot, file.path(dir_path, plot_filename))
+        }
+        rm(scope); gc()
+      }
+    }
+  }
+}
+
+# Extract configurations from the 'configs' object
+configs_cut <- configs[1:2]
+config_names <- extract_configs(configs_cut)
+
+# Set the directory path where plots will be saved
+dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
+#dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
+
+# Create and save plots
+create_and_save_plots(config_results, config_names, dir_path = dir_path_lam)
+
+
+```
+
+
+
+
+
+################################################ Extended Lambda Path Plots ######################################################
+
+## Helper Functions
+```{r}
+
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
+  
+  orbind <- orbind + 1
+  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
+  if (five_node == FALSE && any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
+  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
+  n <- length(orbind)
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(0, n*(n-1)/2)) # Return empty vector # Failsafe for empty graphs
+  }
+
+  p <- ncol(graph)
+  if (five_node == TRUE) { gdm <- orca::count5(nx2)
+    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
+  } 
+  
+  ## expand missing nodes
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
+  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
+  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
+  ## or completely empty graph and can be safely suppressed.
+  
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
+  gdm <- rbind(gdm[,orbind],1) 
+  
+  if (pseudo_count == TRUE) {
+    ## Add pseudo_count to orb_count
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
+  } 
+
+  if (method %in% c("kendall", "spearman")){
+  #Then calculate the graphlet correlation matrix with method
+  gcm <- suppressWarnings(cor(gdm, method = method))
+  }
+  
+  else if (method == "latentcor") {
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
+  gcm <- gcm$R
+  }
+  
+  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
+  
+  if (return_gcm == TRUE) {
+    return(gcm)
+  } else return(gcv)
+}
+
+
+#' @keywords internal
+.adj2elist <- function(G) {
+    if (inherits(G, "sparseMatrix")) {
+        G <- Matrix::triu(G, k=1)
+        index_i_j <- Matrix::mat2triplet(G)[1:2]
+        return(as.data.frame(index_i_j))
+    } else {
+        p <- ncol(G)
+        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
+    }
+}
+
+modify_orb_count <- function(orb_count, pseudo_count_range = c(0, 0.1)) {
+  # Validate the orbit_count_range input
+  if (length(pseudo_count_range) != 2 || pseudo_count_range[1] >= pseudo_count_range[2]) {
+    stop("pseudo_count_range must be a vector of two numbers, where the first is less than the second. 
+         \n i.e. pseudo_count_range = c(0, 0.1)")
+  }
+
+  # Generate a random matrix with the same dimensions as orb_count
+  random_matrix <- matrix(runif(nrow(orb_count) * ncol(orb_count), 
+                               min = pseudo_count_range[1], 
+                               max = pseudo_count_range[2]), 
+                          nrow = nrow(orb_count), 
+                          ncol = ncol(orb_count))
+  
+  # Apply conditional logic to add random noise only to the zero elements of orb_count
+  modified_orb_count <- mapply(function(orb_elem, random_elem) {
+                               if (orb_elem == 0) orb_elem + random_elem else orb_elem
+                             }, orb_count, random_matrix)
+  
+  # Convert the modified_orb_count to a matrix and set the column names
+  modified_orb_count_matrix <- matrix(modified_orb_count, nrow = nrow(orb_count), ncol = ncol(orb_count))
+  colnames(modified_orb_count_matrix) <- colnames(orb_count)
+
+  return(modified_orb_count_matrix)
+}
+
+#' @keywords internal
+my.hamming <- function(estimated, actual) {
+    hamming_distance <- sum(Matrix::tril(estimated) != Matrix::tril(actual))
+    return(hamming_distance)
+}
+
+
+ggvec <- function(adj_matrix) { #graphlet ghust vector
+  # Convert the adjacency matrix to an igraph graph object
+  graph <- igraph::graph_from_adjacency_matrix(adj_matrix, mode = "undirected", diag = FALSE)
+
+  # Transform adjacency matrix to edge list if necessary for graphlet counting
+  nx2 <- .adj2elist(adj_matrix)
+  orbind <- c(0, 2, 1, 3) + 1 
+  n <- length(orbind)
+  p <- ncol(adj_matrix)
+  
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(NA, 12))  # Return NA vector of length 12 if the graph is empty
+  }
+  
+  # Perform graphlet decomposition to get graphlet degree matrix (gdm)
+  gdm <- orca::count4(nx2)
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm))
+  gdm <- rbind(gdm, buffer)
+  #gdm <- rbind(gdm[,orbind],1) 
+  gdm <- gdm[,orbind] 
+  
+  # Binary indicator matrix for node-orbit participation
+  Pt <- gdm > 0
+  Pt <- 1 * Pt
+  
+  # # Small number to prevent division by zero
+  # epsilon <- 1e-6
+  # 
+  # # Calculate dimensions based on gdm and Pt
+  # rho_1 <- 1 - (2 * sum(Pt[, "O0"]) / (sum(gdm[, "O0"]) + epsilon))
+  # #rho_1 <- ifelse(rho_1 >= 0, r1, NA)
+  # rho_2 <- 1 - (sum(Pt[, "O2"] * (1 - Pt[, "O3"])) / (sum(Pt[, "O1"] * (1 - Pt[, "O3"])) + epsilon))
+  # 
+  # rho_3 = (sum(gdm[, "O1"] * Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) /
+  #          (sum(Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) + epsilon)) / (max(gdm[, "O0"]) + epsilon)
+  # rho_4 = sum(gdm[, "O2"]) / ((sum(Pt[, "O2"]) + epsilon) * (max(gdm[, "O2"]) + epsilon))
+  # rho_5 = (0.5 * cov(rank(gdm[, "O1"]), rank(gdm[, "O2"])) /
+  #         ((sd(rank(gdm[, "O1"])) + epsilon) * (sd(rank(gdm[, "O2"])) + epsilon))) + 0.5
+  # U2 <- ifelse(gdm[, "O2"] == 1, 1, 0)
+  # U3 <- ifelse(gdm[, "O3"] == 0, 1, 0)
+  # rho_6 = sum(U2 * U3) / (sum(Pt[, "O2"]) + epsilon)
+  # n_strings = count_distinct_strings(graph, which(U2 & U3))
+  # rho_7 = 1 - (n_strings / (sum(U2 * U3) + epsilon))
+  # rho_8 = sum(gdm[, "O3"]) / ((3 * sum(gdm[, "O2"]) + sum(gdm[, "O3"])) + epsilon)
+  # rho_9 = 1 - (sum(Pt[, "O3"]) / (sum(gdm[, "O3"]) + epsilon))
+  # rho_10 = sum(Pt[, "O3"]) / (sum(Pt[, "O0"]) + epsilon)
+  # rho_11 = { numerator_rho_11 = sum(Pt[, "O3"] * U2); numerator_rho_11 / (sum(Pt[, "O3"]) + epsilon) }
+  # rho_12 = (sum(gdm[, "O0"] * Pt[, "O3"]) / (sum(Pt[, "O3"]) + epsilon)) / (max(gdm[, "O0"]) + epsilon)
+  
+  # r1 <- 1 - (2 * sum(Pt[, "O0"]) / sum(gdm[, "O0"]))
+  # rho_1 <- ifelse(r1>= 0, r1, NA)
+  rho_1 <- 1 - (2 * sum(Pt[, "O0"]) / (sum(gdm[, "O0"])))
+  rho_2 <- 1 - (sum(Pt[, "O2"] * (1 - Pt[, "O3"])) / sum(Pt[, "O1"] * (1 - Pt[, "O3"])))
+
+  rho_3 = (sum(gdm[, "O1"] * Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"])) /
+             sum(Pt[, "O1"] * (1 - Pt[, "O2"]) * (1 - Pt[, "O3"]))) / max(gdm[, "O0"])
+  rho_4 = sum(gdm[, "O2"]) / (sum(Pt[, "O2"]) * max(gdm[, "O2"]))
+  rho_5 = (0.5 * cov(rank(gdm[, "O1"]), rank(gdm[, "O2"])) / (sd(rank(gdm[, "O1"])) * sd(rank(gdm[, "O2"]))) + 0.5)
+  U2 <- ifelse(gdm[, "O2"] == 1, 1, 0)
+  U3 <- ifelse(gdm[, "O3"] == 0, 1, 0)
+  rho_6 = sum(U2 * U3) / sum(Pt[, "O2"])
+  n_strings = count_distinct_strings(graph, which(U2 & U3))
+  rho_7 = 1 - (n_strings / sum(U2 * U3))
+  rho_8 = sum(gdm[, "O3"]) / (3 * sum(gdm[, "O2"]) + sum(gdm[, "O3"]))
+  rho_9 = 1 - sum(Pt[, "O3"]) / sum(gdm[, "O3"])
+  rho_10 = sum(Pt[, "O3"]) / sum(Pt[, "O0"])
+  rho_11 = {numerator_rho_11 = sum(Pt[, "O3"] * U2); numerator_rho_11 / sum(Pt[, "O3"])}
+  rho_12 = (sum(gdm[, "O0"] * Pt[, "O3"]) / sum(Pt[, "O3"])) / max(gdm[, "O0"])
+  
+  ggv <- c(rho_1, rho_2, rho_3, rho_4, rho_5, rho_6, rho_7, rho_8, rho_9, rho_10, rho_11, rho_12)
+
+  return(ggv)
+}
+
+
+# Function to check connectivity and count distinct strings
+count_distinct_strings <- function(g, intermediate_nodes) {
+  distinct_strings_count <- 0
+  visited <- rep(FALSE, igraph::vcount(g))
+  
+  # Check connectivity for each intermediate node
+  for (node in intermediate_nodes) {
+    if (!visited[node]) {
+      visited[node] <- TRUE
+      distinct_strings_count <- distinct_strings_count + 1
+      
+      # Explore connected intermediate nodes
+      to_explore <- c(node)
+      while (length(to_explore) > 0) {
+        current_node <- to_explore[1]
+        to_explore <- to_explore[-1]
+        
+        # Get all unvisited neighbors that are also intermediate nodes
+        neighbors <- unlist(igraph::neighbors(g, current_node))
+        unvisited_intermediate_neighbors <- neighbors[visited[neighbors] == FALSE & neighbors %in% intermediate_nodes]
+        
+        # Mark them as visited and add to the exploration list
+        visited[unvisited_intermediate_neighbors] <- TRUE
+        to_explore <- c(to_explore, unvisited_intermediate_neighbors)
+      }
+    }
+  }
+  
+  return(distinct_strings_count)
+}
+
+
+```
+
+
+## GCM PLOTS
+```{r}
+
+## GCM Plots
+orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
+
+# Initialize
+GCM <- list()
+GCV <- list()
+
+# Iterate over configurations 
+for (i in seq_along(configs)) {
+  config <- configs[[i]]
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  GCM[[config_key]] <- list()
+  GCV[[config_key]] <- list()
+  
+  aggregated <- config_results[[config_key]][["Aggregated"]]
+  aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
+  optimal_index <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+  
+  # Process oracle_hamming subsamples
+  for (subsample_index in 1:3) {
+    graph <- config_results[[config_key]][["AggregatedPremerge"]][[optimal_index]][[subsample_index]]
+    for (meth in c("kendall", "latentcor", "spearman")) {
+      crit_name <- paste("oracle_hamming_subsample", subsample_index, meth, sep = "_")
+      GCM[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
+                                                 method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+      GCV[[config_key]][[crit_name]] <- my.gcvec(graph = graph, 
+                                                 method = meth, pseudo_count = FALSE, orbind = orbind)
+    }
+  }
+  
+  # Iterate over criteria in aggregated results to calculate GCM where applicable
+  for (crit in names(aggregated)) {
+    # Check if criteria is one of the gcd methods or oracle_hamming
+    if (startsWith(crit, "gcd")) {
+      # Extracting the mean index for the criteria
+      cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
+      
+      # Ensure index is within bounds for selecting a model
+      if (cind >= 1 && cind <= length(aggregatedFullmodel)) {
+        graph <- aggregatedFullmodel[[cind]]
+        
+        # Determine method and pseudo_count flag based on crit
+        count <- grepl("pseudo", crit)
+        meth <- if(grepl("kendall", crit)) "kendall" else if(grepl("latentcor", crit)) "latentcor" else "spearman"
+        
+        # Compute the GCM and store it
+        GCM[[config_key]][[crit]] <- my.gcvec(graph = graph, 
+                                              method = meth, pseudo_count = count, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[crit]] <- my.gcvec(graph = graph, 
+                                              method = meth, pseudo_count = count, orbind = orbind)
+      } else {
+        # Placeholder in case the index is out of bounds
+        GCM[[config_key]][[crit]] <- NA
+        GCV[[config_key]][[crit]] <- NA
+      }
+    }
+    
+    else if (crit == "oracle_hamming") {
+      cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+      graph <- aggregatedFullmodel[[cind]]
+      
+      for (meth in c("kendall", "latentcor", "spearman")) {
+        GCM[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[paste("oracle_hamming", meth, sep = "_")]] <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = FALSE, orbind = orbind)
+        GCM[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
+        GCV[[config_key]][[paste("oracle_hamming_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                        method = meth, pseudo_count = TRUE, orbind = orbind)
+      }
+    }
+  }
+  
+  ## Adding GCM true_graph
+  # Important to set seed!
+  graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
+  for (meth in c("kendall", "latentcor", "spearman")) {
+  GCM[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = FALSE, orbind = orbind, return_gcm = TRUE)
+  GCV[[config_key]][[paste("true_graph", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = FALSE, orbind = orbind)
+  GCM[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = TRUE, orbind = orbind, return_gcm = TRUE)
+  GCV[[config_key]][[paste("true_graph_pseudo", meth, sep = "_")]]  <- my.gcvec(graph = graph, 
+                                                          method = meth, pseudo_count = TRUE, orbind = orbind)
+  }
+}
+
+
+
+## GCM PLOTS
+library(corrplot) # Ensure corrplot is loaded
+
+# Define base directory path
+base_dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/GCM"
+#base_dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/GCM/"
+
+# Function to plot and save GCM for both individual and combined plots
+plot_and_save_gcm <- function(gcm_list, config_key, plot_together = FALSE) {
+    types <- c("pseudo", "nonpseudo", "subsamples")
+    criteria <- c("gcd", "gcd_prior", "true_graph", "oracle_hamming")
+    methods <- c("spearman", "kendall", "latentcor")
+
+    for (type in types) {
+        config_dir_path <- file.path(base_dir_path, type, config_key) # Path for each config within type
+        if (!dir.exists(config_dir_path)) {
+            dir.create(config_dir_path, recursive = TRUE) # Create directory if it doesn't exist
+        }
+
+        # When plotting together
+        if (plot_together) {
+            plot_filename <- "combined_gcm_plots.pdf"
+            plot_full_path <- file.path(config_dir_path, plot_filename)
+            
+            # Normal for 4 rows
+            #pdf(plot_full_path, width = 13, height = 13)
+            #par(mfrow = c(3, 3), mar = c(1.7, 1.7, 1.7, 1.7), oma = c(1, 1, 1, 1))
+            
+            # Adjusted for 2 rows
+            pdf(plot_full_path, width = 13, height = 10)
+            par(mfrow = c(2, 3), mar = c(1.7, 1.7, 3, 1.7), oma = c(0, 0, 2, 0))
+
+            # Iterate through all criteria and methods for combined plot
+            for (criterion in criteria[criteria %in% c("gcd", "true_graph")]) { # Filter
+            #for (criterion in criteria) {
+                for (method in methods) {
+                    crit_name <- ifelse(type == "pseudo" && criterion != "true_graph" && criterion != "oracle_hamming_subsample",
+                                        paste(criterion, "pseudo", method, sep = "_"), paste(criterion, method, sep = "_"))
+                    if (!is.null(gcm_list[[config_key]][[crit_name]]) &&
+                        is.matrix(gcm_list[[config_key]][[crit_name]])) {
+                        # Retrieve the GCM matrix
+                        gcm_matrix <- adjust_gcm_values(gcm_list[[config_key]][[crit_name]])
+                        corrplot(gcm_matrix, method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+                        # Normal for 4 rows
+                        #mtext(text = crit_name, side = 1, line = 1, cex = 0.9)
+                        # Adjusted for 2 rows
+                        mtext(text = crit_name, side = 3, line = 1.5, cex = 0.9, font = 2) # side=3 for top, line=1.5 for outside plot, font=2 for bold
+                    } else {
+                        plot.new()
+                        mtext(text = sprintf("%s (N/A)", crit_name), side = 1, line = 3, cex = 0.8)
+                    }
+                }
+            }
+            dev.off()
+        } else {
+            # Plot individually within the same loop, adapted for 'subsamples' special handling
+            if (type == "subsamples") {
+                subsample_indices <- 1:3
+                for (subsample_index in subsample_indices) {
+                    for (method in methods) {
+                        crit_name <- paste("oracle_hamming_subsample", subsample_index, method, sep = "_")
+                        plot_individual_gcm(gcm_list, config_key, crit_name, config_dir_path)
+                    }
+                }
+            } else {
+                for (criterion in criteria) {
+                    for (method in methods) {
+                        crit_name <- ifelse(type == "pseudo", paste(criterion, "pseudo", method, sep = "_"), 
+                                            paste(criterion, method, sep = "_"))
+                        plot_individual_gcm(gcm_list, config_key, crit_name, config_dir_path)
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Function to ensure GCM values are within the correlation range [-1, 1]
+adjust_gcm_values <- function(matrix) {
+  matrix[matrix > 1] <- 1
+  matrix[matrix < -1] <- -1
+  return(matrix)
+}
+
+# Function to plot individual GCM
+plot_individual_gcm <- function(gcm_list, config_key, crit_name, config_dir_path) {
+    if (!is.null(gcm_list[[config_key]][[crit_name]]) &&
+        is.matrix(gcm_list[[config_key]][[crit_name]])) {
+        # Retrieve the GCM matrix
+        gcm_matrix <- adjust_gcm_values(gcm_list[[config_key]][[crit_name]])
+
+        # Plotting setup
+        plot_filename <- paste(crit_name, "pdf", sep = ".")
+        plot_full_path <- file.path(config_dir_path, plot_filename)
+        # normal full
+        pdf(plot_full_path, width = 8, height = 8)
+
+        # Plot the correlation matrix
+        corrplot(gcm_matrix, method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+        
+        # Close the PDF device
+        dev.off()
+    }
+}
+
+
+# Iterate over all configurations and generate/save plots
+for (config in configs) {
+    config_key <- paste("n", config$n, "p", config$p, sep = "_")
+    plot_and_save_gcm(GCM, config_key, plot_together = TRUE)
+    plot_and_save_gcm(GCM, config_key, plot_together = FALSE)# Or set plot_together = FALSE as needed
+}
+
+
+```
+
+
+## Plot Heatmaps
+```{r}
+
+as.heatmap <- function(graph) {
+  graph <- as.matrix(graph)
+  graph[graph == TRUE] = 1
+  graph[graph == FALSE] = 0
+  
+  return(graph)
+}
+
+# Initialize a list to store the GCM results
+Heatmaps <- list()
+
+# Iterate over configurations using indices since configs does not have names
+for (i in seq_along(configs)) {
+  config <- configs[[i]]
+  # Construct the configuration name/key
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Initialize storage for this configuration's GCM results
+  Heatmaps[[config_key]] <- list()
+
+  # Extract aggregated results and full models for the current configuration
+  aggregated <- config_results[[config_key]][["Aggregated"]]
+  aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
+  
+  # Iterate over criteria in aggregated results to calculate GCM where applicable
+  for (crit in names(aggregated)) {
+    # Check if criteria is one of the gcd methods or oracle_hamming
+    if (startsWith(crit, "gcd") || startsWith(crit, "ghust")) {
+      # Extracting the mean index for the criteria
+      cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
+      
+      # Ensure index is within bounds for selecting a model
+      if (cind >= 1 && cind <= length(aggregatedFullmodel)) {
+        Heatmaps[[config_key]][[crit]] <- as.heatmap(aggregatedFullmodel[[cind]])
+      }
+    }
+    
+    else if (crit == "oracle_hamming") {
+      cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+      Heatmaps[[config_key]][[crit]] <- as.heatmap(aggregatedFullmodel[[cind]])
+      
+    }
+  }
+  ## Adding Heatmap true_graph
+  Heatmaps[[config_key]][["true_graph"]] <- as.heatmap(config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]])
+}
+
+
+
+## Heatmap creation
+library(pheatmap)
+
+# Consider only the first two configurations
+configs <- configs[1:2]
+
+# Folders setup
+pseudo_folder_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/pseudo"
+non_pseudo_folder_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/nonpseudo/"
+#pseudo_folder_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/pseudo/"
+#non_pseudo_folder_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/nonpseudo/"
+
+# Function to ensure directory exists
+ensure_dir_exists <- function(path) {
+  if (!dir.exists(path)) {
+    dir.create(path, recursive = TRUE)
+  }
+}
+
+# Function to save heatmap
+save_heatmap <- function(matrix, name, folder) {
+  ensure_dir_exists(folder) # Ensure the folder exists
+  pdf(file.path(folder, paste0(name, ".pdf")))
+  pheatmap(matrix, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE, show_colnames = FALSE)
+  dev.off()
+}
+
+# Iterate over configurations and heatmaps
+for (config in configs) {
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Adjusted folders for each configuration
+  pseudo_folder <- file.path(pseudo_folder_base, config_key)
+  non_pseudo_folder <- file.path(non_pseudo_folder_base, config_key)
+  
+  for (name in names(Heatmaps[[config_key]])) {
+    matrix <- Heatmaps[[config_key]][[name]]
+    if (grepl("pseudo", name) || name %in% c("oracle_hamming", "true_graph")) {
+      save_heatmap(matrix, name, pseudo_folder)
+    }
+    if (!grepl("pseudo", name) || name %in% c("oracle_hamming", "true_graph")) {
+      save_heatmap(matrix, name, non_pseudo_folder)
+    }
+  }
+}
+
+# Function to plot multiple heatmaps next to each other
+library(gridExtra)
+library(grid)
+
+plot_arranged_heatmaps <- function(heatmaps_list, names_list, save_path, ncol_layout) {
+  # Calculate dimensions
+  pdf(save_path, width = 4 * ncol_layout, height = 12) # Adjust dimensions as needed
+  
+  # Create grobs for heatmaps and titles
+  grobs <- lapply(1:length(heatmaps_list), function(i) {
+    heatmap <- pheatmap(heatmaps_list[[i]], cluster_rows = FALSE, cluster_cols = FALSE,
+                        show_rownames = FALSE, show_colnames = FALSE, silent = TRUE)
+    title <- textGrob(names_list[i], x = 0.5, y = 0.5, just = "center", 
+                      gp = gpar(col = "black", fontsize = 10, fontface = "bold"))
+    arrangeGrob(title, heatmap$gtable, ncol = 1, heights = c(0.1, 0.9))
+  })
+  
+  # Arrange the grobs in the specified layout
+  do.call(grid.arrange, c(grobs, ncol = ncol_layout))
+  dev.off()
+}
+
+
+# Example usage within your existing workflow
+for (config in configs) {
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Define the order and selection of methods explicitly
+  pseudo_methods_order <- c(
+    "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor",  # GCD methods
+    "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor",  # GCD Prior methods
+    "true_graph", "oracle_hamming"  # True Graph
+  )
+  
+  non_pseudo_methods_order <- c(
+    "gcd_spearman", "gcd_kendall", "gcd_latentcor",  # GCD methods
+    "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor",  # GCD Prior methods
+    "true_graph", "oracle_hamming"  # True Graph
+  )
+
+  # Prepare data for plotting
+  pseudo_heatmaps <- Heatmaps[[config_key]][pseudo_methods_order]
+  non_pseudo_heatmaps <- Heatmaps[[config_key]][non_pseudo_methods_order]
+
+  # Calculate the number of columns for layout based on method groups
+  ncol_layout_pseudo = 3
+    #length(pseudo_methods_order) # Adjust based on your actual groups
+  ncol_layout_non_pseudo = 3
+    #length(non_pseudo_methods_order) # Adjust based on your actual groups
+
+  # Save paths for pseudo and non-pseudo combined heatmaps
+  pseudo_save_path <- file.path(pseudo_folder_base, config_key, "arranged_pseudo_heatmap_with_titles.pdf")
+  non_pseudo_save_path <- file.path(non_pseudo_folder_base, config_key, "arranged_non_pseudo_heatmap_with_titles.pdf")
+  
+  # Plot and save pseudo and non-pseudo arranged heatmaps with titles
+  plot_arranged_heatmaps(pseudo_heatmaps, pseudo_methods_order, pseudo_save_path, ncol_layout_pseudo)
+  plot_arranged_heatmaps(non_pseudo_heatmaps, non_pseudo_methods_order, non_pseudo_save_path, ncol_layout_non_pseudo)
+}
+
+# Extend the Heatmaps calculation to include subsamples
+for (i in seq_along(configs)) {
+  config <- configs[[i]]
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  
+  # Determine the optimal index for oracle_hamming
+  optimal_index <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+  
+  # Process oracle_hamming subsamples for heatmaps
+  for (subsample_index in 1:3) {
+    subsample_graph <- config_results[[config_key]][["AggregatedPremerge"]][[optimal_index]][[subsample_index]]
+    heatmap_matrix <- as.heatmap(subsample_graph)  # Convert graph to heatmap matrix
+    subsample_name <- paste("oracle_hamming_subsample", subsample_index)
+    Heatmaps[[config_key]][[subsample_name]] <- heatmap_matrix
+  }
+}
+
+# Save heatmaps, including those for subsamples
+save_heatmap_subsamples <- function(Heatmaps, config_key, base_dir_path) {
+  # Construct the configuration-specific directory path
+  dir_path_subsamples_specific <- file.path(base_dir_path, config_key)
+  
+  # Ensure the configuration-specific directory exists
+  ensure_dir_exists(dir_path_subsamples_specific)
+  
+  subsample_names <- grep("subsample", names(Heatmaps[[config_key]]), value = TRUE)
+  
+  for (name in subsample_names) {
+    matrix <- Heatmaps[[config_key]][[name]]
+    # Use the configuration-specific directory for saving
+    save_heatmap(matrix, name, dir_path_subsamples_specific)
+  }
+}
+
+# Adjust the save_heatmap function if necessary to include directory existence check
+save_heatmap <- function(matrix, name, folder) {
+  ensure_dir_exists(folder)  # Ensure the folder exists
+  pdf_file_path <- file.path(folder, paste0(name, ".pdf"))
+  pdf(pdf_file_path)
+  pheatmap(matrix, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE, show_colnames = FALSE)
+  dev.off()
+}
+
+# Directory paths
+dir_path_subsamples_heatmaps_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/subsamples"
+#dir_path_subsamples_heatmaps_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/subsamples"
+
+# Generate and save heatmaps for subsamples across all configurations
+for (config in configs) {
+  config_key <- paste("n", config$n, "p", config$p, sep = "_")
+  save_heatmap_subsamples(Heatmaps, config_key, dir_path_subsamples_heatmaps_base)
+}
+
+
+
+```
+
+## Gather Hamming Distance and GCD/GGD
+```{r}
+
+# Configuration you want to specify
+n <- 800
+p <- 40
+config_key <- paste("n", n, "p", p, sep = "_")
+
+# Initialize GCD list outside the loop
+GCD <- list()
+Ham_Dist <- list()
+
+aggregated <- config_results[[config_key]][["Aggregated"]]
+aggregatedFullmodel <- config_results[[config_key]][["AggregatedFullmodel"]]
+aggregatedPremerge <- config_results[[config_key]][["AggregatedPremerge"]]
+true_graph <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
+orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1)
+
+## Hamming Distances
+for (crit in names(aggregated)) {
+  if (startsWith(crit, "gcd") || startsWith(crit, "ghust")) {
+    cind <- which.min(config_results[[config_key]][["Summary_Path"]][[crit]][["Mean"]])
+    graph <- aggregatedFullmodel[[cind]]
+    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
+  }
+  
+  else if (crit == "oracle_hamming") {
+    cind <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+    graph <- aggregatedFullmodel[[cind]]
+
+    Sub1 <- aggregatedPremerge[[cind]][[1]]
+    Sub2 <- aggregatedPremerge[[cind]][[2]]
+    Sub3 <- aggregatedPremerge[[cind]][[3]]
+    Ham_Dist[[config_key]][[crit]] <- my.hamming(graph, true_graph)
+    Ham_Dist[[config_key]][["Sub1"]] <- my.hamming(Sub1, true_graph)
+    Ham_Dist[[config_key]][["Sub2"]] <- my.hamming(Sub2, true_graph)
+    Ham_Dist[[config_key]][["Sub3"]] <- my.hamming(Sub3, true_graph)
+  }
+}
+
+## GCD 
+GCD[[config_key]] <- list() # Prepare for this configuration
+
+GCV_list <- GCV[[config_key]] # Simplify access
+
+for (meth in names(GCV_list)) {
+  # Determine if it's a GCD-related method
+  is_gcd_method <- startsWith(meth, "gcd_") || startsWith(meth, "gcd_prior_")
+  is_oracle_method <- startsWith(meth, "oracle_hamming")
+  
+  if (is_gcd_method || is_oracle_method) {
+    # Extract the base method type (e.g., "spearman", "pseudo_spearman")
+    # For oracle_hamming methods, remove any subsample and pseudo prefix as well
+    base_method_type <- gsub("^(gcd(_prior)?_|oracle_hamming(_subsample_[0-9]+)?_)(pseudo_)?", "", meth)
+    
+    # Determine if this is a pseudo method for gcd_ methods
+    is_pseudo <- grepl("pseudo", meth) && is_gcd_method
+    
+    # Construct the corresponding true_graph method name based on whether it's a pseudo method
+    true_graph_method <- if(is_pseudo) {
+      paste("true_graph_pseudo", base_method_type, sep = "_")
+    } else {
+      paste("true_graph", base_method_type, sep = "_")
+    }
+    
+    # Check if the true_graph method exists in the list
+    if (true_graph_method %in% names(GCV_list)) {
+      # Calculate the Euclidean distance and retain original naming
+      GCD[[config_key]][[meth]] <- dist(rbind(GCV_list[[meth]], GCV_list[[true_graph_method]]))[1]
+    }
+  }
+}
+
+## Add Ghust
+cind1 <- which.min(config_results[[config_key]][["Summary_Path"]][["ghust"]][["Mean"]])
+cind2 <- which.min(config_results[[config_key]][["Summary_Path"]][["ghust_prior"]][["Mean"]])
+ghust <- config_results[[config_key]][["AggregatedFullmodel"]][[cind1]]
+ghust_prior <- config_results[[config_key]][["AggregatedFullmodel"]][[cind2]]
+true_graph1 <- config_results[[config_key]][["Individual"]][["Rep 1"]][["true_graph"]]
+GGD_ghust <- ggvec(ghust)
+GGD_ghust_prior <- ggvec(ghust_prior)
+GGD_true <- ggvec(true_graph1)
+GCD[[config_key]][["ghust"]] <- dist(rbind(GGD_ghust, GGD_true))[1]
+GCD[[config_key]][["ghust_prior"]] <- dist(rbind(GGD_ghust_prior, GGD_true))[1]
+
+## Add Hamming Ghust Subsample
+cind3 <- which.min(config_results[[config_key]][["Hamming_Path"]][["Mean"]])
+ghust_oracle_hamming <- config_results[[config_key]][["AggregatedFullmodel"]][[cind3]]
+ghust_oracle_hamming_subsample1 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[1]]
+ghust_oracle_hamming_subsample2 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[2]]
+ghust_oracle_hamming_subsample3 <- config_results[[config_key]][["AggregatedPremerge"]][[cind3]][[3]]
+GGD_oracle_hamming_ghust <- ggvec(ghust_oracle_hamming)
+GGD_oracle_hamming_ghust_subsample1 <- ggvec(ghust_oracle_hamming_subsample1)
+GGD_oracle_hamming_ghust_subsample2 <- ggvec(ghust_oracle_hamming_subsample2)
+GGD_oracle_hamming_ghust_subsample3 <- ggvec(ghust_oracle_hamming_subsample3)
+
+GCD[[config_key]][["ghust_oracle_hamming"]] <- dist(rbind(GGD_oracle_hamming_ghust, GGD_true))[1]
+GCD[[config_key]][["ghust_oracle_hamming_subsample1"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample1, GGD_true))[1]
+GCD[[config_key]][["ghust_oracle_hamming_subsample2"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample2, GGD_true))[1]
+GCD[[config_key]][["ghust_oracle_hamming_subsample3"]] <- dist(rbind(GGD_oracle_hamming_ghust_subsample3, GGD_true))[1]
+   
+```
+
+
+## Final Composition Plot
+```{r}
+
+#install.packages("magick")
+library(magick)
+
+# Configuration you want to specify
+n <- 800
+p <- 40
+meth <- "spearman"
+config_key <- paste("n", n, "p", p, sep = "_")
+
+# Base paths
+dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
+dir_GCM_psd_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/GCM/pseudo"
+dir_GCM_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/GCM/nonpseudo"
+dir_Heat_psd_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/pseudo"
+dir_Heat_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/nonpseudo"
+dir_Heat_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/subsamples"
+dir_GCM_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/GCM/subsamples"
+
+# dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots/"
+# dir_GCM_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/GCM/pseudo/"
+# dir_GCM_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/GCM/nonpseudo"
+# dir_Heat_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/pseudo/"
+# dir_Heat_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/nonpseudo/"
+# dir_Heat_Sub_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/subsamples/"
+# dir_GCM_Sub_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/GCM/subsamples"
+
+# Adjust paths to include specific configuration
+dir_GCM_psd <- file.path(dir_GCM_psd_base, config_key)
+dir_GCM <- file.path(dir_GCM_base, config_key)
+dir_Heat_psd <- file.path(dir_Heat_psd_base, config_key)
+dir_Heat <- file.path(dir_Heat_base, config_key)
+dir_Heat_Sub <- file.path(dir_Heat_Sub_base, config_key)
+dir_GCM_Sub <- file.path(dir_GCM_Sub_base, config_key)
+
+## Convert PDFs to images
+image_lam_path <- image_read(file.path(dir_path_lam, "n_800_p_40_gcd_spearman.pdf"), density = 300)
+
+# GCMs
+GCM_gcd <- image_read(file.path(dir_GCM, "gcd_spearman.pdf"), density = 300)
+GCM_gcd_prior <- image_read(file.path(dir_GCM, "gcd_prior_spearman.pdf"), density = 300)
+GCM_oracle <- image_read(file.path(dir_GCM, "oracle_hamming_spearman.pdf"), density = 300)
+
+# # Pseudo GCMs
+# GCM_gcd_psd <- image_read(file.path(dir_GCM_psd, "gcd_pseudo_spearman.pdf"), density = 300)
+# GCM_gcd_prior_psd <- image_read(file.path(dir_GCM_psd, "gcd_prior_pseudo_spearman.pdf"), density = 300)
+# GCM_oracle_psd <- image_read(file.path(dir_GCM_psd, "oracle_hamming_spearman.pdf"), density = 300)
+
+# GCM Subsamples
+GCM_Sub1 <- image_read(file.path(dir_GCM_Sub, "oracle_hamming_subsample_1_spearman.pdf"), density = 300)
+GCM_Sub2 <- image_read(file.path(dir_GCM_Sub, "oracle_hamming_subsample_2_spearman.pdf"), density = 300)
+GCM_Sub3 <- image_read(file.path(dir_GCM_Sub, "oracle_hamming_subsample_3_spearman.pdf"), density = 300)
+
+# Heatmaps Subsamples
+Heat_Sub1 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 1.pdf"), density = 300)
+Heat_Sub2 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 2.pdf"), density = 300)
+Heat_Sub3 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 3.pdf"), density = 300)
+
+# Heatmaps
+Heat_gcd <- image_read(file.path(dir_Heat, "gcd_spearman.pdf"), density = 300)
+Heat_gcd_prior <- image_read(file.path(dir_Heat, "gcd_prior_spearman.pdf"), density = 300)
+Heat_oracle <- image_read(file.path(dir_Heat, "oracle_hamming.pdf"), density = 300)
+
+# True Graph
+GCM_True <- image_read(file.path(dir_GCM, "true_graph_spearman.pdf"), density = 300)
+Heat_True <- image_read(file.path(dir_Heat, "true_graph.pdf"), density = 300)
+
+# # Pseudo Heatmaps
+# Heat_gcd_psd <- image_read(file.path(dir_Heat_psd, "gcd_pseudo_spearman.pdf"), density = 300)
+# Heat_gcd_prior_psd <- image_read(file.path(dir_Heat_psd, "gcd_prior_pseudo_spearman.pdf"), density = 300)
+# Heat_oracle_psd <- image_read(file.path(dir_Heat_psd, "oracle_hamming_spearman.pdf"), density = 300)
+
+# Resize images 1 to 3 to make them smaller, adjust dimensions as needed
+GCM_gcd_resized <- image_scale(GCM_gcd, "250x250")
+GCM_gcd_prior_resized <- image_scale(GCM_gcd_prior, "250x250")
+GCM_oracle_resized <- image_scale(GCM_oracle, "250x250")
+
+Heat_gcd_resized <- image_scale(Heat_gcd, "250x250")
+Heat_gcd_prior_resized <- image_scale(Heat_gcd_prior, "250x250")
+Heat_oracle_resized <- image_scale(Heat_oracle, "250x250")
+
+GCM_Sub1_resized <- image_scale(GCM_Sub1, "250x250")
+GCM_Sub2_resized <- image_scale(GCM_Sub2, "250x250")
+GCM_Sub3_resized <- image_scale(GCM_Sub3, "250x250")
+
+Heat_Sub1_resized <- image_scale(Heat_Sub1, "250x250")
+Heat_Sub2_resized <- image_scale(Heat_Sub2, "250x250")
+Heat_Sub3_resized <- image_scale(Heat_Sub3, "250x250")
+
+GCM_True_resized <- image_scale(GCM_True, "250x250")
+Heat_True_resized <- image_scale(Heat_True, "250x250")
+
+# Composite images over image0 at specified positions, adjust Hubetry as needed
+composite_image <- image_composite(image_lam_path, GCM_gcd_resized, offset = "+400+130")   
+composite_image <- image_composite(composite_image, GCM_gcd_prior_resized, offset = "+1000+130")
+composite_image <- image_composite(composite_image, GCM_oracle_resized, offset = "+1600+130") 
+
+# Adding Heatmap
+composite_image <- image_composite(composite_image, Heat_gcd_resized, offset = "+650+130")
+composite_image <- image_composite(composite_image, Heat_gcd_prior_resized, offset = "+1250+130")
+composite_image <- image_composite(composite_image, Heat_oracle_resized, offset = "+1850+130")
+
+# Adding GCM subsamples
+composite_image <- image_composite(composite_image, GCM_Sub1_resized, offset = "+400+1250")
+composite_image <- image_composite(composite_image, GCM_Sub2_resized, offset = "+1000+1250")
+composite_image <- image_composite(composite_image, GCM_Sub3_resized, offset = "+1600+1250")
+
+# Adding heatmap subsamples
+composite_image <- image_composite(composite_image, Heat_Sub1_resized, offset = "+650+1250")
+composite_image <- image_composite(composite_image, Heat_Sub2_resized, offset = "+1250+1250")
+composite_image <- image_composite(composite_image, Heat_Sub3_resized, offset = "+1850+1250")
+
+# Adding true graph
+composite_image <- image_composite(composite_image, Heat_True_resized, offset = "+100+800")
+composite_image <- image_composite(composite_image, GCM_True_resized, offset = "+100+550")
+
+# Extracting the GCD value for the specific method
+GCD_value1 <- GCD[[config_key]][["gcd_spearman"]]
+GCD_value2 <- GCD[[config_key]][["gcd_prior_spearman"]]
+GCD_value3 <- GCD[[config_key]][["oracle_hamming_spearman"]]
+
+GCD_value4 <- GCD[[config_key]][["oracle_hamming_subsample_1_spearman"]]
+GCD_value5 <- GCD[[config_key]][["oracle_hamming_subsample_2_spearman"]]
+GCD_value6 <- GCD[[config_key]][["oracle_hamming_subsample_3_spearman"]]
+
+# Extracting the Ham_Dist value for the specific method
+Ham_Dist_value1 <- round(Ham_Dist[[config_key]][["gcd_spearman"]])
+Ham_Dist_value2 <- round(Ham_Dist[[config_key]][["gcd_prior_spearman"]])
+Ham_Dist_value3 <- round(Ham_Dist[[config_key]][["oracle_hamming"]])
+
+Ham_Dist_value4 <- round(Ham_Dist[[config_key]][["Sub1"]])
+Ham_Dist_value5 <- round(Ham_Dist[[config_key]][["Sub2"]])
+Ham_Dist_value6 <- round(Ham_Dist[[config_key]][["Sub3"]])
+
+# Converting the GCD value to a string with formatting
+GCD_text1 <- sprintf("Spearman\nGCD to True Graph: %.3f   Ham_Dist: %.3f", GCD_value1, Ham_Dist_value1)
+GCD_text2 <- sprintf("Prior Spearman\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value2, Ham_Dist_value2)
+GCD_text3 <- sprintf("Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value3, Ham_Dist_value3)
+
+# Converting the GCD value to a string with formatting
+GCD_text4 <- sprintf("Sub1 Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value4, Ham_Dist_value4)
+GCD_text5 <- sprintf("Sub2 Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value5, Ham_Dist_value5)
+GCD_text6 <- sprintf("Sub3 Oracle Hamming\nGCD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value6, Ham_Dist_value6)
+
+GCD_text7 <- sprintf("True Graph")
+
+# Annotating for GCD_text1
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text1,
+  size = 20,
+  color = "red",
+  location = "+410+80"  # Adjust this location as needed
+)
+
+# Annotating for GCD_text2
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text2,
+  size = 20,
+  color = "blue",
+  location = "+1010+80"  # Adjust this location as needed
+)
+
+# Annotating for GCD_text3
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text3,
+  size = 20,
+  color = "orange",
+  location = "+1610+80"  # Adjust this location as needed
+)
+
+#GCD_text4
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text4,
+  size = 20,
+  #color = "lightblue",
+  location = "+410+1200"  
+)
+
+# Example for GCD_text5
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text5,
+  size = 20,
+  #color = "red",
+  location = "+1010+1200"  # Adjust this location as needed
+)
+
+# Example for GCD_text6
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text6,
+  size = 20,
+  #color = "red",
+  location = "+1610+1200"  # Adjust this location as needed
+)
+
+#GCD_text7
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text7,
+  size = 20,
+  #color = "red",
+  location = "+110+520"  
+)
+
+
+# Save the composite image, adjusting the filename as needed
+image_write(composite_image, path = "composite_image.pdf", format = "pdf")
+
+# Save the composite image
+image_write(composite_image, path = file.path(dir_path_lam, "composite_image.pdf"), format = "pdf")
+
+```
+
+
+## Ghust Composition Plot
+```{r}
+
+#install.packages("magick")
+library(magick)
+
+# Configuration you want to specify
+n <- 800
+p <- 40
+config_key <- paste("n", n, "p", p, sep = "_")
+
+# Base paths
+dir_path_lam <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Lam_path_plots"
+dir_Heat_psd_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/pseudo"
+dir_Heat_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/nonpseudo"
+dir_Heat_Sub_base <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/subsamples"
+
+# dir_path_lam <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Lambda_path_plots/"
+# dir_Heat_psd_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/pseudo/"
+# dir_Heat_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/nonpseudo/"
+# dir_Heat_Sub_base <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Plot_Hub/Heatmaps/subsamples/"
+
+# Adjust paths to include specific configuration
+dir_Heat_psd <- file.path(dir_Heat_psd_base, config_key)
+dir_Heat <- file.path(dir_Heat_base, config_key)
+dir_Heat_Sub <- file.path(dir_Heat_Sub_base, config_key)
+
+## Convert PDFs to images
+image_lam_path <- image_read(file.path(dir_path_lam, "n_800_p_40_ghust.pdf"), density = 300)
+
+# Heatmaps Subsamples
+Heat_Sub1 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 1.pdf"), density = 300)
+Heat_Sub2 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 2.pdf"), density = 300)
+Heat_Sub3 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 3.pdf"), density = 300)
+
+# Heatmaps
+Heat_gcd <- image_read(file.path(dir_Heat, "ghust.pdf"), density = 300)
+Heat_gcd_prior <- image_read(file.path(dir_Heat, "ghust_prior.pdf"), density = 300)
+Heat_oracle <- image_read(file.path(dir_Heat, "oracle_hamming.pdf"), density = 300)
+
+# True Graph
+Heat_True <- image_read(file.path(dir_Heat, "true_graph.pdf"), density = 300)
+
+# Resize images 1 to 3 to make them smaller, adjust dimensions as needed
+Heat_gcd_resized <- image_scale(Heat_gcd, "250x250")
+Heat_gcd_prior_resized <- image_scale(Heat_gcd_prior, "250x250")
+Heat_oracle_resized <- image_scale(Heat_oracle, "250x250")
+
+Heat_Sub1_resized <- image_scale(Heat_Sub1, "250x250")
+Heat_Sub2_resized <- image_scale(Heat_Sub2, "250x250")
+Heat_Sub3_resized <- image_scale(Heat_Sub3, "250x250")
+
+Heat_True_resized <- image_scale(Heat_True, "250x250")
+
+# Composite images over image0 at specified positions, adjust Hubetry as needed
+
+# Adding Heatmap
+composite_image <- image_composite(image_lam_path, Heat_gcd_resized, offset = "+400+130")
+composite_image <- image_composite(composite_image, Heat_gcd_prior_resized, offset = "+1000+130")
+composite_image <- image_composite(composite_image, Heat_oracle_resized, offset = "+1600+130")
+
+# Adding heatmap subsamples
+composite_image <- image_composite(composite_image, Heat_Sub1_resized, offset = "+400+1250")
+composite_image <- image_composite(composite_image, Heat_Sub2_resized, offset = "+1000+1250")
+composite_image <- image_composite(composite_image, Heat_Sub3_resized, offset = "+1600+1250")
+
+# Adding true graph
+composite_image <- image_composite(composite_image, Heat_True_resized, offset = "+100+550")
+
+# Extracting the GCD value for the specific method
+GCD_value1 <- GCD[[config_key]][["ghust"]]
+GCD_value2 <- GCD[[config_key]][["ghust_prior"]]
+GCD_value3 <- GCD[[config_key]][["ghust_oracle_hamming"]]
+
+GCD_value4 <- GCD[[config_key]][["ghust_oracle_hamming_subsample1"]]
+GCD_value5 <- GCD[[config_key]][["ghust_oracle_hamming_subsample2"]]
+GCD_value6 <- GCD[[config_key]][["ghust_oracle_hamming_subsample3"]]
+
+# Extracting the Ham_Dist value for the specific method
+Ham_Dist_value1 <- round(Ham_Dist[[config_key]][["ghust"]])
+Ham_Dist_value2 <- round(Ham_Dist[[config_key]][["ghust_prior"]])
+Ham_Dist_value3 <- round(Ham_Dist[[config_key]][["oracle_hamming"]])
+
+Ham_Dist_value4 <- round(Ham_Dist[[config_key]][["Sub1"]])
+Ham_Dist_value5 <- round(Ham_Dist[[config_key]][["Sub2"]])
+Ham_Dist_value6 <- round(Ham_Dist[[config_key]][["Sub3"]])
+
+# Converting the GCD value to a string with formatting
+GCD_text1 <- sprintf("ghust\nGGD to True Graph: %.3f   Ham_Dist: %.3f", GCD_value1, Ham_Dist_value1)
+GCD_text2 <- sprintf("Prior ghust\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value2, Ham_Dist_value2)
+GCD_text3 <- sprintf("Oracle Hamming\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value3, Ham_Dist_value3)
+
+# Converting the GCD value to a string with formatting
+GCD_text4 <- sprintf("Sub1 Oracle Hamming\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value4, Ham_Dist_value4)
+GCD_text5 <- sprintf("Sub2 Oracle Hamming\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value5, Ham_Dist_value5)
+GCD_text6 <- sprintf("Sub3 Oracle Hamming\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value6, Ham_Dist_value6)
+
+GCD_text7 <- sprintf("True Graph")
+
+# Annotating for GCD_text1
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text1,
+  size = 20,
+  color = "red",
+  location = "+410+80"  # Adjust this location as needed
+)
+
+# Annotating for GCD_text2
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text2,
+  size = 20,
+  color = "blue",
+  location = "+1010+80"  # Adjust this location as needed
+)
+
+# Annotating for GCD_text3
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text3,
+  size = 20,
+  color = "orange",
+  location = "+1610+80"  # Adjust this location as needed
+)
+
+#GCD_text4
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text4,
+  size = 20,
+  #color = "lightblue",
+  location = "+410+1200"  
+)
+
+# Example for GCD_text5
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text5,
+  size = 20,
+  #color = "red",
+  location = "+1010+1200"  # Adjust this location as needed
+)
+
+# Example for GCD_text6
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text6,
+  size = 20,
+  #color = "red",
+  location = "+1610+1200"  # Adjust this location as needed
+)
+
+#GCD_text7
+composite_image <- image_annotate(
+  composite_image,
+  text = GCD_text7,
+  size = 20,
+  #color = "red",
+  location = "+110+520"  
+)
+
+
+# Save the composite image, adjusting the filename as needed
+image_write(composite_image, path = "composite_image.pdf", format = "pdf")
+
+# Save the composite image
+image_write(composite_image, path = file.path(dir_path_lam, "composite_image.pdf"), format = "pdf")
+
+```
+
+
+
+
+
+
+
+
 ## Gap plots across different graph topologies additional criteria
 ```{r}
 
@@ -506,14 +1971,14 @@ load_performance_data <- function(dir_path) {
 }
 
 # Paths for different graph types
-dir_path_hub <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
+dir_path_Hub <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 dir_path_erdos_renyi <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_ER"
-dir_path_geometric <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Geom"
+dir_path_Hubetric <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub"
 
 # Loading data
-performance_data_hub <- load_performance_data(dir_path_hub)
+performance_data_Hub <- load_performance_data(dir_path_Hub)
 performance_data_erdos_renyi <- load_performance_data(dir_path_erdos_renyi)
-performance_data_geometric <- load_performance_data(dir_path_geometric)
+performance_data_Hubetric <- load_performance_data(dir_path_Hubetric)
 
 
 ## Prepare Data for Plotting
@@ -537,12 +2002,12 @@ prepare_gap_data <- function(performance_data, graph_type) {
 }
 
 # Then call this function for each graph type
-gap_data_hub <- prepare_gap_data(performance_data_hub, "Hub")
+gap_data_Hub <- prepare_gap_data(performance_data_Hub, "Hub")
 gap_data_erdos_renyi <- prepare_gap_data(performance_data_erdos_renyi, "Erdős-Rényi")
-gap_data_geometric <- prepare_gap_data(performance_data_geometric, "Geometric")
+gap_data_Hubetric <- prepare_gap_data(performance_data_Hubetric, "Hubetric")
 
 # Combine the data from different graph types
-gap_data_all <- rbind(gap_data_hub, gap_data_erdos_renyi, gap_data_geometric)
+gap_data_all <- rbind(gap_data_Hub, gap_data_erdos_renyi, gap_data_Hubetric)
 
 # Create custom labels for configurations
 config_labels <- sapply(configs, function(cfg) paste("p =", cfg$p, "\nn =", cfg$n))
@@ -554,24 +2019,24 @@ gap_data_all$Config <- factor(gap_data_all$Config, levels = config_order, labels
 
 # Gap B Plot
 gap_b_plot <- ggplot(gap_data_all, aes(x = Config, y = Gap_B, color = Graph_Type, group = Graph_Type)) +
-  geom_point() +
-  geom_line(aes(linetype = Graph_Type)) +
-  geom_errorbar(aes(ymin = Gap_B_CI_Lower, ymax = Gap_B_CI_Upper), width = 0.1) +
+  Hub_point() +
+  Hub_line(aes(linetype = Graph_Type)) +
+  Hub_errorbar(aes(ymin = Gap_B_CI_Lower, ymax = Gap_B_CI_Upper), width = 0.1) +
   labs(title = "Gap B Values Across Different Graph Types", y = "Gap B", x = "") +
   theme_minimal() +
-  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "darkred")) +
-  scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Geometric" = "dashed")) +
+  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Hubetric" = "darkred")) +
+  scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Hubetric" = "dashed")) +
   theme(axis.text.x = element_text(angle = 0, hjust = 1))
 
 # Gap Beta Plot
 gap_beta_plot <- ggplot(gap_data_all, aes(x = Config, y = Gap_Beta, color = Graph_Type, group = Graph_Type)) +
-  geom_point() +
-  geom_line(aes(linetype = Graph_Type)) +
-  geom_errorbar(aes(ymin = Gap_Beta_CI_Lower, ymax = Gap_Beta_CI_Upper), width = 0.1) +
+  Hub_point() +
+  Hub_line(aes(linetype = Graph_Type)) +
+  Hub_errorbar(aes(ymin = Gap_Beta_CI_Lower, ymax = Gap_Beta_CI_Upper), width = 0.1) +
   labs(title = "Gap Beta Values Across Different Graph Types", y = "Gap Beta", x = "") +
   theme_minimal() +
-  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Geometric" = "darkred")) +
-  scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Geometric" = "dashed")) +
+  scale_color_manual(values = c("Hub" = "blue", "Erdős-Rényi" = "darkgreen", "Hubetric" = "darkred")) +
+  scale_linetype_manual(values = c("Hub" = "longdash", "Erdős-Rényi" = "solid", "Hubetric" = "dashed")) +
   theme(axis.text.x = element_text(angle = 0, hjust = 1))
 
 # Save and display the plots
@@ -627,7 +2092,8 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
   configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
   methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null", "gcd_spearman", "gcd_kendall", "gcd_latentcor",
                "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "gcd_prior_spearman", "gcd_prior_kendall",
-               "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")  # Updated methods
+               "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", 
+               "ghust", "ghust_prior")  # Updated methods
 
   for (config in configs) {
     for (method in methods) {
@@ -654,23 +2120,10 @@ library(gridExtra)
 table_plot <- tableGrob(combined_df)
 
 library(ggplot2)
-ggsave("Hub_graph.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub")
+ggsave("Hub_graph.pdf", table_plot, width = 10, height = 6, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Hub")
+#ggsave("Hub_graph.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Hub")
 
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

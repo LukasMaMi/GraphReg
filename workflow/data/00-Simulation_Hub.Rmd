@@ -123,6 +123,8 @@ for(rep in 1:num_repetitions) {
   N = 20 # Number of Repetitions
   rho <- 0.20 # Off-Diagonal Effect Strength
 
+  ## Important to set.seed !!!
+  #set.seed(123)
   Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
   Hub_data <- Hub$data
   true_graph <- Hub$theta
