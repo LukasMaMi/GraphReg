@@ -131,13 +131,13 @@ names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg
 #methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "ghust")
 
 # Only GCD
-#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
 
 # GCD + Pseudo
 #methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
 
 # GHuST
-methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior")
+#methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior")
 
 ######
 
@@ -148,10 +148,10 @@ methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior")
 #methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
 
 # Prior GCD + Pseudo
-#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
+methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
 
 # Prior GCD + GCD
-methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
 
 ######
 
@@ -159,13 +159,13 @@ methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_ken
 #methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph", "ghust")
 
 # Hamming GCD
-#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph")
+methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph")
 
 # Hamming GCD + Pseudo
 #methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
 
 # Ghust
-methods_set_1_hamming <- c("stars", "oracle_hamming", "null_graph", "ghust", "ghust_prior")
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "null_graph", "ghust", "ghust_prior")
 
 ######
 
@@ -197,9 +197,9 @@ mean_hamming_df_set_2$Config <- factor(mean_hamming_df_set_2$Config, levels = na
 # Functions
 create_plot <- function(df, title, y_label) {
   ggplot(df, aes(x = Config, y = df[, 3], color = Method)) +
-    Hub_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
-    Hub_point(size = 1.5) +
-    Hub_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
+    geom_line(aes(group = Method), linetype = "dotted", linewidth = 1.5) + 
+    geom_point(size = 1.5) +
+    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.1, alpha = 0.5) +
     labs(title = title, y = y_label, x = "") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
@@ -216,10 +216,10 @@ save_and_display <- function(plot, file_name) {
 }
 
 # Create and Display Plots
-F1_Hub_Set_1 <- create_plot(mean_f1_df_set_1, "Hub F1 Scores Set 1", "Mean F1 Score")
-F1_Hub_Set_2 <- create_plot(mean_f1_df_set_2, "Hub F1 Scores Set 2", "Mean F1 Score")
-Hamming_Hub_Set_1 <- create_plot(mean_hamming_df_set_1, "Hub Hamming Distances Set 1", "Mean Hamming Distance")
-Hamming_Hub_Set_2 <- create_plot(mean_hamming_df_set_2, "Hub Hamming Distances Set 2", "Mean Hamming Distance")
+F1_Hub_Set_1 <- create_plot(mean_f1_df_set_1, "Hub F1 Scores", "Mean F1 Score")
+F1_Hub_Set_2 <- create_plot(mean_f1_df_set_2, "Hub F1 Scores", "Mean F1 Score")
+Hamming_Hub_Set_1 <- create_plot(mean_hamming_df_set_1, "Hub Hamming Distances", "Mean Hamming Distance")
+Hamming_Hub_Set_2 <- create_plot(mean_hamming_df_set_2, "Hub Hamming Distances", "Mean Hamming Distance")
 
 # Save Plots
 save_and_display(F1_Hub_Set_1, "F1_Hub_Set_1")

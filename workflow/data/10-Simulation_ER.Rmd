@@ -155,6 +155,8 @@ for(rep in 1:num_repetitions) {
 
   sparsity <- 2/p # Sparsity level
   
+  ## Important to set.seed !!!
+  #set.seed(123)
   ER <- generator_rand(n = n, p = p, tun = tun, prob = sparsity, rho_lower_range, rho_upper_range, vis = F)
 
   ER_data <- ER$data

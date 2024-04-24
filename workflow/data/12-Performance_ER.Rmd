@@ -3,7 +3,6 @@ title: "12-Performance_ER"
 output: github_document
 ---
 
-
 ```{r}
 
 # Function to generate file names
@@ -249,6 +248,9 @@ for(cfg in configs) {
     # Extract the specific metrics for each repetition
       fullmodel[[rep]] <- out.esti[["fullmodel"]]
       premerge[[rep]] <- out.esti[["premerge"]]
+      
+      min_length <- min(sapply(premerge, length))
+      premerge <- lapply(premerge, function(x) x[1:min_length])
       
       hamming_dists[[rep]] <- out.esti[["additional_metrics"]][["hamming_dist"]]
       lambda_bound[[rep]] <- out.esti[["additional_metrics"]][["lambda_bound"]]

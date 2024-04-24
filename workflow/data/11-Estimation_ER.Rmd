@@ -3,7 +3,6 @@ title: "11-Estimation_ER"
 output: github_document
 ---
 
-
 ## Estimation Functions
 ```{r}
 
@@ -78,7 +77,7 @@ plot_lambda_path <- function(config, rep, prefix, dir_path, show) {
 #install.packages("htmltools")
 #install.packages("devtools")
 #install.packages("batchtools")
-#devtools::install_github("zdk123/pulsar")
+#devtools::install_gitER("zdk123/pulsar")
 #install.packages("BigQuic")
 #install.packages("corrplot")
 
@@ -87,6 +86,7 @@ library(BigQuic)
 library(batchtools)
 library(devtools)
 library(htmltools)
+library(pulsar)
 
 # Define main directory paths
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_ER/"
@@ -212,7 +212,12 @@ print("Estimation completed and plots saved!")
 
 
 
+
 ## Session info
 ```{r}
 sessionInfo()
 ```
+
+
+
+
