@@ -126,10 +126,10 @@ num_repetitions <- 10
 
 # Specify configurations
 configs <- list(
-  list(n=800, p=40, tun = 1.3),
-  list(n=400, p=100, tun = 0.9),
-  list(n=200, p=200, tun = 0.33),
-  list(n=100, p=400, tun = 0.18)
+  list(n=800, p=40, tun = 1),
+  list(n=800, p=100, tun = 0.95),
+  list(n=800, p=200, tun = 0.9),
+  list(n=800, p=400, tun = 0.85)
 )
 
 #ER_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/"
@@ -168,7 +168,7 @@ for(rep in 1:num_repetitions) {
   maxCov <- getMaxCov(ER_data, cov = FALSE, abs = TRUE, diag = FALSE) 
   # Based on the idea that lambda should be large enough to regularize the strongest relationships in the data.
   maxCov
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 100) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 50) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   print('Condition number: ')
