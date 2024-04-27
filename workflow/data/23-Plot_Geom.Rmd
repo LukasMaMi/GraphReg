@@ -97,9 +97,9 @@ method_colors <- c(
   "gcd_pseudo_spearman" = "green",
   "gcd_pseudo_kendall" = "blue",
   "gcd_pseudo_latentcor" = "red",
-  "gcd_prior_spearman" = "darkgreen",
-  "gcd_prior_kendall" = "darkblue",
-  "gcd_prior_latentcor" = "darkred",
+  "gcd_prior_spearman" = "green",
+  "gcd_prior_kendall" = "blue",
+  "gcd_prior_latentcor" = "red",
   "gcd_prior_pseudo_spearman" = "green",
   "gcd_prior_pseudo_kendall" = "blue",
   "gcd_prior_pseudo_latentcor" = "red"
@@ -131,10 +131,10 @@ names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg
 #methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "ghust")
 
 # Only GCD
-#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
 
 # GCD + Pseudo
-methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
 
 # GHuST
 #methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior")
@@ -159,10 +159,10 @@ methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_ken
 #methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph", "ghust")
 
 # Hamming GCD
-#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph")
+methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
 
 # Hamming GCD + Pseudo
-methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
 
 # Ghust
 #methods_set_1_hamming <- c("stars", "oracle_hamming", "null_graph", "ghust", "ghust_prior")
@@ -706,7 +706,8 @@ extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   index_opt_hamming <- which.min(config_results[[config]][["Hamming_Path"]][["Mean"]])
   lambda_opt_hamming <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_hamming]]
   
-  threshold <- out.p[["stars"]][["thresh"]]
+  #threshold <- out.p[["stars"]][["thresh"]]
+  threshold <- 0.05
   index_opt_stars <- max(which(config_results[[config]][["Summary_Path"]][["stars"]][["Mean"]] < threshold))
   lambda_opt_stars <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_stars]]
 

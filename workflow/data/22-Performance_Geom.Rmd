@@ -329,7 +329,7 @@ for(cfg in configs) {
 }
 
 # Save the results to a file
-save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, dir_path3, config_results, file = Geom_settings_file)
+save(num_repetitions, configs, out.p, config_results, file = Geom_settings_file)
 performance_filename <- "all_performance_results.RData"
 save(config_results, file = file.path(dir_path3, performance_filename))
 
