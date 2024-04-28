@@ -56,7 +56,9 @@ for (cfg_key in names(config_results)) {
     # Extract confidence intervals
     ci_f1_lower <- aggregated_metrics$F1["CI1"]
     ci_f1_upper <- aggregated_metrics$F1["CI2"]
+    ci_f1_upper <- ifelse(ci_f1_upper > 1, 1, ci_f1_upper)
     ci_hamming_lower <- aggregated_metrics$Hamming["CI1"]
+    ci_hamming_lower <- ifelse(ci_hamming_lower < 0, 0, ci_hamming_lower)
     ci_hamming_upper <- aggregated_metrics$Hamming["CI2"]
 
     # Append to data frames
