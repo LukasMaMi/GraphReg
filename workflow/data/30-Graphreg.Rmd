@@ -561,7 +561,7 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
 #########################################################################################################
 
 ## Version 1
-# Keeping NaNs, lb and ub needs to be turned on or small constant added to denominator.
+# Small constant added to denominator
 ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prior = FALSE, ...) {
 
   est <- list()

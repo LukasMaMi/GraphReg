@@ -118,10 +118,10 @@ num_repetitions <- 1
 
 # Specify configurations
 configs <- list(
-  list(n=800, p=40),
-  list(n=800, p=100),
-  list(n=800, p=200),
-  list(n=800, p=400)
+  list(n=400, p=40),
+  list(n=400, p=100),
+  list(n=400, p=200),
+  list(n=400, p=400)
 )
 
 #Geom_setting_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Settings/" 
@@ -139,11 +139,11 @@ for(rep in 1:num_repetitions) {
   n <- cfg$n # Samples
   p <- cfg$p # Dimensions
   b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
-  N = 5 # Number of Repetitions
+  N = 20 # Number of Repetitions
   rho <- 0.245 # Strength off-diagonal elements
 
   ## Important to set.seed !!!
-  set.seed(123)
+  #set.seed(123)
   Geom <- generator_geom(n = n, p = p, rho = rho, vis = FALSE, verbose = TRUE)
   Geom_data <- Geom$data
   true_graph <- Geom$theta
@@ -152,7 +152,7 @@ for(rep in 1:num_repetitions) {
   null_data <- Geom$null_data
   
   maxCov <- getMaxCov(Geom_data)
-  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 10) #,log = TRUE
+  lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
   lambda <- list(lambda=lambda_path)
   
   cat("Condition number:", kappa(Geom$omega), "\n")
