@@ -96,15 +96,15 @@ method_colors <- c(
   "gcd_spearman" = "darkgreen",
   "gcd_kendall" = "darkblue",
   "gcd_latentcor" = "darkred",
-  "gcd_pseudo_spearman" = "green",
-  "gcd_pseudo_kendall" = "blue",
-  "gcd_pseudo_latentcor" = "red",
+  "gcd_pseudo_spearman" = "coral",
+  "gcd_pseudo_kendall" = "magenta",
+  "gcd_pseudo_latentcor" = "steelblue",
   "gcd_prior_spearman" = "green",
   "gcd_prior_kendall" = "blue",
   "gcd_prior_latentcor" = "red",
-  "gcd_prior_pseudo_spearman" = "green",
-  "gcd_prior_pseudo_kendall" = "blue",
-  "gcd_prior_pseudo_latentcor" = "red"
+  "gcd_prior_pseudo_spearman" = "coral4",
+  "gcd_prior_pseudo_kendall" = "magenta4",
+  "gcd_prior_pseudo_latentcor" = "steelblue4"
 )
 
 # Function to add sparsity values with color coding to configuration labels
@@ -133,24 +133,26 @@ names(config_labels) <- sapply(configs, function(cfg) paste("n", cfg$n, "p", cfg
 #methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "ghust")
 
 # Only GCD
-methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+
+#methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
 
 # GCD + Pseudo
 #methods_set_1_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor")
 
 # GHuST
-#methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior")
+methods_set_1_f1 <- c("stars", "oracle_f1", "ghust", "ghust_prior", "gcd_spearman", "gcd_prior_spearman")
 
 ######
 
 # Prior ALL
-methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "ghust_prior")
 
 # Prior GCD
-#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
 
 # Prior GCD + Pseudo
-#methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
+methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor")
 
 # Prior GCD + GCD
 #methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_spearman", "gcd_kendall", "gcd_latentcor")
@@ -161,13 +163,15 @@ methods_set_2_f1 <- c("stars", "oracle_f1", "gcd_spearman", "gcd_kendall", "gcd_
 #methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph", "ghust")
 
 # Hamming GCD
-methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
+
+#methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph")
 
 # Hamming GCD + Pseudo
 #methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "null_graph")
 
 # Ghust
-#methods_set_1_hamming <- c("stars", "oracle_hamming", "null_graph", "ghust", "ghust_prior")
+methods_set_1_hamming <- c("stars", "oracle_f1", "ghust", "ghust_prior", "gcd_spearman", "gcd_prior_spearman")
 
 ######
 
@@ -175,10 +179,12 @@ methods_set_1_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kenda
 #methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph", "ghust_prior")
 
 # Hamming Prior GCD
-methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph")
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "null_graph")
+
+#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "null_graph")
 
 # Hamming Prior GCD + Pseudo
-#methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph")
+methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", "null_graph")
 
 # Hamming GCD + Prior GCD
 #methods_set_2_hamming <- c("stars", "oracle_hamming", "gcd_spearman", "gcd_kendall", "gcd_latentcor", "null_graph", "gcd_prior_spearman", "gcd_prior_kendall", "gcd_prior_latentcor")
@@ -368,7 +374,7 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
   p <- p %>%
     add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max_value), 
               type = 'scatter', mode = "lines", 
-              line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+              line = list(color = 'rgba(60, 60, 60, 1)', dash = "dot"), showlegend = FALSE)
 
   # Adding an annotation for oracle lambda_opt_hamming
   p <- p %>%
@@ -379,7 +385,7 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
   p <- p %>%
     add_trace(x = rep(data$lambda_opt_stars, 2), y = c(0, max_value), 
               type = 'scatter', mode = "lines", 
-              line = list(color = 'rgba(173, 216, 230, 0.5)', dash = "dot"), showlegend = FALSE)
+              line = list(color = 'rgba(173, 216, 230, 1)', dash = "dot"), showlegend = FALSE)
 
   # Adding an annotation for lambda_opt_stars
   p <- p %>%
@@ -452,7 +458,8 @@ extract_data <- function(config_results, config, gcd_crit, gcd_crit_psd) {
   index_opt_hamming <- which.min(config_results[[config]][["Hamming_Path"]][["Mean"]])
   lambda_opt_hamming <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_hamming]]
   
-  threshold <- out.p[["stars"]][["thresh"]]
+  #threshold <- out.p[["stars"]][["thresh"]]
+  threshold <- 0.05
   index_opt_stars <- max(which(config_results[[config]][["Summary_Path"]][["stars"]][["Mean"]] < threshold))
   lambda_opt_stars <- config_results[[config]][["Lambda_Path"]][["Mean"]][[index_opt_stars]]
 
@@ -607,7 +614,7 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
   p <- p %>%
     add_trace(x = rep(data$lambda_opt_hamming, 2), y = c(0, max_value), 
               type = 'scatter', mode = "lines", 
-              line = list(color = 'rgba(60, 60, 60, 0.5)', dash = "dot"), showlegend = FALSE)
+              line = list(color = 'rgba(60, 60, 60, 1)', dash = "dot"), showlegend = FALSE)
 
   p <- p %>%
     add_annotations(x = data$lambda_opt_hamming, y = 0, text =  'λ<sub>oracle</sub>', 
@@ -618,7 +625,7 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
   p <- p %>%
     add_trace(x = rep(data$lambda_opt_stars, 2), y = c(0, max_value), 
               type = 'scatter', mode = "lines", 
-              line = list(color = 'rgba(173, 216, 230, 0.5)', dash = "dot"), showlegend = FALSE)
+              line = list(color = 'rgba(173, 216, 230, 1)', dash = "dot"), showlegend = FALSE)
 
   p <- p %>%
     add_annotations(x = data$lambda_opt_stars, y = 0, text =  'λ<sub>stars</sub>', 
@@ -673,9 +680,9 @@ create_plot <- function(data, gcd_crit, gcd_crit_psd) {
       ),
       plot_bgcolor = 'rgba(0,0,0,0)',
       ## For Extended plot
-      #margin = list(l = 210, r = 50, t = 150, b = 180)
+      margin = list(l = 210, r = 50, t = 150, b = 180)
       ## Normal plot
-      margin = list(l = 50, r = 50, t = 50, b = 50)
+      #margin = list(l = 50, r = 50, t = 50, b = 50)
   )
   
   return(p)
@@ -1141,7 +1148,7 @@ plot_and_save_gcm <- function(gcm_list, config_key, plot_together = FALSE) {
             for (criterion in criteria[criteria %in% c("gcd", "true_graph")]) { # Filter
             #for (criterion in criteria) {
                 for (method in methods) {
-                    crit_name <- ifelse(type == "pseudo" && criterion != "true_graph" && criterion != "oracle_hamming_subsample",
+                    crit_name <- ifelse(type == "pseudo" && criterion != "oracle_hamming_subsample",
                                         paste(criterion, "pseudo", method, sep = "_"), paste(criterion, method, sep = "_"))
                     if (!is.null(gcm_list[[config_key]][[crit_name]]) &&
                         is.matrix(gcm_list[[config_key]][[crit_name]])) {
@@ -1440,7 +1447,7 @@ for (config in configs) {
 ```{r}
 
 # Configuration you want to specify
-n <- 800
+n <- 400
 p <- 40
 config_key <- paste("n", n, "p", p, sep = "_")
 
@@ -1547,7 +1554,7 @@ GCD[[config_key]][["ghust_oracle_hamming_subsample3"]] <- dist(rbind(GGD_oracle_
 library(magick)
 
 # Configuration you want to specify
-n <- 800
+n <- 400
 p <- 40
 meth <- "spearman"
 config_key <- paste("n", n, "p", p, sep = "_")
@@ -1578,7 +1585,7 @@ dir_Heat_Sub <- file.path(dir_Heat_Sub_base, config_key)
 dir_GCM_Sub <- file.path(dir_GCM_Sub_base, config_key)
 
 ## Convert PDFs to images
-image_lam_path <- image_read(file.path(dir_path_lam, "n_800_p_40_gcd_spearman.pdf"), density = 300)
+image_lam_path <- image_read(file.path(dir_path_lam, "n_400_p_40_gcd_spearman.pdf"), density = 300)
 
 # GCMs
 GCM_gcd <- image_read(file.path(dir_GCM, "gcd_spearman.pdf"), density = 300)
@@ -1768,7 +1775,7 @@ image_write(composite_image, path = file.path(dir_path_lam, "composite_image.pdf
 library(magick)
 
 # Configuration you want to specify
-n <- 800
+n <- 400
 p <- 40
 config_key <- paste("n", n, "p", p, sep = "_")
 
@@ -1789,7 +1796,7 @@ dir_Heat <- file.path(dir_Heat_base, config_key)
 dir_Heat_Sub <- file.path(dir_Heat_Sub_base, config_key)
 
 ## Convert PDFs to images
-image_lam_path <- image_read(file.path(dir_path_lam, "n_800_p_40_ghust.pdf"), density = 300)
+image_lam_path <- image_read(file.path(dir_path_lam, "n_400_p_40_ghust.pdf"), density = 300)
 
 # Heatmaps Subsamples
 Heat_Sub1 <- image_read(file.path(dir_Heat_Sub, "oracle_hamming_subsample 1.pdf"), density = 300)
@@ -1849,8 +1856,8 @@ Ham_Dist_value5 <- round(Ham_Dist[[config_key]][["Sub2"]])
 Ham_Dist_value6 <- round(Ham_Dist[[config_key]][["Sub3"]])
 
 # Converting the GCD value to a string with formatting
-GCD_text1 <- sprintf("ghust\nGGD to True Graph: %.3f   Ham_Dist: %.3f", GCD_value1, Ham_Dist_value1)
-GCD_text2 <- sprintf("Prior ghust\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value2, Ham_Dist_value2)
+GCD_text1 <- sprintf("Ghust\nGGD to True Graph: %.3f   Ham_Dist: %.3f", GCD_value1, Ham_Dist_value1)
+GCD_text2 <- sprintf("Prior Ghust\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value2, Ham_Dist_value2)
 GCD_text3 <- sprintf("Oracle Hamming\nGGD to True Graph: %.3f  Ham_Dist: %.3f", GCD_value3, Ham_Dist_value3)
 
 # Converting the GCD value to a string with formatting

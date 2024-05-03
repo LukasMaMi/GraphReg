@@ -165,6 +165,10 @@ ER_setting_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Scienc
 ER_settings_file <- file.path(ER_setting_path, "ER_settings.RData")
 load(ER_settings_file)
 
+dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_ER/"
+#dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_ER"
+dir_path_results <- file.path(dir_path2, "Results")
+
 dir_path3 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_ER"
 #dir_path3 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Performance_ER"
 
@@ -246,7 +250,12 @@ for(cfg in configs) {
       individual_results[[paste("Rep", rep)]]$true_graph <- out.esti[["selected_graphs"]][["true_graph"]]
 
     # Extract the specific metrics for each repetition
-      fullmodel[[rep]] <- out.esti[["fullmodel"]]
+      if (!is.null(out.esti$additional_metrics$lb.index)) {
+        lb <- out.esti$additional_metrics$lb.index
+        ub <- out.esti$additional_metrics$ub.index
+        fullmodel[[rep]] <- out.esti[["fullmodel"]][lb:ub]
+      } else fullmodel[[rep]] <- out.esti[["fullmodel"]]
+      
       premerge[[rep]] <- out.esti[["premerge"]]
       
       min_length <- min(sapply(premerge, length))
@@ -329,7 +338,7 @@ for(cfg in configs) {
 }
 
 # Save the results to a file
-save(num_repetitions, configs, dir_path, dir_path2, dir_path_results, out.p, dir_path3, config_results, file = ER_settings_file)
+save(num_repetitions, configs, out.p, config_results, file = ER_settings_file)
 performance_filename <- "all_performance_results.RData"
 save(config_results, file = file.path(dir_path3, performance_filename))
 
