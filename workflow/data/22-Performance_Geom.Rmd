@@ -103,7 +103,7 @@ aggregate_fullmodel <- function(fullmodel_list) {
 
   for (lambda_index in 1:max_lambda_index) {
     # Collect all matrices for this lambda across all repetitions, if available
-    lambda_matrices <- lapply(fullmodel_list, function(x) if (length(x) >= lambda_index) x[[lambda_index]] else Matrix(0, 40, 40))
+    lambda_matrices <- lapply(fullmodel_list, function(x) if (length(x) >= lambda_index) x[[lambda_index]] else matrix(0, 40, 40))
 
     # Check that we are operating on matrices and not further nested structures
     if (all(sapply(lambda_matrices, function(m) inherits(m, "Matrix")))) {
@@ -136,7 +136,7 @@ aggregate_premerge <- function(premerge_list) {
     for (subsample_index in 1:max_subsample_index) {
       # Collect the specific subsample matrix from each repetition's lambda list, if available
       subsample_matrices <- lapply(lambda_matrices_list, 
-                                   function(x) if (length(x) >= subsample_index) x[[subsample_index]] else Matrix(0, 40, 40))
+                                   function(x) if (length(x) >= subsample_index) x[[subsample_index]] else matrix(0, 40, 40))
       
       # Check that we are operating on matrices and not further nested structures
       if (all(sapply(subsample_matrices, function(m) inherits(m, "Matrix")))) {

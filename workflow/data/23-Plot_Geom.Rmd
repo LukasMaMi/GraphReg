@@ -2078,7 +2078,7 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
     return(results_df)
   }
 
-  configs <- c("n_800_p_40", "n_400_p_100", "n_200_p_200", "n_100_p_400")
+  configs <- c("n_400_p_40", "n_400_p_100", "n_400_p_200", "n_400_p_400")
   methods <- c("oracle_f1", "oracle_hamming", "stars", "gstars", "null", "gcd_spearman", "gcd_kendall", "gcd_latentcor",
                "gcd_pseudo_spearman", "gcd_pseudo_kendall", "gcd_pseudo_latentcor", "gcd_prior_spearman", "gcd_prior_kendall",
                "gcd_prior_latentcor", "gcd_prior_pseudo_spearman", "gcd_prior_pseudo_kendall", "gcd_prior_pseudo_latentcor", 
@@ -2095,7 +2095,7 @@ generate_df_for_rho <- function(data_list, rho_descriptor) {
 
 
 # Generate data frames for each rho value
-df_rho_3 <- generate_df_for_rho(rho_3, "rho = 0.2, thresh = 0.05, lambda path = 100")
+df_rho_3 <- generate_df_for_rho(rho_3, "rho = 0.245, thresh = 0.05, lambda path = 30")
 #df_rho_2 <- generate_df_for_rho(rho_2, "rho = [-1, -0.4], [0.4, 1]")
 #df_rho_3 <- generate_df_for_rho(rho_3, "rho = [-1, -0.5], [0.5, 1]")
 
@@ -2109,7 +2109,7 @@ library(gridExtra)
 table_plot <- tableGrob(combined_df)
 
 library(ggplot2)
-ggsave("Geom_graph.pdf", table_plot, width = 10, height = 6, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom")
+ggsave("Geom_graph.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Plot_Geom")
 #ggsave("Geom_graph.pdf", table_plot, width = 10, height = 20, path = "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Performance_Geom")
 
 ```
