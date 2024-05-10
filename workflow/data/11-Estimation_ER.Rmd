@@ -88,6 +88,9 @@ library(devtools)
 library(htmltools)
 library(pulsar)
 
+#dir_path <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Simulation_Hub"
+dir_path <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Simulation_ER"
+
 # Define main directory paths
 dir_path2 <- "/Users/bropc/Documents/LMU/Master Statistics and Data Science/Masterarbeit/R Master/StARS_Simulations/workflow/Storage_Estimation_ER/"
 #dir_path2 <- "C:/R Projekte/StARS_Simulations/workflow/Storage_Estimation_ER"
