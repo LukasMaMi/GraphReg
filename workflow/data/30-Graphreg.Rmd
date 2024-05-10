@@ -420,16 +420,20 @@ Graphreg <- function(data, fun = huge::huge, fargs=list(),
 
     ## Refit section
     if (refit == TRUE) {
-
+      
       # Refit each criterion with optimal index
       for (crit in criterion) {
-        opt_ind <- est[[crit]]$opt.index
-        if (!is.null(opt_ind) && is.numeric(opt_ind) && !is.na(opt_ind)) {
+        # Initialize opt_ind with NA or appropriate default if it's not already set
+        opt_ind <- if (!is.null(est[[crit]]$opt.index)) est[[crit]]$opt.index else NA
+      
+        # Now, check if opt_ind is valid before using it
+        if (!is.na(opt_ind) && is.numeric(opt_ind) && opt_ind > 0 && opt_ind <= length(fullmodel$path)) {
           est[[crit]]$refit <- fullmodel$path[[opt_ind]]
         } else {
           est[[crit]]$refit <- NULL
         }
       }
+
 
       ## Determine adjacency matrices for full lambda path
       for (crit in criterion) {
@@ -594,24 +598,23 @@ ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prio
 
 
 ## Version 2: Standard Ghust but consider only complete GGVs - Ghust lb ub
-# If one NaN remove whole lambda, lb and ub can be turned off
 # ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prior = FALSE, ...) {
 #   est <- list()
+#   est$merge <- vector("list", nlams)  # Initialize merge for all lambda cases to avoid uninitialization issues
 # 
-#   # Calculate euclidean distance between the 12 dim of each subsample for a specific lambda to the 12 dim of the true graph
+#   # Calculate Euclidean distance between the 12 dim of each subsample for a specific lambda to the 12 dim of the true graph
 #   if (use_prior && !is.null(prior_graph)) {
 #     ggv_true <- ggvec(prior_graph, ...) # ggv for true_graph
 # 
 #     if (all(is.finite(ggv_true))) {
-#       est$merge <- vector("list", nlams)
 #       for (i in 1:nlams) {
 #         lambda_distances <- numeric(rep.num)
-#         valid_subs = TRUE
+#         valid_subs <- TRUE
 # 
 #         for (j in 1:rep.num) {
 #           ggv_sub <- premerge[[j]][[i]]
 #           if (!all(is.finite(ggv_sub))) {
-#             valid_subs = FALSE
+#             valid_subs <- FALSE
 #             break
 #           }
 #         }
@@ -627,11 +630,11 @@ ggd.stability <- function(premerge, rep.num, nlams, prior_graph = NULL, use_prio
 #         }
 #       }
 #     } else {
+#       est$merge <- lapply(est$merge, function(x) rep(NA, rep.num))  # Safely assign NA to all lambda cases
 #       print("GHuST vector of true graph contains NaN/NA value --> Skipping ghust_prior calculation!")
 #     }
 #   } else {
 #     ## Internal consistency among subsamples
-#     # Calculate the euclidean distance between the 12 dim of the subsamples for a specific lambda with each other
 #     est$merge <- lapply(1:nlams, function(i) {
 #       ggv_matrix <- sapply(1:rep.num, function(j) premerge[[j]][[i]])
 #       if (any(!is.finite(ggv_matrix))) {
