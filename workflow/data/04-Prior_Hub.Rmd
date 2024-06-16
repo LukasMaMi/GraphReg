@@ -3,16 +3,6 @@ title: "04-Prior_Hub"
 output: github_document
 ---
 
-```{r}
-## To Do List:
-# Die N mal lambda_k graphs existieren nicht, wenn lb and ub == TRUE. Was existiert ist eine Liste mit N = 2 subsample dann N subsample für den regulierten Pfad und dann wieder N = 2 subsample.
-# Es macht keinen Sinn bei den lambda path plots die Ergebnisse mehrer Repetitionen zu betrachten. Weil wenn man den seed nicht setzt, erzeugt man unterschiedliche Graphen über die man nicht den Mittelwert nehmen kann! Und wenn man den Seed setzt erzeugt man wiederholt den gleichen Graphen, und die Varianz ist gleich null.
-# Das ist auch der Grund, warum die Pseudo Graphen auf den Lambda path plots (besonders bei prior Information) besser performten, als ihre nicht pseudo counterparts. Es wurden jedes mal unterschiedliche Graphen erzeugt und die pseudo methoden weisen weniger Varianz auf deshalb waren sie über mehrere Repetitionen verschiedener Graphen präziser. 
-# Basis GCD Abstand bei PRIOR plots vergrößert sich über dimensions. Bei p = 40 um die 2-3, bei p = 100 schon bei 4-6. 
-# Bei set.seed kein Unterschied mehr bei pseudo zu non-pseudo.
-```
-
-
 ## Helper Functions
 ```{r}
 
@@ -409,6 +399,71 @@ rho_12 <- ifelse(max_O0 > 0, rho_12_prime / max_O0, NA)
 
 ```
 
+```{r}
+my.gcvec <- function(graph, method, orbind, five_node = FALSE, pseudo_count = FALSE, return_gcm = FALSE) {
+  
+  orbind <- orbind + 1
+  if (length(orbind) < 2) stop("Only one orbit selected, need at least two to calculate graphlet correlations")
+  if (five_node == FALSE && any(orbind > 15))   stop("Only 15 orbits, from 4-node graphlets, can be selected")
+  if (!method %in% c("kendall", "spearman", "latentcor")) stop("Not supported correlation method is chosen!")
+  nx2 <- .adj2elist(graph) # Transform adjacency matrix to nx2 edge matrix
+  n <- length(orbind)
+  if (ncol(nx2) < 1 || nrow(nx2) < 1) {
+      return(rep(0, n*(n-1)/2)) # Return empty vector # Failsafe for empty graphs
+  }
+
+  p <- ncol(graph)
+  if (five_node == TRUE) { gdm <- orca::count5(nx2)
+    } else { gdm <- orca::count4(nx2) # redundant Graphlet Degree Matrix (gdm) px15
+  } 
+  
+  ## expand missing nodes
+  buffer <- matrix(0, nrow=p-nrow(gdm), ncol=ncol(gdm)) # Create empty set up
+  gdm <- rbind(gdm, buffer) # non-redundant Graphlet Degree Matrix (gdm) px11
+  ## warnings here are due to std dev == 0. This almost always occurs for a completely connected
+  ## or completely empty graph and can be safely suppressed.
+  
+  # add one row of 1s to the orbind matrix to overcome std dev == 0 error problem 
+  gdm <- rbind(gdm[,orbind],1) 
+  
+  if (pseudo_count == TRUE) {
+    ## Add pseudo_count to orb_count
+    gdm <- modify_orb_count(orb_count = gdm, pseudo_count_range = c(0, 0.1))
+  } 
+
+  if (method %in% c("kendall", "spearman")){
+  #Then calculate the graphlet correlation matrix with method
+  gcm <- suppressWarnings(cor(gdm, method = method))
+  }
+  
+  else if (method == "latentcor") {
+  print(gdm)
+  print(latentcor::get_types(gdm))  
+  gcm <- suppressMessages(latentcor::latentcor(gdm, method = "approx", use.nearPD = FALSE))
+  gcm <- gcm$R
+  }
+  
+  gcv <- gcm[upper.tri(gcm)] # Create a numeric vector of the upper triangle of gcm
+  
+  if (return_gcm == TRUE) {
+    return(gcm)
+  } else return(gcv)
+}
+
+#' @keywords internal
+.adj2elist <- function(G) {
+    if (inherits(G, "sparseMatrix")) {
+        G <- Matrix::triu(G, k=1)
+        index_i_j <- Matrix::mat2triplet(G)[1:2]
+        return(as.data.frame(index_i_j))
+    } else {
+        p <- ncol(G)
+        return(arrayInd(which(as.logical(triu(G))), c(p,p)))
+    }
+}
+```
+
+
 
 ```{r}
 library(MASS)
@@ -527,6 +582,33 @@ lambda <- list(lambda=lambda_path)
 
 cat("Condition number:", kappa(Geom$omega), "\n")
 
+n <- 400 # Samples
+p <- 40 # Dimensions
+s <- 20    # Size Hub Group
+J <- floor(p/s) # Number of Hubs
+b = ifelse(n > 144, (floor(10*sqrt(n)))/n, 0.8) # Size Subsamples (Ratio)
+N = 20 # Number of Repetitions
+rho <- 0.20 # Off-Diagonal Effect Strength
+
+## Important to set.seed !!!
+#set.seed(123)
+Hub <- generator_Hub(n = n, p = p, rho = rho, g = J, vis = FALSE, verbose = TRUE)
+Data <- Hub$data
+true_graph <- Hub$theta
+act_sparsity <- Hub$act_sparsity
+null_graph <- Hub$theta_null
+null_data <- Hub$null_data
+
+maxCov <- getMaxCov(Data)
+lambda_path  <- getLamPath(max = maxCov, min = 0.01, len = 30) #,log = TRUE
+lambda <- list(lambda=lambda_path)
+
+cat("Condition number:", kappa(Hub$omega), "\n")
+
+latentcor::get_types(Data)
+gcm <- my.gcvec(true_graph, method = "latentcor", orbind = c(0, 2, 5, 7, 8, 10, 11, 6, 9, 4, 1), return_gcm = TRUE)
+corrplot::corrplot(gcm, method = "circle", addgrid.col = NA, tl.pos = "lt", cl.pos = "n")
+
 #huge.plot(true_graph)
 
 ```
@@ -559,20 +641,20 @@ library(pulsar)
 
 time1    <- system.time(    
 out.p <- Graphreg(
-  data = Geom_data, 
+  data = Data, 
   fun = quicr, 
   fargs = quicargs, 
   rep.num = N,
   thresh = 0.05,
   subsample.ratio = b,
-  criterion=c('stars', 'ghust', 'ghust_prior', 'gcd', 'gcd_prior'), 
+  criterion=c('stars', 'gcd'), 
   lb.stars = FALSE, 
   ub.stars = FALSE, 
   seed = FALSE,
   refit = TRUE,
   prior_graph = true_graph,
   method = c("spearman"),
-  use_pseudo_count = TRUE
+  use_pseudo_count = FALSE
 ))
 
 out.p
