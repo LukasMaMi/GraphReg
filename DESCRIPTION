@@ -1,15 +1,25 @@
 Package: StARS_Simulations
-Title: GraphReg: Graphlet Regularization Function (Pulsar Extension)
+Title: GraphReg: An Extended Stability Approach to Regularization Selection in Sparse Graphical Models
 Version: 0.0.0.9000
 Authors@R: 
     person("Lukas", "Mischinger", , "mischingerlukas@yahoo.de", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+
+Description: The new stability-based selection methods introduced in the master's project: 
+    "GraphReg: An Extended Stability Approach to Regularization Selection in Sparse Graphical Models" 
+    project are implemented in the GraphReg function. This function, developed specifically for the project, 
+    builds upon the pulsar function from the R-package ”Pulsar” ([1]), created by the authors of G-StARS ([2]).
+
+License: GPL-3
 Encoding: UTF-8
 Imports: 
     projthis,
     rmarkdown
-URL: https://github.com/LukasMaMi/StARS_Simulations
-BugReports: https://github.com/LukasMaMi/StARS_Simulations/issues
+URL: https://github.com/LukasMaMi/GraphReg
+BugReports: https://github.com/LukasMaMi/GraphReg/issues
+
+References:
+[1] Zachary Kurtz and Christian L. Müller. Pulsar: Parallel Utilities for Lambda Selection along a Regularization Path. 
+    R package version 0.3.11. 2023. url: https://CRAN.R- project.org/package=pulsar.
+[2] Christian L. Müller, Richard Bonneau, and Zachary D. Kurtz. “Generalized Stability Approach for Regularized Graphical Models”. 
+    In: (2016). arXiv preprint arXiv:1605.07072v1, pp. 1–11.
