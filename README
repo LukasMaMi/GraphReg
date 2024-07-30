@@ -1,0 +1,9 @@
+# GraphReg: An Extended Stability Approach to Regularization Selection in Sparse Graphical Models
+
+This package is an adaptation and extension of the work by the original authors of the G-StARS method and the `pulsar` R package.
+
+For detailed information, please refer to the DESCRIPTION file and the respective original papers.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
